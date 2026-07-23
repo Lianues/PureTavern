@@ -1,0 +1,6 @@
+apps/web/public/legacy/**
+SillyTavern-1.18.0/**
+node_modules/**
+dist/**
+coverage/**
+pnpm-lock.yaml

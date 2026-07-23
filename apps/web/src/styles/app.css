@@ -1,0 +1,57 @@
+:root {
+  color-scheme: dark;
+  font-family:
+    system-ui,
+    -apple-system,
+    BlinkMacSystemFont,
+    'Segoe UI',
+    sans-serif;
+  background: #202124;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+}
+
+.legacy-host {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  background: #202124;
+}
+
+.legacy-host__frame {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  background: #202124;
+}
+
+.legacy-host__status {
+  position: absolute;
+  inset: 50% auto auto 50%;
+  z-index: 1;
+  max-width: min(28rem, calc(100vw - 2rem));
+  padding: 0.75rem 1rem;
+  border: 1px solid rgb(255 255 255 / 16%);
+  border-radius: 0.5rem;
+  color: #f4f4f5;
+  background: rgb(32 33 36 / 92%);
+  box-shadow: 0 0.5rem 2rem rgb(0 0 0 / 35%);
+  transform: translate(-50%, -50%);
+}
+
+.legacy-host__status--error {
+  border-color: rgb(248 113 113 / 60%);
+  color: #fecaca;
+}

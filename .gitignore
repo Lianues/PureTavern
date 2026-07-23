@@ -1,0 +1,30 @@
+# Dependencies and build output
+node_modules/
+dist/
+coverage/
+.vite/
+*.tsbuildinfo
+
+# Environment and local tooling
+.env
+.env.*
+!.env.example
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+pnpm-debug.log*
+npm-debug.log*
+
+# Read-only upstream source snapshot
+/SillyTavern-1.18.0/
+
+# Generated verification output
+/apps/web/legacy-verification-report.json
+
+# Accidental TypeScript config emission (configs are authored as .ts)
+/apps/web/vite.config.js
+/apps/web/vitest.config.js

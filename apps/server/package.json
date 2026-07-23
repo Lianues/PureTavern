@@ -1,0 +1,11 @@
+{
+  "name": "@pure-tavern/server",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node -e \"console.log('Optional server is not implemented in this phase.')\"",
+    "typecheck": "node -e \"console.log('Optional server has no source files yet.')\"",
+    "test": "node -e \"console.log('Optional server has no tests yet.')\""
+  }
+}

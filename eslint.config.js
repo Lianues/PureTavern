@@ -1,0 +1,45 @@
+import eslint from '@eslint/js';
+import pluginVue from 'eslint-plugin-vue';
+import globals from 'globals';
+import tseslint from 'typescript-eslint';
+
+export default tseslint.config(
+  {
+    ignores: [
+      '**/node_modules/**',
+      '**/dist/**',
+      '**/coverage/**',
+      'apps/web/public/legacy/**',
+      'SillyTavern-1.18.0/**',
+    ],
+  },
+  eslint.configs.recommended,
+  ...tseslint.configs.recommended,
+  ...pluginVue.configs['flat/recommended'],
+  {
+    files: ['apps/web/**/*.{ts,vue}', 'packages/**/*.ts'],
+    languageOptions: {
+      globals: {
+        ...globals.browser,
+        ...globals.es2022,
+      },
+      parserOptions: {
+        parser: tseslint.parser,
+        extraFileExtensions: ['.vue'],
+      },
+    },
+    rules: {
+      'vue/max-attributes-per-line': 'off',
+      'vue/multi-word-component-names': 'off',
+      'vue/singleline-html-element-content-newline': 'off',
+    },
+  },
+  {
+    files: ['**/*.config.{js,ts}', '**/scripts/**/*.mjs'],
+    languageOptions: {
+      globals: {
+        ...globals.node,
+      },
+    },
+  },
+);

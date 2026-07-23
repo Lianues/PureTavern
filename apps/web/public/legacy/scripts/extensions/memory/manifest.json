@@ -1,0 +1,16 @@
+{
+    "display_name": "Summarize",
+    "loading_order": 9,
+    "requires": [],
+    "optional": [
+        "summarize"
+    ],
+    "js": "index.js",
+    "css": "style.css",
+    "author": "Cohee#1207",
+    "version": "1.0.0",
+    "homePage": "https://github.com/SillyTavern/SillyTavern",
+    "hooks": {
+        "activate": "init"
+    }
+}
