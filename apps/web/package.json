@@ -16,6 +16,8 @@
     "legacy:prepare": "node scripts/prepare-legacy-runtime.mjs",
     "legacy:sync": "node scripts/sync-legacy.mjs",
     "legacy:sync:check": "node scripts/sync-legacy.mjs --check",
+    "legacy:contracts:generate": "node scripts/legacy-contracts.mjs generate",
+    "legacy:contracts:check": "node scripts/legacy-contracts.mjs check",
     "legacy:verify": "node scripts/verify-legacy.mjs"
   },
   "dependencies": {

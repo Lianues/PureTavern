@@ -16,6 +16,8 @@
     "legacy:prepare": "node apps/web/scripts/prepare-legacy-runtime.mjs",
     "legacy:sync": "node apps/web/scripts/sync-legacy.mjs",
     "legacy:sync:check": "node apps/web/scripts/sync-legacy.mjs --check",
+    "legacy:contracts:generate": "node apps/web/scripts/legacy-contracts.mjs generate",
+    "legacy:contracts:check": "node apps/web/scripts/legacy-contracts.mjs check",
     "legacy:verify": "pnpm --filter @pure-tavern/web legacy:verify"
   },
   "devDependencies": {

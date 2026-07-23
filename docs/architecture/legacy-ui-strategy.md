@@ -1,8 +1,8 @@
-# Legacy-first UI 与渐进迁移策略
+# Legacy-first UI 与长期兼容层策略
 
 ## 1. 当前决策
 
-新工程使用 Vue 3、Vite、TypeScript 和 IndexedDB，但当前产品入口由 **SillyTavern 原版页面直接负责 DOM 与交互**。
+新工程使用 Vue 3、Vite、TypeScript 和 IndexedDB，但产品根入口由 **SillyTavern 原版页面长期负责 DOM 与交互**。这不是临时静态预览，也不再把“整体 Vue 重写原版 UI”作为默认终点。
 
 ```text
 浏览器访问 /
@@ -16,11 +16,12 @@
 └─ Vue 3 现代模块与诊断入口
 ```
 
-这取代了早期“禁用脚本的 iframe 静态预览”方案。静态预览能显示页面，但无法保留按钮、抽屉、弹窗和设置控件的原版行为，不符合“尽量保留旧版 UI 和交互”的迁移目标。
+这取代了早期“禁用脚本的 iframe 静态预览”方案。静态预览能显示页面，但无法保留按钮、抽屉、弹窗和设置控件的原版行为，不符合“尽量保留旧版 UI 和交互”的迁移目标。Vue 只用于隔离的新页面、新能力或完成所有权切换后的功能岛；原版 DOM 不允许被 Vue 和 jQuery/上游 ESM 同时管理。
 
 当前浏览器测试已经确认：
 
 - 原版 CSS、jQuery、`lib.js`、`script.js` 和模块脚本正常加载；
+- 关键 DOM 锚点、运行时全局对象、原版模块导入、事件系统和扩展上下文入口可用；
 - 原版初始化流程能移除 `#preloader`；
 - 左侧配置抽屉、右侧角色抽屉和世界书抽屉由原版事件处理器完成打开与关闭；
 - 旧启动请求由 Hook 在浏览器内处理，不要求启动 SillyTavern Node 服务端；
@@ -34,6 +35,7 @@ apps/web/
 │  ├─ upstream/
 │  │  ├─ public/**             # 完整、只读的上游 public 快照
 │  │  └─ default/content/**    # 启动需要的上游默认内容
+│  ├─ contracts/               # 版本化 Legacy 兼容契约基线
 │  ├─ legacy-files.sha256      # public 文件哈希清单
 │  ├─ upstream.json            # 上游版本与来源元数据
 │  └─ reports/                 # 每次正式同步的差异报告
@@ -43,6 +45,7 @@ apps/web/
 ├─ scripts/
 │  ├─ sync-legacy.mjs
 │  ├─ prepare-legacy-runtime.mjs
+│  ├─ legacy-contracts.mjs
 │  ├─ verify-legacy.mjs
 │  └─ verify-browser-startup.mjs
 └─ src/
@@ -58,6 +61,8 @@ apps/web/
 3. `index.html` 和 `.generated/**` 都是派生物，任何手工修改都会在下次启动时丢失。
 4. 上游快照不参加 ESLint/Prettier；哈希清单负责检查误改。
 5. 不在原版文件里散落 patch，避免升级时人工合并数百个文件。
+6. 允许改动的优先级是：上游公开函数/导出/事件 → Pure Tavern Hook → 独立 CSS 或版本化 patch；禁止直接修改 `legacy/upstream/**`。
+7. Vue 只能挂载到隔离页面或明确移交所有权的功能岛，不能接管仍由原版 jQuery/ESM 控制的 DOM 子树。
 
 ## 3. 运行时生成过程
 
@@ -74,7 +79,17 @@ apps/web/
 
 Hook 注入使用稳定的 `lib/polyfill.js` 标签作为锚点，并要求它恰好出现一次。若新上游修改了该锚点，同步会在覆盖当前快照前失败，要求人工审阅，而不是生成不确定的页面。
 
-## 4. Hook 边界
+## 4. 兼容契约基线
+
+`apps/web/legacy/contracts/1.18.0.json` 是当前上游版本的长期兼容契约基线，由 `legacy-contracts.mjs` 从只读快照生成。契约分为三类：
+
+- **UI 必需**：关键 DOM ID、首页脚本/样式入口和原版交互锚点；
+- **扩展生态必需**：扩展面板 DOM、`scripts/extensions.js`、`scripts/extensions/**`、关键模块导出、事件名和运行时全局对象；
+- **数据能力待迁移**：Hook 当前处理的启动请求，全部标记为 Bootstrap Compatibility，不代表角色、聊天、世界书或扩展业务已经迁移。
+
+`pnpm legacy:contracts:generate` 只生成契约 JSON，不写回上游目录。`pnpm legacy:contracts:check --source <新上游> --version <版本>` 会报告 added/removed/changed；关键契约破坏时返回非零状态。
+
+## 5. Hook 边界
 
 Hook 必须在原版主模块执行前安装。当前职责仅有：
 
@@ -97,7 +112,7 @@ Hook 必须在原版主模块执行前安装。当前职责仅有：
 
 当某个功能正式迁移时，才为该模块定义 Port、领域模型、IndexedDB Adapter 和可选后端 Adapter，然后逐步撤销对应 Legacy 兼容路径。
 
-## 5. 保留原版交互的原则
+## 6. 保留原版交互的原则
 
 当前阶段不在 Vue 中重新实现原版按钮。原版 DOM 应继续由原版脚本拥有：
 
@@ -115,41 +130,44 @@ Hook 必须在原版主模块执行前安装。当前职责仅有：
 - 我方 Hook 不需要为每个纯 UI 操作复制事件处理器；
 - 删除某个尚未迁移模块时，可以通过 Hook/Capability 降级，而不是改乱整份上游脚本。
 
-禁止同时让 Vue 和原版 jQuery管理同一个 DOM 子树。后续 Vue 功能岛必须有明确挂载点和所有权切换步骤。
+禁止同时让 Vue 和原版 jQuery 管理同一个 DOM 子树。后续 Vue 功能岛必须有明确挂载点和所有权切换步骤。
 
-## 6. 上游升级流程
+## 7. 上游升级流程
 
 升级前先保留干净的新上游源码目录，例如 `SillyTavern-1.19.0/`。
 
-### 6.1 只读检查
+### 7.1 只读检查
 
 ```powershell
 pnpm legacy:sync:check --source "F:\path\SillyTavern-1.19.0" --version 1.19.0
 ```
 
-该命令不会写入快照，会输出：
+该命令不会写入快照，会先输出文件差异，再输出嵌入的 `contracts` 契约差异：
 
 - 新增、删除、变化的文件；
 - `index.html` 是否变化；
 - 新增或变化的 JavaScript；
 - 新增扩展目录；
 - Hook 注入锚点是否兼容；
-- 默认设置、头像、背景和 `lib.js` 是否齐全。
+- 默认设置、头像、背景和 `lib.js` 是否齐全；
+- DOM ID、资源入口、扩展模块路径、关键模块导出、事件名和值、启动兼容请求的 added/removed/changed。
 
-重点审阅 `index.html`、`script.js`、`scripts/**`、`lib.js` 和新增扩展。HTML 新按钮通常会随完整快照自动进入运行时，但若它要求新的启动请求，浏览器测试会把路径记录到 `unhandledEndpoints`。
+重点审阅 `index.html`、`script.js`、`scripts/**`、`lib.js`、新增扩展和 `contracts.risks`。HTML 新按钮通常会随完整快照自动进入运行时，但若它要求新的启动请求，浏览器测试会把路径记录到 `unhandledEndpoints`。
 
-### 6.2 正式同步
+### 7.2 正式同步
 
 ```powershell
 pnpm legacy:sync --source "F:\path\SillyTavern-1.19.0" --version 1.19.0
 ```
 
-正式同步会整体替换只读快照、默认内容、哈希清单和版本元数据，并生成差异报告；它不会修改 `src/legacy-hook/**`。
+正式同步会整体替换只读快照、默认内容、哈希清单和版本元数据，并生成差异报告；它不会修改 `src/legacy-hook/**`。接受新上游后，运行 `pnpm legacy:contracts:generate` 生成对应版本的新契约基线并随同步结果一起提交。
 
-### 6.3 同步后验证
+### 7.3 同步后验证
 
 ```powershell
+pnpm legacy:contracts:generate
 pnpm legacy:verify
+pnpm legacy:contracts:check
 pnpm typecheck
 pnpm test
 pnpm build
@@ -165,6 +183,7 @@ pnpm test:browser
 
 - Hook、IndexedDB 和上游元数据已就绪；
 - 原版 CSS 和主脚本成功加载；
+- 关键 DOM 锚点、运行时全局对象、原版模块导入、事件系统和扩展上下文入口可用；
 - 原版启动结束并移除 preloader；
 - 没有本地资源 404、运行时异常或控制台错误；
 - 没有兼容请求意外进入网络；
@@ -173,7 +192,7 @@ pnpm test:browser
 
 若测试发现新的 `unhandledEndpoints`，只补充完成 UI 启动所需的最小空响应；不要借升级之机一次性迁移真实业务接口。
 
-## 7. CSS 与资源策略
+## 8. CSS 与资源策略
 
 当前根页面直接使用上游 CSS，因此原版选择器、变量、字体和媒体查询全部保留。新 Vue 页面不应全局导入这些样式。
 
@@ -185,13 +204,13 @@ pnpm test:browser
 - 使用桌面与移动视觉回归验证所有权切换；
 - 未迁移区域仍由上游 CSS 控制。
 
-## 8. 安全与限制
+## 9. 安全与限制
 
 原版 JavaScript 现在会在主页面上下文执行，这是保留原版交互的必要条件，也意味着它能访问页面、浏览器存储和 Hook。当前快照必须视为受信任的固定上游代码；第三方扩展不能在没有权限模型的情况下自动启用。
 
 Hook 对未知同源 `/api/**` 返回 `501` 并记录诊断，不会静默转发到不存在的 Node 服务。外部请求和普通静态资源仍交给浏览器原生 `fetch`。
 
-## 9. 许可证和来源
+## 10. 许可证和来源
 
 SillyTavern 1.18.0 标记为 AGPL-3.0。由于当前方案复制并执行原始 HTML、CSS、JavaScript 和静态资源：
 

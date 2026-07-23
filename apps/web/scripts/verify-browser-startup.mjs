@@ -4,7 +4,16 @@ import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
+import {
+  CRITICAL_DOM_IDS,
+  EXPECTED_RUNTIME_GLOBALS,
+  EXTENSION_DOM_IDS,
+} from './legacy-contracts.mjs';
+
 const appUrl = process.env.PURE_TAVERN_URL ?? 'http://127.0.0.1:5173/';
+const criticalDomAnchorIds = [...new Set([...CRITICAL_DOM_IDS, ...EXTENSION_DOM_IDS])];
+const runtimeCriticalDomAnchorIds = criticalDomAnchorIds.filter((id) => id !== 'preloader');
+const expectedRuntimeGlobals = EXPECTED_RUNTIME_GLOBALS;
 const browserCandidates = [
   process.env.CHROME_PATH,
   'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
@@ -167,6 +176,8 @@ try {
   await client.send('Page.navigate', { url: appUrl });
 
   const snapshotExpression = `(() => {
+    const criticalDomAnchorIds = ${JSON.stringify(runtimeCriticalDomAnchorIds)};
+    const expectedRuntimeGlobals = ${JSON.stringify(expectedRuntimeGlobals)};
     const preloader = document.getElementById('preloader');
     const preloaderStyle = preloader ? getComputedStyle(preloader) : null;
     const diagnostics = globalThis.__PURE_TAVERN__?.diagnostics;
@@ -176,6 +187,23 @@ try {
         ? { exists: true, className: element.className, display: getComputedStyle(element).display }
         : { exists: false, className: null, display: null };
     };
+    const describeById = (id) => {
+      const element = document.getElementById(id);
+      return element
+        ? {
+            exists: true,
+            tagName: element.tagName.toLowerCase(),
+            className: element.className,
+            display: getComputedStyle(element).display,
+          }
+        : { exists: false, tagName: null, className: null, display: null };
+    };
+    const criticalDomAnchors = Object.fromEntries(
+      criticalDomAnchorIds.map((id) => [id, describeById(id)]),
+    );
+    const runtimeGlobals = Object.fromEntries(
+      expectedRuntimeGlobals.map((name) => [name, typeof globalThis[name] !== 'undefined']),
+    );
 
     return {
       documentReadyState: document.readyState,
@@ -184,6 +212,14 @@ try {
       databaseState: document.documentElement.dataset.databaseState ?? null,
       upstreamVersion: globalThis.__PURE_TAVERN__?.upstreamVersion ?? null,
       jqueryPresent: typeof globalThis.jQuery === 'function',
+      criticalDomAnchors,
+      missingCriticalDomAnchors: Object.entries(criticalDomAnchors)
+        .filter(([, anchor]) => !anchor.exists)
+        .map(([id]) => id),
+      runtimeGlobals: {
+        ...runtimeGlobals,
+        SillyTavernGetContext: typeof globalThis.SillyTavern?.getContext === 'function',
+      },
       preloader: preloader
         ? {
             exists: true,
@@ -274,6 +310,101 @@ try {
   });
   const interactions = interactionEvaluation.result?.value;
 
+  const moduleContractEvaluation = await client.send('Runtime.evaluate', {
+    expression: `(async () => {
+      const requiredExports = {
+        '/lib.js': ['default', 'initLibraryShims'],
+        '/script.js': ['eventSource', 'event_types', 'getRequestHeaders'],
+        '/scripts/events.js': ['eventSource', 'event_types'],
+        '/scripts/extensions.js': ['extension_settings', 'extensionNames', 'getContext', 'initExtensions'],
+        '/scripts/st-context.js': ['getContext'],
+        '/scripts/popup.js': ['POPUP_TYPE', 'Popup'],
+      };
+      const imports = {};
+      const modules = {};
+
+      for (const [modulePath, exports] of Object.entries(requiredExports)) {
+        try {
+          const module = await import(modulePath);
+          modules[modulePath] = module;
+          const availableExports = Object.keys(module).sort();
+          const missingExports = exports.filter((name) => typeof module[name] === 'undefined');
+          imports[modulePath] = {
+            ok: missingExports.length === 0,
+            exportCount: availableExports.length,
+            missingExports,
+          };
+        } catch (error) {
+          imports[modulePath] = {
+            ok: false,
+            exportCount: 0,
+            missingExports: exports,
+            error: String(error?.stack ?? error),
+          };
+        }
+      }
+
+      let eventSystem = { delivered: false, scriptEventSourceMatches: false, error: null };
+      try {
+        const eventsModule = modules['/scripts/events.js'];
+        const scriptModule = modules['/script.js'];
+        let deliveries = 0;
+        const probeEvent = 'pure_tavern_contract_probe';
+        const listener = (payload) => {
+          if (payload === 'ok') deliveries += 1;
+        };
+        eventsModule.eventSource.on(probeEvent, listener);
+        await eventsModule.eventSource.emit(probeEvent, 'ok');
+        eventsModule.eventSource.removeListener(probeEvent, listener);
+        eventSystem = {
+          delivered: deliveries === 1,
+          scriptEventSourceMatches: scriptModule.eventSource === eventsModule.eventSource,
+          error: null,
+        };
+      } catch (error) {
+        eventSystem = {
+          delivered: false,
+          scriptEventSourceMatches: false,
+          error: String(error?.stack ?? error),
+        };
+      }
+
+      const extensionsModule = modules['/scripts/extensions.js'];
+      const extensionContext = extensionsModule
+        ? {
+            getContextFunction: typeof extensionsModule.getContext === 'function',
+            extensionSettingsObject:
+              extensionsModule.extension_settings &&
+              typeof extensionsModule.extension_settings === 'object',
+            disabledExtensionsArray: Array.isArray(
+              extensionsModule.extension_settings?.disabledExtensions,
+            ),
+            extensionNamesArray: Array.isArray(extensionsModule.extensionNames),
+          }
+        : {
+            getContextFunction: false,
+            extensionSettingsObject: false,
+            disabledExtensionsArray: false,
+            extensionNamesArray: false,
+          };
+      extensionContext.ok =
+        extensionContext.getContextFunction &&
+        extensionContext.extensionSettingsObject &&
+        extensionContext.disabledExtensionsArray &&
+        extensionContext.extensionNamesArray;
+
+      return {
+        imports,
+        allImportsOk: Object.values(imports).every((entry) => entry.ok),
+        eventSystem,
+        extensionContext,
+      };
+    })()`,
+    awaitPromise: true,
+    returnByValue: true,
+  });
+  const moduleContracts = moduleContractEvaluation.result?.value;
+
   // Allow animations, nested CSS imports, fonts, and images to finish so late failures are included.
   await new Promise((resolve) => setTimeout(resolve, 750));
 
@@ -302,6 +433,14 @@ try {
       typeof snapshot?.upstreamVersion === 'string' && snapshot.upstreamVersion !== 'loading',
     documentComplete: snapshot?.documentReadyState === 'complete',
     legacyJQueryLoaded: snapshot?.jqueryPresent === true,
+    criticalDomAnchorsPresent: snapshot?.missingCriticalDomAnchors?.length === 0,
+    expectedRuntimeGlobalsPresent:
+      snapshot?.runtimeGlobals && Object.values(snapshot.runtimeGlobals).every(Boolean),
+    legacyModuleImportsAvailable: moduleContracts?.allImportsOk === true,
+    legacyEventSystemOperational:
+      moduleContracts?.eventSystem?.delivered === true &&
+      moduleContracts?.eventSystem?.scriptEventSourceMatches === true,
+    extensionContextAvailable: moduleContracts?.extensionContext?.ok === true,
     legacyCssLoaded:
       snapshot?.styleSheetHrefs?.some((href) => href.endsWith('/style.css')) === true,
     legacyLibraryLoaded: localScriptRequests.some((url) => new URL(url).pathname === '/lib.js'),
@@ -330,6 +469,7 @@ try {
     browserPath,
     snapshot,
     interactions,
+    moduleContracts,
     requestCount: requests.length,
     localScriptRequestCount: localScriptRequests.length,
     compatibilityNetworkRequests,

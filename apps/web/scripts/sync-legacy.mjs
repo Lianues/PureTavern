@@ -3,6 +3,7 @@ import { cp, mkdir, readFile, readdir, rm, stat, writeFile } from 'node:fs/promi
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { checkLegacyContract } from './legacy-contracts.mjs';
 import { generateHookedIndex } from './legacy-index-generator.mjs';
 import { prepareLegacyRuntime } from './prepare-legacy-runtime.mjs';
 
@@ -174,8 +175,10 @@ const report = {
 };
 
 if (options.check) {
+  const contractReport = await checkLegacyContract({ source: source.publicRoot, version });
+  report.contracts = contractReport;
   console.log(JSON.stringify(report, null, 2));
-  process.exit(0);
+  process.exit(contractReport.ok ? 0 : 1);
 }
 
 await rm(targetPublicRoot, { recursive: true, force: true });
