@@ -155,15 +155,16 @@ describe('legacy compatibility contracts', () => {
       expect.arrayContaining(['eventSource', 'event_types', 'getRequestHeaders']),
     );
     expect(
-      contract.categories.dataCapabilitiesPendingMigration.startupCompatibilityRequests.some(
+      contract.categories.dataCapabilities.startupCompatibilityRequests.some(
         (request) => request.migrationStatus === 'bootstrap-empty-response-not-migrated',
       ),
     ).toBe(true);
-    expect(
-      contract.categories.dataCapabilitiesPendingMigration.startupCompatibilityRequests.every(
-        (request) => request.migrationStatus !== 'migrated',
-      ),
-    ).toBe(true);
+    expect(contract.categories.dataCapabilities.startupCompatibilityRequests).toContainEqual(
+      expect.objectContaining({
+        pathname: '/api/settings/save',
+        migrationStatus: 'browser-ready-core-settings',
+      }),
+    );
   });
 
   it('reports critical risks when key Legacy contracts disappear', async () => {

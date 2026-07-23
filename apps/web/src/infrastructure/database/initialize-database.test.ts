@@ -1,3 +1,4 @@
+import Dexie from 'dexie';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { AppDatabase, DATABASE_SCHEMA_VERSION } from './app-database';
@@ -21,7 +22,7 @@ afterEach(async () => {
 });
 
 describe('initializeDatabase', () => {
-  it('creates core metadata without feature-specific tables', async () => {
+  it('creates core metadata and the feature-owned settings table', async () => {
     const database = createTestDatabase();
 
     const state = await initializeDatabase(database);
@@ -38,7 +39,15 @@ describe('initializeDatabase', () => {
       status: 'browser-ready',
       version: DATABASE_SCHEMA_VERSION,
     });
-    expect(database.tables.map((table) => table.name).sort()).toEqual(['meta', 'moduleStates']);
+    expect(database.tables.map((table) => table.name).sort()).toEqual([
+      'meta',
+      'moduleStates',
+      'settings',
+    ]);
+    await expect(database.moduleStates.get('M03-settings')).resolves.toMatchObject({
+      status: 'browser-ready',
+      version: 1,
+    });
   });
 
   it('can run repeatedly without duplicating module state rows', async () => {
@@ -47,6 +56,29 @@ describe('initializeDatabase', () => {
     await initializeDatabase(database);
     await initializeDatabase(database);
 
-    await expect(database.moduleStates.count()).resolves.toBe(3);
+    await expect(database.moduleStates.count()).resolves.toBe(4);
+  });
+
+  it('upgrades an existing schema v1 database without losing core records', async () => {
+    const name = `pure-tavern-test-${crypto.randomUUID()}`;
+    const legacyDatabase = new Dexie(name);
+    legacyDatabase.version(1).stores({
+      meta: '&key, updatedAt',
+      moduleStates: '&moduleId, status, updatedAt',
+    });
+    await legacyDatabase.open();
+    await legacyDatabase.table('meta').put({
+      key: 'legacyProbe',
+      value: 'preserved',
+      updatedAt: new Date(0).toISOString(),
+    });
+    legacyDatabase.close();
+
+    const database = new AppDatabase(name);
+    databases.push(database);
+    await initializeDatabase(database);
+
+    await expect(database.meta.get('legacyProbe')).resolves.toMatchObject({ value: 'preserved' });
+    expect(database.tables.some((table) => table.name === 'settings')).toBe(true);
   });
 });

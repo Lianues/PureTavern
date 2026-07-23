@@ -1,4 +1,6 @@
+AGENTS.md
 apps/web/legacy/upstream/**
+apps/web/legacy/contracts/**
 apps/web/.generated/**
 apps/web/index.html
 SillyTavern-1.18.0/**

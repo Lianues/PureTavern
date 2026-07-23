@@ -85,7 +85,7 @@ Hook 注入使用稳定的 `lib/polyfill.js` 标签作为锚点，并要求它�
 
 - **UI 必需**：关键 DOM ID、首页脚本/样式入口和原版交互锚点；
 - **扩展生态必需**：扩展面板 DOM、`scripts/extensions.js`、`scripts/extensions/**`、关键模块导出、事件名和运行时全局对象；
-- **数据能力待迁移**：Hook 当前处理的启动请求，全部标记为 Bootstrap Compatibility，不代表角色、聊天、世界书或扩展业务已经迁移。
+- **数据能力**：Settings get/save 标记为浏览器就绪；其余启动请求继续标记为 Bootstrap Compatibility，不代表角色、聊天、世界书或扩展业务已经迁移。
 
 `pnpm legacy:contracts:generate` 只生成契约 JSON，不写回上游目录。`pnpm legacy:contracts:check --source <新上游> --version <版本>` 会报告 added/removed/changed；关键契约破坏时返回非零状态。
 
@@ -93,16 +93,17 @@ Hook 注入使用稳定的 `lib/polyfill.js` 标签作为锚点，并要求它�
 
 Hook 必须在原版主模块执行前安装。当前职责仅有：
 
-- 初始化 IndexedDB 基础 schema；
+- 初始化 IndexedDB schema v2；
 - 包装同源 `fetch`；
-- 对原版启动阶段必需的少量路径返回固定空数据；
+- 将原版 settings get/save 桥接到 Settings Use Case 与 IndexedDB；
+- 对其余启动阶段必需路径返回固定空数据或安全默认值；
 - 记录已处理请求和未处理路径；
 - 暴露 `globalThis.__PURE_TAVERN__` 诊断信息；
 - 读取同步工具生成的上游版本元数据。
 
-当前启动响应包括设置、空角色列表、空群组列表、空世界书列表、默认头像、空背景、空最近聊天和离线 Horde 状态等。它们是 **Bootstrap Compatibility Contract**，作用只是让原版 UI 完成初始化。
+当前 Settings 核心文档已经是浏览器能力：首次使用上游默认设置初始化，原版 `/api/settings/get` 与 `/api/settings/save` 通过 Port/Adapter 在 IndexedDB 中读取和全量写入；IndexedDB 不可用时降级为页面会话内存存储。
 
-它们不代表对应接口已经迁移：
+空角色列表、空群组列表、空世界书列表、默认头像、空背景、空最近聊天和离线 Horde 状态等仍属于 **Bootstrap Compatibility Contract**，只用于让原版 UI 完成初始化。除 Settings 核心文档外，它们不代表对应接口已经迁移：
 
 - 不持久化真实角色或聊天；
 - 不实现角色卡导入导出；
@@ -120,7 +121,8 @@ Hook 必须在原版主模块执行前安装。当前职责仅有：
 原版按钮 / DOM
   → 原版 jQuery 或 ESM 事件处理器
   → Legacy Hook（仅在需要数据能力时介入）
-  → 当前为空响应；未来转发到浏览器 Use Case 或可选后端
+  → Settings 已转发到浏览器 Use Case；其他模块暂为空响应
+  → 未来可按 Port 切换浏览器或可选后端 Adapter
 ```
 
 这样可以保证：
@@ -188,7 +190,8 @@ pnpm test:browser
 - 没有本地资源 404、运行时异常或控制台错误；
 - 没有兼容请求意外进入网络；
 - 没有未处理的启动路径；
-- 代表性的左右抽屉和世界书抽屉可打开并再次关闭。
+- 代表性的左右抽屉和世界书抽屉可打开并再次关闭；
+- 原版 `#fast_ui_mode` 通过原版防抖保存写入 IndexedDB，刷新后恢复。
 
 若测试发现新的 `unhandledEndpoints`，只补充完成 UI 启动所需的最小空响应；不要借升级之机一次性迁移真实业务接口。
 

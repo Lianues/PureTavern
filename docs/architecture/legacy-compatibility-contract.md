@@ -47,15 +47,17 @@ Pure Tavern 将 SillyTavern 原版 UI/交互作为长期保留的上游兼容层
 
 当前状态必须明确为：扩展 UI 基础仍在，扩展发现接口返回空列表，第三方扩展加载未启用。契约保留入口，不等于恢复了完整第三方扩展运行能力。
 
-### 数据能力待迁移
+### 数据能力
 
-记录 Hook 当前处理的启动阶段兼容请求：
+记录 Hook 当前处理的 Legacy 请求，并明确区分已实现与待迁移能力：
 
-- `/csrf-token`、`/version`、`/api/users/me` 等 UI 启动必需响应；
-- `/api/settings/get`、`/api/characters/all`、`/api/chats/recent`、`/api/worldinfo/list` 等空数据响应；
-- 扩展相关的 `/api/extensions/discover`、`/api/secrets/*` 空或安全默认响应。
+- `/api/settings/get`、`/api/settings/save` 标记为 `browser-ready-core-settings`，通过 Settings Port 在 IndexedDB 中持久化完整 settings 文档；
+- `/csrf-token`、`/version`、`/api/users/me` 等仍是 UI 启动固定兼容响应；
+- `/api/characters/all`、`/api/chats/recent`、`/api/worldinfo/list` 等仍是空数据响应；
+- `/api/settings/get-snapshots` 仍为空数组，设置快照尚未迁移；
+- 扩展相关的 `/api/extensions/discover`、`/api/secrets/*` 仍为空或安全默认响应。
 
-这些接口统一标记为 `bootstrap-compatibility-only`、`bootstrap-empty-response-not-migrated` 或 `extension-loading-disabled`。它们不是新架构正式业务 API，也不代表角色、聊天、世界书或扩展数据已经迁移。
+契约 schema v2 使用 `dataCapabilities` 分类。除 Settings 核心文档外，标记为 `bootstrap-compatibility-only`、`bootstrap-empty-response-not-migrated` 或 `extension-loading-disabled` 的路径都不是已完成业务能力。
 
 ## 3. 工具命令
 
@@ -79,7 +81,7 @@ pnpm legacy:contracts:check --source "F:\path\SillyTavern-1.19.0" --version 1.19
 
 `pnpm test:browser` 在真实 Chrome/Edge 中验证：
 
-- Hook、IndexedDB 和上游版本元数据就绪；
+- Hook、IndexedDB、Settings Storage 和上游版本元数据就绪；
 - 原版 CSS、`lib.js`、`script.js` 加载；
 - jQuery 与关键上游全局对象存在；
 - `script.js`、`scripts/events.js`、`scripts/extensions.js` 等模块可动态导入且关键导出存在；
@@ -87,9 +89,10 @@ pnpm legacy:contracts:check --source "F:\path\SillyTavern-1.19.0" --version 1.19
 - 扩展上下文入口和扩展设置对象存在，但不启用第三方扩展；
 - 关键 DOM 锚点存在；
 - 左右抽屉、世界书抽屉可打开并关闭；
+- 原版 `#fast_ui_mode` 触发原版防抖保存，IndexedDB 记录与刷新后的控件状态一致；
 - 本地资源无 404、运行时无异常、控制台无错误、启动兼容请求不进入网络。
 
-测试只读取和触发 UI，不保存真实角色、聊天或世界书数据。
+测试会在临时浏览器 Profile 中保存一个设置布尔值；不会保存真实角色、聊天或世界书数据，测试结束后整个 Profile 会删除。
 
 ## 5. 升级风险处理
 

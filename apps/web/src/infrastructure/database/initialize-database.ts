@@ -21,7 +21,7 @@ const INITIAL_MODULE_STATES: Omit<ModuleStateContract, 'updatedAt'>[] = [
     moduleId: 'M00-application-shell',
     version: 1,
     status: 'legacy-hosted',
-    details: 'Legacy UI is displayed in a script-disabled sandbox.',
+    details: 'Upstream Legacy UI and interaction runtime are the primary compatibility surface.',
   },
   {
     moduleId: 'M01-module-runtime',
@@ -33,7 +33,14 @@ const INITIAL_MODULE_STATES: Omit<ModuleStateContract, 'updatedAt'>[] = [
     moduleId: 'M02-local-database',
     version: DATABASE_SCHEMA_VERSION,
     status: 'browser-ready',
-    details: 'Core metadata tables are available. Feature tables are added by module migrations.',
+    details: 'Core metadata and feature-owned settings storage are available in IndexedDB.',
+  },
+  {
+    moduleId: 'M03-settings',
+    version: 1,
+    status: 'browser-ready',
+    details:
+      'The main Legacy settings document persists locally; snapshots and preset CRUD are deferred.',
   },
 ];
 

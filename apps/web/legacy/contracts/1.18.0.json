@@ -1,8 +1,8 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "project": "SillyTavern",
   "version": "1.18.0",
-  "generatedAt": "2026-07-23T16:07:06.209Z",
+  "generatedAt": "2026-07-23T16:37:17.635Z",
   "source": {
     "publicRoot": "legacy/upstream/public",
     "repositoryRoot": "legacy/upstream"
@@ -2460,7 +2460,10 @@
           "updateViewMessageIds",
           "user_avatar"
         ],
-        "scripts/events.js": ["event_types", "eventSource"],
+        "scripts/events.js": [
+          "event_types",
+          "eventSource"
+        ],
         "scripts/extensions.js": [
           "cancelDebouncedMetadataSave",
           "deleteExtension",
@@ -2492,7 +2495,10 @@
           "writeExtensionField",
           "writeExtensionFieldBulk"
         ],
-        "scripts/st-context.js": ["default", "getContext"],
+        "scripts/st-context.js": [
+          "default",
+          "getContext"
+        ],
         "scripts/popup.js": [
           "callGenericPopup",
           "fixToastrForDialogs",
@@ -2502,7 +2508,10 @@
           "POPUP_TYPE",
           "PopupUtils"
         ],
-        "scripts/templates.js": ["renderTemplate", "renderTemplateAsync"]
+        "scripts/templates.js": [
+          "renderTemplate",
+          "renderTemplateAsync"
+        ]
       },
       "moduleExports": {
         "lib.js": [
@@ -2534,12 +2543,27 @@
           "SVGInject",
           "yaml"
         ],
-        "lib/dialog-polyfill.esm.js": ["default"],
-        "lib/eventemitter.js": ["EventEmitter"],
-        "lib/structured-clone/deserialize.js": ["deserialize"],
-        "lib/structured-clone/index.js": ["default", "deserialize", "serialize"],
-        "lib/structured-clone/json.js": ["parse", "stringify"],
-        "lib/structured-clone/serialize.js": ["serialize"],
+        "lib/dialog-polyfill.esm.js": [
+          "default"
+        ],
+        "lib/eventemitter.js": [
+          "EventEmitter"
+        ],
+        "lib/structured-clone/deserialize.js": [
+          "deserialize"
+        ],
+        "lib/structured-clone/index.js": [
+          "default",
+          "deserialize",
+          "serialize"
+        ],
+        "lib/structured-clone/json.js": [
+          "parse",
+          "stringify"
+        ],
+        "lib/structured-clone/serialize.js": [
+          "serialize"
+        ],
         "lib/structured-clone/types.js": [
           "ARRAY",
           "BIGINT",
@@ -2803,8 +2827,12 @@
           "updateViewMessageIds",
           "user_avatar"
         ],
-        "scripts/a11y.js": ["initAccessibility"],
-        "scripts/action-loader-slashcommands.js": ["registerActionLoaderSlashCommands"],
+        "scripts/a11y.js": [
+          "initAccessibility"
+        ],
+        "scripts/action-loader-slashcommands.js": [
+          "registerActionLoaderSlashCommands"
+        ],
         "scripts/action-loader.js": [
           "ActionLoaderHandle",
           "ActionLoaderToastMode",
@@ -2815,7 +2843,9 @@
           "loader",
           "showActionLoader"
         ],
-        "scripts/audio-player.js": ["AudioPlayer"],
+        "scripts/audio-player.js": [
+          "AudioPlayer"
+        ],
         "scripts/authors-note.js": [
           "initAuthorsNote",
           "metadata_keys",
@@ -2829,14 +2859,24 @@
           "AUTOCOMPLETE_STATE",
           "AUTOCOMPLETE_WIDTH"
         ],
-        "scripts/autocomplete/AutoCompleteFuzzyScore.js": ["AutoCompleteFuzzyScore"],
-        "scripts/autocomplete/AutoCompleteNameResult.js": ["AutoCompleteNameResult"],
-        "scripts/autocomplete/AutoCompleteNameResultBase.js": ["AutoCompleteNameResultBase"],
-        "scripts/autocomplete/AutoCompleteOption.js": ["AutoCompleteOption"],
+        "scripts/autocomplete/AutoCompleteFuzzyScore.js": [
+          "AutoCompleteFuzzyScore"
+        ],
+        "scripts/autocomplete/AutoCompleteNameResult.js": [
+          "AutoCompleteNameResult"
+        ],
+        "scripts/autocomplete/AutoCompleteNameResultBase.js": [
+          "AutoCompleteNameResultBase"
+        ],
+        "scripts/autocomplete/AutoCompleteOption.js": [
+          "AutoCompleteOption"
+        ],
         "scripts/autocomplete/AutoCompleteSecondaryNameResult.js": [
           "AutoCompleteSecondaryNameResult"
         ],
-        "scripts/autocomplete/BlankAutoCompleteOption.js": ["BlankAutoCompleteOption"],
+        "scripts/autocomplete/BlankAutoCompleteOption.js": [
+          "BlankAutoCompleteOption"
+        ],
         "scripts/autocomplete/EnhancedMacroAutoCompleteOption.js": [
           "EnhancedMacroAutoCompleteOption",
           "isValidVariableShorthandName",
@@ -2874,7 +2914,9 @@
           "getMacroAutoCompleteAt",
           "getVariableNames"
         ],
-        "scripts/autocomplete/MacroAutoCompleteOption.js": ["MacroAutoCompleteOption"],
+        "scripts/autocomplete/MacroAutoCompleteOption.js": [
+          "MacroAutoCompleteOption"
+        ],
         "scripts/backgrounds.js": [
           "background_settings",
           "getActiveBackgroundTab",
@@ -2893,8 +2935,13 @@
           "showBookmarksButtons",
           "updateBookmarkDisplay"
         ],
-        "scripts/browser-fixes.js": ["applyBrowserFixes", "isFirefox"],
-        "scripts/bulk-edit.js": ["initBulkEdit"],
+        "scripts/browser-fixes.js": [
+          "applyBrowserFixes",
+          "isFirefox"
+        ],
+        "scripts/bulk-edit.js": [
+          "initBulkEdit"
+        ],
         "scripts/BulkEditOverlay.js": [
           "BulkEditOverlay",
           "BulkEditOverlayState",
@@ -2907,9 +2954,16 @@
           "initCfg",
           "metadataKeys"
         ],
-        "scripts/char-data.js": ["default"],
-        "scripts/chat-backups.js": ["addChatBackupsBrowser"],
-        "scripts/chat-templates.js": ["bindModelTemplates", "deriveTemplatesFromChatTemplate"],
+        "scripts/char-data.js": [
+          "default"
+        ],
+        "scripts/chat-backups.js": [
+          "addChatBackupsBrowser"
+        ],
+        "scripts/chat-templates.js": [
+          "bindModelTemplates",
+          "deriveTemplatesFromChatTemplate"
+        ],
         "scripts/chats.js": [
           "addDOMPurifyHooks",
           "appendFileContent",
@@ -2954,13 +3008,29 @@
           "SWIPE_STATE",
           "VIDEO_EXTENSIONS"
         ],
-        "scripts/custom-request.js": ["ChatCompletionService", "TextCompletionService"],
-        "scripts/data-maid.js": ["initDataMaid"],
-        "scripts/dom-handlers.js": ["initDomHandlers"],
-        "scripts/dragdrop.js": ["DragAndDropHandler"],
-        "scripts/dynamic-styles.js": ["initDynamicStyles"],
-        "scripts/events.js": ["event_types", "eventSource"],
-        "scripts/extensions-slashcommands.js": ["registerExtensionSlashCommands"],
+        "scripts/custom-request.js": [
+          "ChatCompletionService",
+          "TextCompletionService"
+        ],
+        "scripts/data-maid.js": [
+          "initDataMaid"
+        ],
+        "scripts/dom-handlers.js": [
+          "initDomHandlers"
+        ],
+        "scripts/dragdrop.js": [
+          "DragAndDropHandler"
+        ],
+        "scripts/dynamic-styles.js": [
+          "initDynamicStyles"
+        ],
+        "scripts/events.js": [
+          "event_types",
+          "eventSource"
+        ],
+        "scripts/extensions-slashcommands.js": [
+          "registerExtensionSlashCommands"
+        ],
         "scripts/extensions.js": [
           "cancelDebouncedMetadataSave",
           "deleteExtension",
@@ -2992,10 +3062,20 @@
           "writeExtensionField",
           "writeExtensionFieldBulk"
         ],
-        "scripts/extensions/assets/index.js": ["init", "MODULE_NAME"],
-        "scripts/extensions/attachments/index.js": ["init"],
-        "scripts/extensions/caption/index.js": ["init", "MODULE_NAME"],
-        "scripts/extensions/connection-manager/index.js": ["init"],
+        "scripts/extensions/assets/index.js": [
+          "init",
+          "MODULE_NAME"
+        ],
+        "scripts/extensions/attachments/index.js": [
+          "init"
+        ],
+        "scripts/extensions/caption/index.js": [
+          "init",
+          "MODULE_NAME"
+        ],
+        "scripts/extensions/connection-manager/index.js": [
+          "init"
+        ],
         "scripts/extensions/expressions/index.js": [
           "getExpressionLabel",
           "getExpressionsList",
@@ -3005,9 +3085,16 @@
           "sendExpressionCall",
           "visualNovelUpdateLayers"
         ],
-        "scripts/extensions/gallery/index.js": ["init"],
-        "scripts/extensions/memory/index.js": ["init", "MODULE_NAME"],
-        "scripts/extensions/quick-reply/api/QuickReplyApi.js": ["QuickReplyApi"],
+        "scripts/extensions/gallery/index.js": [
+          "init"
+        ],
+        "scripts/extensions/memory/index.js": [
+          "init",
+          "MODULE_NAME"
+        ],
+        "scripts/extensions/quick-reply/api/QuickReplyApi.js": [
+          "QuickReplyApi"
+        ],
         "scripts/extensions/quick-reply/index.js": [
           "debounceAsync",
           "debug",
@@ -3016,20 +3103,48 @@
           "quickReplyApi",
           "warn"
         ],
-        "scripts/extensions/quick-reply/src/AutoExecuteHandler.js": ["AutoExecuteHandler"],
-        "scripts/extensions/quick-reply/src/QuickReply.js": ["QuickReply"],
-        "scripts/extensions/quick-reply/src/QuickReplyConfig.js": ["QuickReplyConfig"],
-        "scripts/extensions/quick-reply/src/QuickReplyContextLink.js": ["QuickReplyContextLink"],
-        "scripts/extensions/quick-reply/src/QuickReplySet.js": ["QuickReplySet"],
-        "scripts/extensions/quick-reply/src/QuickReplySetLink.js": ["QuickReplySetLink"],
-        "scripts/extensions/quick-reply/src/QuickReplySettings.js": ["QuickReplySettings"],
-        "scripts/extensions/quick-reply/src/SlashCommandHandler.js": ["SlashCommandHandler"],
-        "scripts/extensions/quick-reply/src/ui/ButtonUi.js": ["ButtonUi"],
-        "scripts/extensions/quick-reply/src/ui/ctx/ContextMenu.js": ["ContextMenu"],
-        "scripts/extensions/quick-reply/src/ui/ctx/MenuHeader.js": ["MenuHeader"],
-        "scripts/extensions/quick-reply/src/ui/ctx/MenuItem.js": ["MenuItem"],
-        "scripts/extensions/quick-reply/src/ui/ctx/SubMenu.js": ["SubMenu"],
-        "scripts/extensions/quick-reply/src/ui/SettingsUi.js": ["SettingsUi"],
+        "scripts/extensions/quick-reply/src/AutoExecuteHandler.js": [
+          "AutoExecuteHandler"
+        ],
+        "scripts/extensions/quick-reply/src/QuickReply.js": [
+          "QuickReply"
+        ],
+        "scripts/extensions/quick-reply/src/QuickReplyConfig.js": [
+          "QuickReplyConfig"
+        ],
+        "scripts/extensions/quick-reply/src/QuickReplyContextLink.js": [
+          "QuickReplyContextLink"
+        ],
+        "scripts/extensions/quick-reply/src/QuickReplySet.js": [
+          "QuickReplySet"
+        ],
+        "scripts/extensions/quick-reply/src/QuickReplySetLink.js": [
+          "QuickReplySetLink"
+        ],
+        "scripts/extensions/quick-reply/src/QuickReplySettings.js": [
+          "QuickReplySettings"
+        ],
+        "scripts/extensions/quick-reply/src/SlashCommandHandler.js": [
+          "SlashCommandHandler"
+        ],
+        "scripts/extensions/quick-reply/src/ui/ButtonUi.js": [
+          "ButtonUi"
+        ],
+        "scripts/extensions/quick-reply/src/ui/ctx/ContextMenu.js": [
+          "ContextMenu"
+        ],
+        "scripts/extensions/quick-reply/src/ui/ctx/MenuHeader.js": [
+          "MenuHeader"
+        ],
+        "scripts/extensions/quick-reply/src/ui/ctx/MenuItem.js": [
+          "MenuItem"
+        ],
+        "scripts/extensions/quick-reply/src/ui/ctx/SubMenu.js": [
+          "SubMenu"
+        ],
+        "scripts/extensions/quick-reply/src/ui/SettingsUi.js": [
+          "SettingsUi"
+        ],
         "scripts/extensions/regex/engine.js": [
           "allowPresetScripts",
           "allowScopedScripts",
@@ -3050,7 +3165,10 @@
           "SCRIPT_TYPES",
           "substitute_find_regex"
         ],
-        "scripts/extensions/regex/index.js": ["getRegexScripts", "init"],
+        "scripts/extensions/regex/index.js": [
+          "getRegexScripts",
+          "init"
+        ],
         "scripts/extensions/shared.js": [
           "ConnectionManagerRequestService",
           "countWebLlmTokens",
@@ -3059,23 +3177,60 @@
           "getWebLlmContextSize",
           "isWebLlmSupported"
         ],
-        "scripts/extensions/stable-diffusion/index.js": ["init", "MODULE_NAME"],
-        "scripts/extensions/token-counter/index.js": ["init"],
-        "scripts/extensions/translate/index.js": ["autoModeOptions", "init", "translate"],
-        "scripts/extensions/tts/alltalk.js": ["AllTalkTtsProvider"],
-        "scripts/extensions/tts/azure.js": ["AzureTtsProvider"],
-        "scripts/extensions/tts/chatterbox.js": ["ChatterboxTtsProvider"],
-        "scripts/extensions/tts/chutes.js": ["ChutesTtsProvider"],
-        "scripts/extensions/tts/coqui.js": ["CoquiTtsProvider"],
-        "scripts/extensions/tts/cosyvoice.js": ["CosyVoiceProvider"],
-        "scripts/extensions/tts/edge.js": ["EdgeTtsProvider"],
-        "scripts/extensions/tts/electronhub.js": ["ElectronHubTtsProvider"],
-        "scripts/extensions/tts/elevenlabs.js": ["ElevenLabsTtsProvider"],
-        "scripts/extensions/tts/google-native.js": ["GoogleNativeTtsProvider"],
-        "scripts/extensions/tts/google-translate.js": ["GoogleTranslateTtsProvider"],
-        "scripts/extensions/tts/gpt-sovits-adapter.js": ["GptSoVITSAdapterProvider"],
-        "scripts/extensions/tts/gpt-sovits-v2.js": ["GptSovitsV2Provider"],
-        "scripts/extensions/tts/gsvi.js": ["GSVITtsProvider"],
+        "scripts/extensions/stable-diffusion/index.js": [
+          "init",
+          "MODULE_NAME"
+        ],
+        "scripts/extensions/token-counter/index.js": [
+          "init"
+        ],
+        "scripts/extensions/translate/index.js": [
+          "autoModeOptions",
+          "init",
+          "translate"
+        ],
+        "scripts/extensions/tts/alltalk.js": [
+          "AllTalkTtsProvider"
+        ],
+        "scripts/extensions/tts/azure.js": [
+          "AzureTtsProvider"
+        ],
+        "scripts/extensions/tts/chatterbox.js": [
+          "ChatterboxTtsProvider"
+        ],
+        "scripts/extensions/tts/chutes.js": [
+          "ChutesTtsProvider"
+        ],
+        "scripts/extensions/tts/coqui.js": [
+          "CoquiTtsProvider"
+        ],
+        "scripts/extensions/tts/cosyvoice.js": [
+          "CosyVoiceProvider"
+        ],
+        "scripts/extensions/tts/edge.js": [
+          "EdgeTtsProvider"
+        ],
+        "scripts/extensions/tts/electronhub.js": [
+          "ElectronHubTtsProvider"
+        ],
+        "scripts/extensions/tts/elevenlabs.js": [
+          "ElevenLabsTtsProvider"
+        ],
+        "scripts/extensions/tts/google-native.js": [
+          "GoogleNativeTtsProvider"
+        ],
+        "scripts/extensions/tts/google-translate.js": [
+          "GoogleTranslateTtsProvider"
+        ],
+        "scripts/extensions/tts/gpt-sovits-adapter.js": [
+          "GptSoVITSAdapterProvider"
+        ],
+        "scripts/extensions/tts/gpt-sovits-v2.js": [
+          "GptSovitsV2Provider"
+        ],
+        "scripts/extensions/tts/gsvi.js": [
+          "GSVITtsProvider"
+        ],
         "scripts/extensions/tts/index.js": [
           "getCharacters",
           "getPreviewString",
@@ -3085,26 +3240,56 @@
           "sanitizeId",
           "saveTtsProviderSettings"
         ],
-        "scripts/extensions/tts/kokoro.js": ["KokoroTtsProvider"],
-        "scripts/extensions/tts/minimax.js": ["MiniMaxTtsProvider"],
-        "scripts/extensions/tts/novel.js": ["NovelTtsProvider"],
-        "scripts/extensions/tts/openai-compatible.js": ["OpenAICompatibleTtsProvider"],
-        "scripts/extensions/tts/openai.js": ["OpenAITtsProvider"],
-        "scripts/extensions/tts/pollinations.js": ["PollinationsTtsProvider"],
-        "scripts/extensions/tts/sbvits2.js": ["SBVits2TtsProvider"],
-        "scripts/extensions/tts/silerotts.js": ["SileroTtsProvider"],
-        "scripts/extensions/tts/speecht5.js": ["SpeechT5TtsProvider"],
-        "scripts/extensions/tts/system.js": ["SystemTtsProvider"],
-        "scripts/extensions/tts/tts-webui.js": ["TtsWebuiProvider"],
-        "scripts/extensions/tts/vits.js": ["VITSTtsProvider"],
-        "scripts/extensions/tts/volcengine.js": ["VolcengineTtsProvider"],
-        "scripts/extensions/tts/xtts.js": ["XTTSTtsProvider"],
+        "scripts/extensions/tts/kokoro.js": [
+          "KokoroTtsProvider"
+        ],
+        "scripts/extensions/tts/minimax.js": [
+          "MiniMaxTtsProvider"
+        ],
+        "scripts/extensions/tts/novel.js": [
+          "NovelTtsProvider"
+        ],
+        "scripts/extensions/tts/openai-compatible.js": [
+          "OpenAICompatibleTtsProvider"
+        ],
+        "scripts/extensions/tts/openai.js": [
+          "OpenAITtsProvider"
+        ],
+        "scripts/extensions/tts/pollinations.js": [
+          "PollinationsTtsProvider"
+        ],
+        "scripts/extensions/tts/sbvits2.js": [
+          "SBVits2TtsProvider"
+        ],
+        "scripts/extensions/tts/silerotts.js": [
+          "SileroTtsProvider"
+        ],
+        "scripts/extensions/tts/speecht5.js": [
+          "SpeechT5TtsProvider"
+        ],
+        "scripts/extensions/tts/system.js": [
+          "SystemTtsProvider"
+        ],
+        "scripts/extensions/tts/tts-webui.js": [
+          "TtsWebuiProvider"
+        ],
+        "scripts/extensions/tts/vits.js": [
+          "VITSTtsProvider"
+        ],
+        "scripts/extensions/tts/volcengine.js": [
+          "VolcengineTtsProvider"
+        ],
+        "scripts/extensions/tts/xtts.js": [
+          "XTTSTtsProvider"
+        ],
         "scripts/extensions/vectors/index.js": [
           "EXTENSION_PROMPT_TAG",
           "EXTENSION_PROMPT_TAG_DB",
           "init"
         ],
-        "scripts/extensions/vectors/webllm.js": ["WebLlmVectorProvider"],
+        "scripts/extensions/vectors/webllm.js": [
+          "WebLlmVectorProvider"
+        ],
         "scripts/f-localStorage.js": [
           "CheckLocal",
           "ClearLocal",
@@ -3183,7 +3368,9 @@
           "t",
           "translate"
         ],
-        "scripts/input-md-formatting.js": ["initInputMarkdown"],
+        "scripts/input-md-formatting.js": [
+          "initInputMarkdown"
+        ],
         "scripts/instruct-mode.js": [
           "autoSelectInstructPreset",
           "force_output_sequence",
@@ -3238,22 +3425,48 @@
           "NOT_FOCUSABLE_CONTROL_CLASS",
           "registerInteractableType"
         ],
-        "scripts/loader.js": ["hideLoader", "showLoader"],
+        "scripts/loader.js": [
+          "hideLoader",
+          "showLoader"
+        ],
         "scripts/logit-bias.js": [
           "BIAS_CACHE",
           "createNewLogitBiasEntry",
           "displayLogitBias",
           "getLogitBiasListResult"
         ],
-        "scripts/logprobs.js": ["initLogprobs", "saveLogprobsForActiveMessage"],
-        "scripts/macros.js": ["evaluateMacros", "getLastMessageId", "initMacros", "MacrosParser"],
-        "scripts/macros/definitions/chat-macros.js": ["registerChatMacros"],
-        "scripts/macros/definitions/core-macros.js": ["ELSE_MARKER", "registerCoreMacros"],
-        "scripts/macros/definitions/env-macros.js": ["registerEnvMacros"],
-        "scripts/macros/definitions/instruct-macros.js": ["registerInstructMacros"],
-        "scripts/macros/definitions/state-macros.js": ["registerStateMacros"],
-        "scripts/macros/definitions/time-macros.js": ["registerTimeMacros"],
-        "scripts/macros/definitions/variable-macros.js": ["registerVariableMacros"],
+        "scripts/logprobs.js": [
+          "initLogprobs",
+          "saveLogprobsForActiveMessage"
+        ],
+        "scripts/macros.js": [
+          "evaluateMacros",
+          "getLastMessageId",
+          "initMacros",
+          "MacrosParser"
+        ],
+        "scripts/macros/definitions/chat-macros.js": [
+          "registerChatMacros"
+        ],
+        "scripts/macros/definitions/core-macros.js": [
+          "ELSE_MARKER",
+          "registerCoreMacros"
+        ],
+        "scripts/macros/definitions/env-macros.js": [
+          "registerEnvMacros"
+        ],
+        "scripts/macros/definitions/instruct-macros.js": [
+          "registerInstructMacros"
+        ],
+        "scripts/macros/definitions/state-macros.js": [
+          "registerStateMacros"
+        ],
+        "scripts/macros/definitions/time-macros.js": [
+          "registerTimeMacros"
+        ],
+        "scripts/macros/definitions/variable-macros.js": [
+          "registerVariableMacros"
+        ],
         "scripts/macros/engine/MacroBrowser.js": [
           "createAliasIndicator",
           "createSourceIndicator",
@@ -3263,7 +3476,9 @@
           "MacroBrowser",
           "renderMacroDetails"
         ],
-        "scripts/macros/engine/MacroCstWalker.js": ["MacroCstWalker"],
+        "scripts/macros/engine/MacroCstWalker.js": [
+          "MacroCstWalker"
+        ],
         "scripts/macros/engine/MacroDiagnostics.js": [
           "createMacroRuntimeError",
           "logMacroGeneralError",
@@ -3275,8 +3490,13 @@
           "onboardingExperimentalMacroEngine",
           "onboardingExperimentalMacroEngineMutex"
         ],
-        "scripts/macros/engine/MacroEngine.js": ["MacroEngine"],
-        "scripts/macros/engine/MacroEnvBuilder.js": ["env_provider_order", "MacroEnvBuilder"],
+        "scripts/macros/engine/MacroEngine.js": [
+          "MacroEngine"
+        ],
+        "scripts/macros/engine/MacroEnvBuilder.js": [
+          "env_provider_order",
+          "MacroEnvBuilder"
+        ],
         "scripts/macros/engine/MacroFlags.js": [
           "createEmptyFlags",
           "getFlagDefinition",
@@ -3292,7 +3512,9 @@
           "MACRO_VARIABLE_SHORTHAND_PATTERN",
           "MacroLexer"
         ],
-        "scripts/macros/engine/MacroParser.js": ["MacroParser"],
+        "scripts/macros/engine/MacroParser.js": [
+          "MacroParser"
+        ],
         "scripts/macros/engine/MacroRegistry.js": [
           "MacroCategory",
           "MacroRegistry",
@@ -3441,7 +3663,10 @@
           "sortEntitiesList",
           "toastPositionClasses"
         ],
-        "scripts/preset-manager.js": ["getPresetManager", "initPresetManager"],
+        "scripts/preset-manager.js": [
+          "getPresetManager",
+          "initPresetManager"
+        ],
         "scripts/PromptManager.js": [
           "chatCompletionDefaultPrompts",
           "INJECTION_POSITION",
@@ -3470,7 +3695,10 @@
           "removeReasoningFromString",
           "updateReasoningUI"
         ],
-        "scripts/request-compression.js": ["compressRequest", "setRequestCompressionConfig"],
+        "scripts/request-compression.js": [
+          "compressRequest",
+          "setRequestCompressionConfig"
+        ],
         "scripts/RossAscends-mods.js": [
           "autoFitSendTextAreaDebounced",
           "dragElement",
@@ -3497,7 +3725,10 @@
           "toggleSamplerManualPriority",
           "validateDisabledSamplers"
         ],
-        "scripts/scrapers.js": ["initScrapers", "ScraperManager"],
+        "scripts/scrapers.js": [
+          "initScrapers",
+          "ScraperManager"
+        ],
         "scripts/secrets.js": [
           "canViewSecrets",
           "checkOpenRouterAuth",
@@ -3514,10 +3745,18 @@
           "updateSecretDisplay",
           "writeSecret"
         ],
-        "scripts/server-history.js": ["initServerHistory"],
-        "scripts/setting-search.js": ["initSettingsSearch"],
-        "scripts/showdown-exclusion.js": ["markdownExclusionExt"],
-        "scripts/showdown-underscore.js": ["markdownUnderscoreExt"],
+        "scripts/server-history.js": [
+          "initServerHistory"
+        ],
+        "scripts/setting-search.js": [
+          "initSettingsSearch"
+        ],
+        "scripts/showdown-exclusion.js": [
+          "markdownExclusionExt"
+        ],
+        "scripts/showdown-underscore.js": [
+          "markdownUnderscoreExt"
+        ],
         "scripts/slash-commands.js": [
           "activateScriptButtons",
           "commandsFromChatInputAbortController",
@@ -3546,8 +3785,12 @@
           "validateArrayArg",
           "validateArrayArgString"
         ],
-        "scripts/slash-commands/AbstractEventTarget.js": ["AbstractEventTarget"],
-        "scripts/slash-commands/SlashCommand.js": ["SlashCommand"],
+        "scripts/slash-commands/AbstractEventTarget.js": [
+          "AbstractEventTarget"
+        ],
+        "scripts/slash-commands/SlashCommand.js": [
+          "SlashCommand"
+        ],
         "scripts/slash-commands/SlashCommandAbortController.js": [
           "SlashCommandAbortController",
           "SlashCommandAbortSignal"
@@ -3560,12 +3803,24 @@
         "scripts/slash-commands/SlashCommandAutoCompleteNameResult.js": [
           "SlashCommandAutoCompleteNameResult"
         ],
-        "scripts/slash-commands/SlashCommandBreak.js": ["SlashCommandBreak"],
-        "scripts/slash-commands/SlashCommandBreakController.js": ["SlashCommandBreakController"],
-        "scripts/slash-commands/SlashCommandBreakPoint.js": ["SlashCommandBreakPoint"],
-        "scripts/slash-commands/SlashCommandBrowser.js": ["SlashCommandBrowser"],
-        "scripts/slash-commands/SlashCommandClosure.js": ["SlashCommandClosure"],
-        "scripts/slash-commands/SlashCommandClosureResult.js": ["SlashCommandClosureResult"],
+        "scripts/slash-commands/SlashCommandBreak.js": [
+          "SlashCommandBreak"
+        ],
+        "scripts/slash-commands/SlashCommandBreakController.js": [
+          "SlashCommandBreakController"
+        ],
+        "scripts/slash-commands/SlashCommandBreakPoint.js": [
+          "SlashCommandBreakPoint"
+        ],
+        "scripts/slash-commands/SlashCommandBrowser.js": [
+          "SlashCommandBrowser"
+        ],
+        "scripts/slash-commands/SlashCommandClosure.js": [
+          "SlashCommandClosure"
+        ],
+        "scripts/slash-commands/SlashCommandClosureResult.js": [
+          "SlashCommandClosureResult"
+        ],
         "scripts/slash-commands/SlashCommandCommandAutoCompleteOption.js": [
           "SlashCommandCommandAutoCompleteOption"
         ],
@@ -3574,25 +3829,41 @@
           "commonEnumProviders",
           "enumIcons"
         ],
-        "scripts/slash-commands/SlashCommandDebugController.js": ["SlashCommandDebugController"],
+        "scripts/slash-commands/SlashCommandDebugController.js": [
+          "SlashCommandDebugController"
+        ],
         "scripts/slash-commands/SlashCommandEnumAutoCompleteOption.js": [
           "SlashCommandEnumAutoCompleteOption"
         ],
-        "scripts/slash-commands/SlashCommandEnumValue.js": ["enumTypes", "SlashCommandEnumValue"],
-        "scripts/slash-commands/SlashCommandExecutionError.js": ["SlashCommandExecutionError"],
-        "scripts/slash-commands/SlashCommandExecutor.js": ["SlashCommandExecutor"],
+        "scripts/slash-commands/SlashCommandEnumValue.js": [
+          "enumTypes",
+          "SlashCommandEnumValue"
+        ],
+        "scripts/slash-commands/SlashCommandExecutionError.js": [
+          "SlashCommandExecutionError"
+        ],
+        "scripts/slash-commands/SlashCommandExecutor.js": [
+          "SlashCommandExecutor"
+        ],
         "scripts/slash-commands/SlashCommandNamedArgumentAssignment.js": [
           "SlashCommandNamedArgumentAssignment"
         ],
         "scripts/slash-commands/SlashCommandNamedArgumentAutoCompleteOption.js": [
           "SlashCommandNamedArgumentAutoCompleteOption"
         ],
-        "scripts/slash-commands/SlashCommandParser.js": ["PARSER_FLAG", "SlashCommandParser"],
-        "scripts/slash-commands/SlashCommandParserError.js": ["SlashCommandParserError"],
+        "scripts/slash-commands/SlashCommandParser.js": [
+          "PARSER_FLAG",
+          "SlashCommandParser"
+        ],
+        "scripts/slash-commands/SlashCommandParserError.js": [
+          "SlashCommandParserError"
+        ],
         "scripts/slash-commands/SlashCommandQuickReplyAutoCompleteOption.js": [
           "SlashCommandQuickReplyAutoCompleteOption"
         ],
-        "scripts/slash-commands/SlashCommandReturnHelper.js": ["slashCommandReturnHelper"],
+        "scripts/slash-commands/SlashCommandReturnHelper.js": [
+          "slashCommandReturnHelper"
+        ],
         "scripts/slash-commands/SlashCommandScope.js": [
           "SlashCommandScope",
           "SlashCommandScopeVariableExistsError",
@@ -3604,8 +3875,15 @@
         "scripts/slash-commands/SlashCommandVariableAutoCompleteOption.js": [
           "SlashCommandVariableAutoCompleteOption"
         ],
-        "scripts/sse-stream.js": ["default", "getEventSourceStream", "SmoothEventSourceStream"],
-        "scripts/st-context.js": ["default", "getContext"],
+        "scripts/sse-stream.js": [
+          "default",
+          "getEventSourceStream",
+          "SmoothEventSourceStream"
+        ],
+        "scripts/st-context.js": [
+          "default",
+          "getContext"
+        ],
         "scripts/stats.js": [
           "characterStatsHandler",
           "charStats",
@@ -3614,7 +3892,9 @@
           "statMesProcess",
           "userStatsHandler"
         ],
-        "scripts/streaming-display.js": ["StreamingDisplay"],
+        "scripts/streaming-display.js": [
+          "StreamingDisplay"
+        ],
         "scripts/swipe-picker.js": [
           "canJumpToSwipeForMessage",
           "canOpenSwipePickerForMessage",
@@ -3669,7 +3949,10 @@
           "tag_sort_mode",
           "tags"
         ],
-        "scripts/templates.js": ["renderTemplate", "renderTemplateAsync"],
+        "scripts/templates.js": [
+          "renderTemplate",
+          "renderTemplateAsync"
+        ],
         "scripts/textgen-models.js": [
           "getCurrentDreamGenModelTokenizer",
           "getCurrentOpenRouterModelTokenizer",
@@ -3746,7 +4029,9 @@
           "TOKENIZER_WARNING_KEY",
           "tokenizers"
         ],
-        "scripts/tool-calling.js": ["ToolManager"],
+        "scripts/tool-calling.js": [
+          "ToolManager"
+        ],
         "scripts/user.js": [
           "accountsEnabled",
           "currentUser",
@@ -3754,16 +4039,26 @@
           "isAdmin",
           "setUserControls"
         ],
-        "scripts/util/AbortReason.js": ["AbortReason"],
-        "scripts/util/AccountStorage.js": ["accountStorage"],
-        "scripts/util/showdown-patch.js": ["addShowdownPatch"],
-        "scripts/util/SimpleMutex.js": ["SimpleMutex"],
+        "scripts/util/AbortReason.js": [
+          "AbortReason"
+        ],
+        "scripts/util/AccountStorage.js": [
+          "accountStorage"
+        ],
+        "scripts/util/showdown-patch.js": [
+          "addShowdownPatch"
+        ],
+        "scripts/util/SimpleMutex.js": [
+          "SimpleMutex"
+        ],
         "scripts/util/stream-fadein.js": [
           "applyStreamFadeIn",
           "isSegmenterSupported",
           "segmentTextInElement"
         ],
-        "scripts/util/StructuredCloneMap.js": ["StructuredCloneMap"],
+        "scripts/util/StructuredCloneMap.js": [
+          "StructuredCloneMap"
+        ],
         "scripts/util/ThemeGenerator.js": [
           "deriveBackgroundName",
           "extractDominantColor",
@@ -4019,13 +4314,27 @@
           "showdown",
           "SVGInject"
         ],
-        "lib/cropper.min.js": ["Cropper"],
-        "lib/dialog-polyfill.esm.js": ["HTMLDialogElement"],
-        "lib/structured-clone/monkey-patch.js": ["structuredClone"],
-        "lib/swiped-events.js": ["CustomEvent"],
-        "lib/toastr.min.js": ["toastr"],
-        "script.js": ["SillyTavern"],
-        "scripts/extensions/expressions/index.js": ["translate"],
+        "lib/cropper.min.js": [
+          "Cropper"
+        ],
+        "lib/dialog-polyfill.esm.js": [
+          "HTMLDialogElement"
+        ],
+        "lib/structured-clone/monkey-patch.js": [
+          "structuredClone"
+        ],
+        "lib/swiped-events.js": [
+          "CustomEvent"
+        ],
+        "lib/toastr.min.js": [
+          "toastr"
+        ],
+        "script.js": [
+          "SillyTavern"
+        ],
+        "scripts/extensions/expressions/index.js": [
+          "translate"
+        ],
         "scripts/extensions/gallery/jquery.nanogallery2.min.js": [
           "cancelAnimationFrame",
           "clearRequestTimeout",
@@ -4040,10 +4349,19 @@
           "requestAnimFrame",
           "requestTimeout"
         ],
-        "scripts/extensions/quick-reply/index.js": ["executeQuickReplyByName", "quickReplyApi"],
-        "scripts/extensions/quick-reply/src/SlashCommandHandler.js": ["qrEnumProviderExecutables"],
-        "scripts/extensions/stable-diffusion/index.js": ["SD_ProcessTriggers"],
-        "scripts/extensions/translate/index.js": ["translate"],
+        "scripts/extensions/quick-reply/index.js": [
+          "executeQuickReplyByName",
+          "quickReplyApi"
+        ],
+        "scripts/extensions/quick-reply/src/SlashCommandHandler.js": [
+          "qrEnumProviderExecutables"
+        ],
+        "scripts/extensions/stable-diffusion/index.js": [
+          "SD_ProcessTriggers"
+        ],
+        "scripts/extensions/translate/index.js": [
+          "translate"
+        ],
         "scripts/extensions/tts/index.js": [
           "debugTtsPlayback",
           "playFullConversation",
@@ -4051,8 +4369,13 @@
           "tts_preview",
           "vrmLipSync"
         ],
-        "scripts/extensions/vectors/index.js": ["translate", "vectors_rearrangeChat"],
-        "scripts/slash-commands.js": ["qrEnumProviderExecutables"]
+        "scripts/extensions/vectors/index.js": [
+          "translate",
+          "vectors_rearrangeChat"
+        ],
+        "scripts/slash-commands.js": [
+          "qrEnumProviderExecutables"
+        ]
       },
       "expectedRuntimeGlobals": [
         "$",
@@ -4072,8 +4395,8 @@
         "__PURE_TAVERN__"
       ]
     },
-    "dataCapabilitiesPendingMigration": {
-      "description": "Startup requests handled by the Pure Tavern Hook only so the original UI can initialize. Empty responses are not migrated character/chat/world-book implementations.",
+    "dataCapabilities": {
+      "description": "Legacy request compatibility surface. Core settings get/save persist in IndexedDB; remaining empty bootstrap responses are not migrated character/chat/world-book implementations.",
       "startupCompatibilityRequests": [
         {
           "method": "GET",
@@ -4113,16 +4436,16 @@
         {
           "method": "POST",
           "pathname": "/api/settings/get",
-          "category": "data-capability-pending-migration",
-          "responseKind": "default-settings-plus-empty-presets-json",
-          "migrationStatus": "bootstrap-empty-response-not-migrated"
+          "category": "browser-data-capability",
+          "responseKind": "indexeddb-settings-plus-bootstrap-preset-data-json",
+          "migrationStatus": "browser-ready-core-settings"
         },
         {
           "method": "POST",
           "pathname": "/api/settings/save",
-          "category": "data-capability-pending-migration",
-          "responseKind": "ack-json-discarded",
-          "migrationStatus": "bootstrap-empty-response-not-migrated"
+          "category": "browser-data-capability",
+          "responseKind": "indexeddb-full-settings-document-write",
+          "migrationStatus": "browser-ready-core-settings"
         },
         {
           "method": "POST",

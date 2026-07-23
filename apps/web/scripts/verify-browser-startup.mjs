@@ -211,6 +211,10 @@ try {
       hookInstalled: document.documentElement.dataset.pureTavernHook ?? null,
       databaseState: document.documentElement.dataset.databaseState ?? null,
       upstreamVersion: globalThis.__PURE_TAVERN__?.upstreamVersion ?? null,
+      settingsStorage: globalThis.__PURE_TAVERN__?.settingsStorage
+        ? { ...globalThis.__PURE_TAVERN__.settingsStorage }
+        : null,
+      fastUiMode: document.getElementById('fast_ui_mode')?.checked ?? null,
       jqueryPresent: typeof globalThis.jQuery === 'function',
       criticalDomAnchors,
       missingCriticalDomAnchors: Object.entries(criticalDomAnchors)
@@ -247,24 +251,30 @@ try {
     };
   })()`;
 
-  const deadline = Date.now() + 20_000;
-  let snapshot;
-  while (Date.now() < deadline) {
-    const evaluation = await client.send('Runtime.evaluate', {
-      expression: snapshotExpression,
-      returnByValue: true,
-    });
-    snapshot = evaluation.result?.value;
-    if (
-      snapshot?.hookInstalled === 'installed' &&
-      snapshot?.databaseState === 'ready' &&
-      snapshot?.jqueryPresent === true &&
-      (snapshot?.preloader?.exists === false || snapshot?.preloader?.display === 'none')
-    ) {
-      break;
+  async function waitForApplicationSnapshot(timeoutMs = 20_000) {
+    const deadline = Date.now() + timeoutMs;
+    let currentSnapshot;
+    while (Date.now() < deadline) {
+      const evaluation = await client.send('Runtime.evaluate', {
+        expression: snapshotExpression,
+        returnByValue: true,
+      });
+      currentSnapshot = evaluation.result?.value;
+      if (
+        currentSnapshot?.hookInstalled === 'installed' &&
+        currentSnapshot?.databaseState === 'ready' &&
+        currentSnapshot?.jqueryPresent === true &&
+        (currentSnapshot?.preloader?.exists === false ||
+          currentSnapshot?.preloader?.display === 'none')
+      ) {
+        return currentSnapshot;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 100));
     }
-    await new Promise((resolve) => setTimeout(resolve, 100));
+    return currentSnapshot;
   }
+
+  let snapshot = await waitForApplicationSnapshot();
 
   const interactionEvaluation = await client.send('Runtime.evaluate', {
     expression: `(async () => {
@@ -405,6 +415,60 @@ try {
   });
   const moduleContracts = moduleContractEvaluation.result?.value;
 
+  const settingsPersistenceEvaluation = await client.send('Runtime.evaluate', {
+    expression: `(async () => {
+      const checkbox = document.getElementById('fast_ui_mode');
+      if (!(checkbox instanceof HTMLInputElement)) {
+        return { available: false, error: '#fast_ui_mode is not an input element.' };
+      }
+
+      const readStoredSettings = () => new Promise((resolve, reject) => {
+        const openRequest = indexedDB.open('pure-frontend-tavern');
+        openRequest.onerror = () => reject(openRequest.error);
+        openRequest.onsuccess = () => {
+          const database = openRequest.result;
+          const transaction = database.transaction('settings', 'readonly');
+          const getRequest = transaction.objectStore('settings').get('current');
+          getRequest.onerror = () => reject(getRequest.error);
+          getRequest.onsuccess = () => {
+            database.close();
+            resolve(getRequest.result ?? null);
+          };
+        };
+      });
+
+      const initialValue = checkbox.checked;
+      const targetValue = !initialValue;
+      checkbox.click();
+      await new Promise((resolve) => setTimeout(resolve, 1_600));
+      const record = await readStoredSettings();
+      const storage = globalThis.__PURE_TAVERN__?.settingsStorage;
+      const saveRequestHandled = globalThis.__PURE_TAVERN__?.diagnostics.requests.some(
+        ({ method, pathname, handled }) =>
+          method === 'POST' && pathname === '/api/settings/save' && handled,
+      );
+
+      return {
+        available: true,
+        initialValue,
+        targetValue,
+        valueAfterClick: checkbox.checked,
+        savedValue: record?.document?.power_user?.fast_ui_mode ?? null,
+        saveRequestHandled: Boolean(saveRequestHandled),
+        storage: storage ? { ...storage } : null,
+      };
+    })()`,
+    awaitPromise: true,
+    returnByValue: true,
+  });
+  const settingsPersistence = settingsPersistenceEvaluation.result?.value;
+
+  await client.send('Page.navigate', { url: appUrl });
+  snapshot = await waitForApplicationSnapshot();
+  if (settingsPersistence) {
+    settingsPersistence.reloadedValue = snapshot?.fastUiMode ?? null;
+  }
+
   // Allow animations, nested CSS imports, fonts, and images to finish so late failures are included.
   await new Promise((resolve) => setTimeout(resolve, 750));
 
@@ -429,6 +493,15 @@ try {
   const checks = {
     hookInstalled: snapshot?.hookInstalled === 'installed',
     databaseReady: snapshot?.databaseState === 'ready',
+    settingsStorageReady:
+      snapshot?.settingsStorage?.status === 'ready' &&
+      snapshot?.settingsStorage?.backend === 'indexeddb',
+    settingsPersistedThroughLegacyUi:
+      settingsPersistence?.available === true &&
+      settingsPersistence?.valueAfterClick === settingsPersistence?.targetValue &&
+      settingsPersistence?.savedValue === settingsPersistence?.targetValue &&
+      settingsPersistence?.reloadedValue === settingsPersistence?.targetValue &&
+      settingsPersistence?.saveRequestHandled === true,
     upstreamMetadataLoaded:
       typeof snapshot?.upstreamVersion === 'string' && snapshot.upstreamVersion !== 'loading',
     documentComplete: snapshot?.documentReadyState === 'complete',
@@ -470,6 +543,7 @@ try {
     snapshot,
     interactions,
     moduleContracts,
+    settingsPersistence,
     requestCount: requests.length,
     localScriptRequestCount: localScriptRequests.length,
     compatibilityNetworkRequests,

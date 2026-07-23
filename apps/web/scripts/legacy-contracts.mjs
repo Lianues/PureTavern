@@ -7,7 +7,7 @@ const currentLegacyPublicRoot = path.join(packageRoot, 'legacy', 'upstream', 'pu
 const currentUpstreamMetadataPath = path.join(packageRoot, 'legacy', 'upstream.json');
 const contractsRoot = path.join(packageRoot, 'legacy', 'contracts');
 
-export const CONTRACT_SCHEMA_VERSION = 1;
+export const CONTRACT_SCHEMA_VERSION = 2;
 
 export const CRITICAL_DOM_IDS = Object.freeze([
   'preloader',
@@ -135,16 +135,16 @@ export const STARTUP_COMPATIBILITY_REQUESTS = Object.freeze([
   {
     method: 'POST',
     pathname: '/api/settings/get',
-    category: 'data-capability-pending-migration',
-    responseKind: 'default-settings-plus-empty-presets-json',
-    migrationStatus: 'bootstrap-empty-response-not-migrated',
+    category: 'browser-data-capability',
+    responseKind: 'indexeddb-settings-plus-bootstrap-preset-data-json',
+    migrationStatus: 'browser-ready-core-settings',
   },
   {
     method: 'POST',
     pathname: '/api/settings/save',
-    category: 'data-capability-pending-migration',
-    responseKind: 'ack-json-discarded',
-    migrationStatus: 'bootstrap-empty-response-not-migrated',
+    category: 'browser-data-capability',
+    responseKind: 'indexeddb-full-settings-document-write',
+    migrationStatus: 'browser-ready-core-settings',
   },
   {
     method: 'POST',
@@ -537,9 +537,9 @@ export async function generateLegacyContract(options = {}) {
         globalAssignments,
         expectedRuntimeGlobals: [...EXPECTED_RUNTIME_GLOBALS],
       },
-      dataCapabilitiesPendingMigration: {
+      dataCapabilities: {
         description:
-          'Startup requests handled by the Pure Tavern Hook only so the original UI can initialize. Empty responses are not migrated character/chat/world-book implementations.',
+          'Legacy request compatibility surface. Core settings get/save persist in IndexedDB; remaining empty bootstrap responses are not migrated character/chat/world-book implementations.',
         startupCompatibilityRequests: [...STARTUP_COMPATIBILITY_REQUESTS],
       },
     },
@@ -633,9 +633,11 @@ function flattenGlobalAssignments(contract) {
 }
 
 function requestKeys(contract) {
-  return (
-    contract.categories.dataCapabilitiesPendingMigration.startupCompatibilityRequests ?? []
-  ).map((request) => `${request.method.toUpperCase()} ${request.pathname}`);
+  const capabilities =
+    contract.categories.dataCapabilities ?? contract.categories.dataCapabilitiesPendingMigration;
+  return (capabilities?.startupCompatibilityRequests ?? []).map(
+    (request) => `${request.method.toUpperCase()} ${request.pathname}`,
+  );
 }
 
 function pushRisk(risks, severity, area, message, items) {
@@ -718,7 +720,7 @@ export function compareLegacyContracts(previousContract, nextContract) {
       globalAssignments,
       removedExpectedGlobalAssignments,
     },
-    dataCapabilitiesPendingMigration: {
+    dataCapabilities: {
       startupCompatibilityRequests: startupRequests,
     },
   };
@@ -813,8 +815,8 @@ export function compareLegacyContracts(previousContract, nextContract) {
   pushRisk(
     risks,
     'warning',
-    'dataCapabilitiesPendingMigration.startupCompatibilityRequests',
-    'Bootstrap compatibility request declarations changed; keep these marked as pending migration unless real data modules are implemented.',
+    'dataCapabilities.startupCompatibilityRequests',
+    'Legacy compatibility request declarations changed; confirm each path remains correctly classified as browser-ready or pending migration.',
     [...startupRequests.added, ...startupRequests.removed],
   );
 

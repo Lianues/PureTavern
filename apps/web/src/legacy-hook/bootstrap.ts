@@ -1,13 +1,15 @@
 import { initializeDatabaseSafely } from '../infrastructure/database/initialize-database';
 
 import { registerBootstrapRoutes } from './api-compat/bootstrap-routes';
+import { createLegacySettingsRuntime } from './settings-runtime';
 import { CompatibilityRouter, installCompatibilityFetch } from './transport/compatibility-fetch';
 import { loadUpstreamMetadata } from './upstream-metadata';
 
 const router = new CompatibilityRouter();
 const nativeFetch = installCompatibilityFetch(router);
 const upstreamMetadata = loadUpstreamMetadata(nativeFetch);
-registerBootstrapRoutes(router, nativeFetch, upstreamMetadata);
+const settingsRuntime = createLegacySettingsRuntime(nativeFetch);
+registerBootstrapRoutes(router, upstreamMetadata, settingsRuntime.service);
 
 const database = initializeDatabaseSafely();
 void database.then((state) => {
@@ -20,6 +22,7 @@ globalThis.__PURE_TAVERN__ = {
   upstreamMetadata,
   diagnostics: router.diagnostics,
   database,
+  settingsStorage: settingsRuntime.diagnostics,
 };
 void upstreamMetadata.then((metadata) => {
   globalThis.__PURE_TAVERN__.upstreamVersion = metadata.version;

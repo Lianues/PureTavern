@@ -1,3 +1,4 @@
+import type { SettingsService } from '../../features/settings/application/settings-service';
 import type { UpstreamMetadata } from '../upstream-metadata';
 import {
   type CompatibilityRouter,
@@ -24,28 +25,11 @@ const EMPTY_PRESET_DATA = {
   reasoning: [],
 };
 
-async function loadBootstrapSettings(nativeFetch: typeof window.fetch) {
-  const response = await nativeFetch('/__pure_tavern/default-settings.json');
-  if (!response.ok) throw new Error(`Default settings failed to load: HTTP ${response.status}`);
-  const settings = await response.json();
-
-  return {
-    ...settings,
-    firstRun: false,
-    active_character: null,
-    active_group: null,
-    accountStorage: settings.accountStorage ?? {},
-  };
-}
-
 export function registerBootstrapRoutes(
   router: CompatibilityRouter,
-  nativeFetch: typeof window.fetch,
   upstreamMetadata: Promise<UpstreamMetadata>,
+  settingsService: SettingsService,
 ) {
-  let settingsPromise: ReturnType<typeof loadBootstrapSettings> | undefined;
-  const getSettings = () => (settingsPromise ??= loadBootstrapSettings(nativeFetch));
-
   router.register('GET', '/csrf-token', () => jsonResponse({ token: 'pure-tavern-local' }));
   router.register('GET', '/version', async () => {
     const metadata = await upstreamMetadata;
@@ -83,7 +67,7 @@ export function registerBootstrapRoutes(
 
   router.register('POST', '/api/settings/get', async () =>
     jsonResponse({
-      settings: JSON.stringify(await getSettings()),
+      settings: JSON.stringify(await settingsService.getSettings()),
       ...EMPTY_PRESET_DATA,
       enable_extensions: false,
       enable_extensions_auto_update: false,
@@ -96,7 +80,20 @@ export function registerBootstrapRoutes(
       },
     }),
   );
-  router.register('POST', '/api/settings/save', () => jsonResponse({ result: 'ok' }));
+  router.register('POST', '/api/settings/save', async (request) => {
+    try {
+      await settingsService.saveSettings(await request.json());
+      return jsonResponse({ result: 'ok' });
+    } catch (error) {
+      return jsonResponse(
+        {
+          error: error instanceof Error ? error.message : String(error),
+          pureTavern: true,
+        },
+        400,
+      );
+    }
+  });
   router.register('POST', '/api/settings/get-snapshots', () => jsonResponse([]));
 
   router.register('POST', '/api/secrets/settings', () =>

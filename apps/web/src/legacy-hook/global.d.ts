@@ -1,3 +1,4 @@
+import type { SettingsStorageDiagnostics } from '@/features/settings/adapters/resilient-settings-repository';
 import type { DatabaseBootstrapState } from '@/infrastructure/database/initialize-database';
 
 import type { CompatibilityDiagnostics } from './transport/compatibility-fetch';
@@ -10,6 +11,7 @@ declare global {
     upstreamMetadata: Promise<UpstreamMetadata>;
     diagnostics: CompatibilityDiagnostics;
     database: Promise<DatabaseBootstrapState>;
+    settingsStorage: SettingsStorageDiagnostics;
   };
 }
 

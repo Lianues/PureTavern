@@ -113,7 +113,7 @@ features/<module>/
 ## M02 — Local Database / 本地数据库
 
 - **优先级**：P0
-- **当前状态**：`browser-ready`（仅核心元数据 schema）
+- **当前状态**：`browser-ready`（核心元数据 + M03 Settings schema）
 - **核心性**：必需，不可删除
 - **原始位置**：原项目主要依赖服务端文件系统；前端零散使用 LocalStorage/LocalForage。
 - **相关前端**：
@@ -122,15 +122,16 @@ features/<module>/
   - `public/scripts/itemized-prompts.js`
   - `public/scripts/samplerSelect.js`
 - **新职责**：Dexie 生命周期、schema migration、事务、数据库健康状态、模块迁移日志。
-- **初始表**：`meta`、`moduleStates`。
-- **模块数据表**：由后续模块 migration 独立增加。
+- **schema v1 表**：`meta`、`moduleStates`。
+- **schema v2 表**：新增由 M03 拥有的 `settings`；从 v1 原地升级并保留核心记录。
+- **其他模块数据表**：由后续模块 migration 独立增加。
 - **可选后端**：同步 Adapter；本地库始终保留为离线源或缓存。
 - **删除影响**：纯前端持久化失效，因此不可删除。
 
 ## M03 — Settings / 设置
 
 - **优先级**：P1
-- **初始状态**：`inventory`
+- **当前状态**：`browser-ready`（核心 settings 文档；快照和预设 CRUD 尚未迁移）
 - **原始前端**：
   - `public/script.js`（`getSettings`、`saveSettings`）
   - `public/scripts/power-user.js`
@@ -144,11 +145,17 @@ features/<module>/
   - `POST /api/settings/make-snapshot`
   - `POST /api/settings/restore-snapshot`
 - **问题**：原 `get` 接口同时聚合设置、预设、主题、世界书名称等多类数据，边界过宽。
-- **目标 Port**：`SettingsRepository`、`PreferenceStore`、`SettingsSnapshotRepository`。
-- **浏览器实现**：IndexedDB；轻量设备偏好可保留 LocalStorage，但必须由 Adapter 统一访问。
-- **可选后端**：设置同步和历史快照。
+- **已实现 Port**：`SettingsRepository`，以 JSON-safe opaque document 保留上游动态字段。
+- **浏览器实现**：
+  - `/api/settings/get` 首次从上游默认设置初始化，之后读取 IndexedDB；
+  - `/api/settings/save` 按原版全量覆盖语义串行写入 IndexedDB；
+  - 每次读取/写入都克隆文档，避免 Legacy 代码持有数据库内部对象；
+  - IndexedDB 不可用时降级为页面会话内存存储并报告诊断。
+- **尚未实现**：设置快照、主题/预设 CRUD、跨标签页冲突控制、可选后端同步。
+- **可选后端**：未来通过同一 Port 提供设置同步和历史快照，不能成为本地启动前提。
 - **依赖**：M02。
 - **删除影响**：只能删除高级设置 UI，基础运行设置不可删除。
+- **验收**：原版 `#fast_ui_mode` 修改后经原版防抖保存写入 IndexedDB，刷新页面后恢复。
 
 ## M04 — Characters / 角色与角色卡
 
@@ -459,14 +466,15 @@ features/<module>/
 
 - M00 Application Shell
 - M01 Runtime 骨架
-- M02 IndexedDB 骨架
+- M02 IndexedDB schema v2
+- M03 核心 Settings 文档本地持久化
 - Legacy 文件完整复制、哈希校验和版本升级工具
 - 无服务端 Legacy-first 启动与原版 UI 交互
-- 只提供启动所需固定空数据，不迁移真实业务接口
+- 除 Settings get/save 外，其余业务能力仍只提供启动所需空数据
 
 ## 批次 B：最小可用本地酒馆
 
-- M03 Settings
+- M03 Settings 快照、预设和可选同步（核心 settings 文档已完成）
 - M04 Characters
 - M05 Chats
 - M08 Personas 最小实现
@@ -518,9 +526,9 @@ features/<module>/
 
 当前只迁移 UI 外壳、原版交互和工程基础，不实现以下真实业务能力：
 
-- 设置持久化与快照；
+- 设置快照、主题/预设 CRUD 和跨设备同步；
 - 角色、聊天、群组和世界书的 CRUD；
 - 模型生成与 Tokenizer；
 - 扩展安装、用户、远程存储或同步。
 
-Legacy JavaScript 会在根页面正常执行。Hook 对少量启动路径返回固定空数据，使旧 UI 完成初始化；这些路径不是已迁移接口，也不承诺业务语义。未知 `/api/**` 会返回 `501` 并记录在诊断信息中。
+Legacy JavaScript 会在根页面正常执行。Settings get/save 已桥接到浏览器 Use Case 和 IndexedDB；其他启动路径仍返回固定空数据或安全默认值，不承诺真实业务语义。未知 `/api/**` 会返回 `501` 并记录在诊断信息中。
