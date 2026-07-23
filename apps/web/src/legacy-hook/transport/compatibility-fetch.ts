@@ -69,6 +69,16 @@ export function jsonResponse(data: unknown, status = 200): Response {
   });
 }
 
+export function textResponse(data: string, status = 200): Response {
+  return new Response(data, {
+    status,
+    headers: {
+      'Content-Type': 'text/plain; charset=utf-8',
+      'X-Pure-Tavern-Hook': '1',
+    },
+  });
+}
+
 export function emptyResponse(status = 204): Response {
   return new Response(null, {
     status,

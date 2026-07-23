@@ -1,5 +1,8 @@
+import { SettingsSnapshotService } from '../features/settings/application/settings-snapshot-service';
 import { SettingsService } from '../features/settings/application/settings-service';
 import { IndexedDbSettingsRepository } from '../features/settings/adapters/indexeddb-settings-repository';
+import { IndexedDbSettingsSnapshotRepository } from '../features/settings/adapters/indexeddb-settings-snapshot-repository';
+import { ResilientSettingsSnapshotRepository } from '../features/settings/adapters/resilient-settings-snapshot-repository';
 import { ResilientSettingsRepository } from '../features/settings/adapters/resilient-settings-repository';
 import { cloneSettingsDocument } from '../features/settings/domain/settings-document';
 import { appDatabase } from '../infrastructure/database/app-database';
@@ -25,8 +28,15 @@ export function createLegacySettingsRuntime(nativeFetch: typeof window.fetch) {
     };
   });
 
+  const snapshotRepository = new ResilientSettingsSnapshotRepository(
+    new IndexedDbSettingsSnapshotRepository(appDatabase),
+  );
+  const snapshots = new SettingsSnapshotService(service, snapshotRepository);
+
   return {
     service,
     diagnostics: repository.diagnostics,
+    snapshots,
+    snapshotDiagnostics: snapshotRepository.diagnostics,
   };
 }

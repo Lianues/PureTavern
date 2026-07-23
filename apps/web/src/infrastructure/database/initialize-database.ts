@@ -33,14 +33,13 @@ const INITIAL_MODULE_STATES: Omit<ModuleStateContract, 'updatedAt'>[] = [
     moduleId: 'M02-local-database',
     version: DATABASE_SCHEMA_VERSION,
     status: 'browser-ready',
-    details: 'Core metadata and feature-owned settings storage are available in IndexedDB.',
+    details: 'Core metadata, settings, and settings snapshot storage are available in IndexedDB.',
   },
   {
     moduleId: 'M03-settings',
-    version: 1,
-    status: 'browser-ready',
-    details:
-      'The main Legacy settings document persists locally; snapshots and preset CRUD are deferred.',
+    version: 2,
+    status: 'completed',
+    details: 'Core Legacy settings and snapshots persist locally; preset CRUD belongs to M09.',
   },
 ];
 

@@ -159,11 +159,17 @@ describe('legacy compatibility contracts', () => {
         (request) => request.migrationStatus === 'bootstrap-empty-response-not-migrated',
       ),
     ).toBe(true);
-    expect(contract.categories.dataCapabilities.startupCompatibilityRequests).toContainEqual(
-      expect.objectContaining({
-        pathname: '/api/settings/save',
-        migrationStatus: 'browser-ready-core-settings',
-      }),
+    expect(contract.categories.dataCapabilities.startupCompatibilityRequests).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          pathname: '/api/settings/save',
+          migrationStatus: 'browser-ready-core-settings',
+        }),
+        expect.objectContaining({
+          pathname: '/api/settings/restore-snapshot',
+          migrationStatus: 'browser-ready-settings-snapshots',
+        }),
+      ]),
     );
   });
 

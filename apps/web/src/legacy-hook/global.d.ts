@@ -12,6 +12,7 @@ declare global {
     diagnostics: CompatibilityDiagnostics;
     database: Promise<DatabaseBootstrapState>;
     settingsStorage: SettingsStorageDiagnostics;
+    settingsSnapshotStorage: SettingsStorageDiagnostics;
   };
 }
 

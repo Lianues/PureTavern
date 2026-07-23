@@ -1,9 +1,15 @@
+import {
+  InvalidSettingsSnapshotNameError,
+  SettingsSnapshotNotFoundError,
+  type SettingsSnapshotService,
+} from '../../features/settings/application/settings-snapshot-service';
 import type { SettingsService } from '../../features/settings/application/settings-service';
 import type { UpstreamMetadata } from '../upstream-metadata';
 import {
   type CompatibilityRouter,
   emptyResponse,
   jsonResponse,
+  textResponse,
 } from '../transport/compatibility-fetch';
 
 const EMPTY_PRESET_DATA = {
@@ -29,6 +35,7 @@ export function registerBootstrapRoutes(
   router: CompatibilityRouter,
   upstreamMetadata: Promise<UpstreamMetadata>,
   settingsService: SettingsService,
+  settingsSnapshots: SettingsSnapshotService,
 ) {
   router.register('GET', '/csrf-token', () => jsonResponse({ token: 'pure-tavern-local' }));
   router.register('GET', '/version', async () => {
@@ -94,7 +101,34 @@ export function registerBootstrapRoutes(
       );
     }
   });
-  router.register('POST', '/api/settings/get-snapshots', () => jsonResponse([]));
+  router.register('POST', '/api/settings/get-snapshots', async () =>
+    jsonResponse(await settingsSnapshots.listSnapshots()),
+  );
+  router.register('POST', '/api/settings/load-snapshot', async (request) => {
+    try {
+      const { name } = (await request.json()) as { name?: unknown };
+      return textResponse(await settingsSnapshots.loadSnapshotContent(name));
+    } catch (error) {
+      return settingsSnapshotErrorResponse(error);
+    }
+  });
+  router.register('POST', '/api/settings/make-snapshot', async () => {
+    try {
+      await settingsSnapshots.createSnapshot();
+      return emptyResponse();
+    } catch (error) {
+      return settingsSnapshotErrorResponse(error);
+    }
+  });
+  router.register('POST', '/api/settings/restore-snapshot', async (request) => {
+    try {
+      const { name } = (await request.json()) as { name?: unknown };
+      await settingsSnapshots.restoreSnapshot(name);
+      return emptyResponse();
+    } catch (error) {
+      return settingsSnapshotErrorResponse(error);
+    }
+  });
 
   router.register('POST', '/api/secrets/settings', () =>
     jsonResponse({ allowKeysExposure: false }),
@@ -115,4 +149,20 @@ export function registerBootstrapRoutes(
   );
   router.register('POST', '/api/image-metadata/all', () => jsonResponse({ images: {} }));
   router.register('POST', '/api/stats/get', () => jsonResponse({}));
+}
+
+function settingsSnapshotErrorResponse(error: unknown): Response {
+  const status =
+    error instanceof InvalidSettingsSnapshotNameError
+      ? 400
+      : error instanceof SettingsSnapshotNotFoundError
+        ? 404
+        : 500;
+  return jsonResponse(
+    {
+      error: error instanceof Error ? error.message : String(error),
+      pureTavern: true,
+    },
+    status,
+  );
 }

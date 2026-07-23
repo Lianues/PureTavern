@@ -2,7 +2,7 @@
 
 一个以浏览器本地能力为默认实现、可选连接后端增强能力的酒馆项目。
 
-当前阶段采用 **Legacy-first**：根页面长期运行原版 SillyTavern UI、CSS 和交互脚本，我方 Hook 将原版能力桥接到浏览器实现。核心 Settings 文档已经通过 IndexedDB 本地持久化；角色、聊天、模型等能力仍使用启动空数据且尚未迁移。Vue 仅用于隔离的新页面或完成所有权切换的新能力。
+当前阶段采用 **Legacy-first**：根页面长期运行原版 SillyTavern UI、CSS 和交互脚本，我方 Hook 将原版能力桥接到浏览器实现。M03 Settings 的核心文档和设置快照已经通过 IndexedDB 本地持久化；角色、聊天、模型等能力仍使用启动空数据且尚未迁移。Vue 仅用于隔离的新页面或完成所有权切换的新能力。
 
 ## 开发
 
@@ -19,9 +19,10 @@ pnpm dev
 ## 当前浏览器能力
 
 - 原版 `/api/settings/get` 与 `/api/settings/save` 已桥接到 IndexedDB；原版设置 UI 无需修改。
+- 原版设置快照列表、创建、内容预览和恢复流程已经接入 `settingsSnapshots`。
 - 首次启动从上游默认设置初始化，之后保存完整 Legacy settings 文档。
-- IndexedDB 不可用时退化为当前页面会话内存存储，并在 `__PURE_TAVERN__.settingsStorage` 报告 `degraded`。
-- 设置快照、预设 CRUD、角色、聊天和世界书仍未迁移。
+- IndexedDB 不可用时退化为当前页面会话内存存储，并在 `__PURE_TAVERN__.settingsStorage` / `settingsSnapshotStorage` 报告 `degraded`。
+- 主题与提示词预设 CRUD 属于 M09；角色、聊天和世界书仍未迁移。
 
 ## 常用命令
 

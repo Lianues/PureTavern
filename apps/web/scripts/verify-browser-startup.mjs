@@ -143,6 +143,7 @@ try {
   const responses = [];
   const runtimeExceptions = [];
   const consoleErrors = [];
+  let pageLoadEvents = 0;
 
   client.on('Network.requestWillBeSent', ({ request }) => requests.push(request.url));
   client.on('Network.responseReceived', ({ response }) =>
@@ -156,6 +157,9 @@ try {
       lineNumber: exceptionDetails.lineNumber ?? null,
       columnNumber: exceptionDetails.columnNumber ?? null,
     });
+  });
+  client.on('Page.loadEventFired', () => {
+    pageLoadEvents += 1;
   });
   client.on('Runtime.consoleAPICalled', ({ type, args }) => {
     if (type !== 'error' && type !== 'assert') return;
@@ -469,6 +473,117 @@ try {
     settingsPersistence.reloadedValue = snapshot?.fastUiMode ?? null;
   }
 
+  const snapshotCreateEvaluation = await client.send('Runtime.evaluate', {
+    expression: `(async () => {
+      const waitFor = async (read, timeoutMs = 5_000) => {
+        const deadline = Date.now() + timeoutMs;
+        while (Date.now() < deadline) {
+          const value = read();
+          if (value) return value;
+          await new Promise((resolve) => setTimeout(resolve, 50));
+        }
+        return null;
+      };
+      const routeHandled = (pathname) =>
+        globalThis.__PURE_TAVERN__?.diagnostics.requests.some(
+          (request) => request.pathname === pathname && request.handled,
+        ) ?? false;
+
+      document.getElementById('account_button')?.click();
+      const snapshotsButton = await waitFor(() =>
+        document.querySelector('.popup[open] .userSettingsSnapshotsButton'),
+      );
+      snapshotsButton?.click();
+      const makeButton = await waitFor(() =>
+        [...document.querySelectorAll('.popup[open] .makeSnapshotButton')].at(-1),
+      );
+      makeButton?.click();
+      const row = await waitFor(() => document.querySelector('.snapshotList .snapshot'));
+      row?.querySelector('.inline-drawer-toggle')?.click();
+      const content = await waitFor(() => {
+        const textarea = row?.querySelector('.snapshotContent');
+        return textarea?.value ? textarea : null;
+      });
+      let previewValue = null;
+      try {
+        previewValue = JSON.parse(content?.value ?? '{}')?.power_user?.fast_ui_mode ?? null;
+      } catch {
+        previewValue = null;
+      }
+
+      return {
+        available: Boolean(snapshotsButton && makeButton && row),
+        name: row?.querySelector('.snapshotName')?.textContent ?? null,
+        previewValue,
+        snapshotCount: document.querySelectorAll('.snapshotList .snapshot').length,
+        routesHandled: {
+          list: routeHandled('/api/settings/get-snapshots'),
+          make: routeHandled('/api/settings/make-snapshot'),
+          load: routeHandled('/api/settings/load-snapshot'),
+        },
+        storage: globalThis.__PURE_TAVERN__?.settingsSnapshotStorage
+          ? { ...globalThis.__PURE_TAVERN__.settingsSnapshotStorage }
+          : null,
+      };
+    })()`,
+    awaitPromise: true,
+    returnByValue: true,
+  });
+  const settingsSnapshotWorkflow = snapshotCreateEvaluation.result?.value;
+
+  const changeAfterSnapshotEvaluation = await client.send('Runtime.evaluate', {
+    expression: `(async () => {
+      const checkbox = document.getElementById('fast_ui_mode');
+      if (!(checkbox instanceof HTMLInputElement)) return null;
+      checkbox.click();
+      await new Promise((resolve) => setTimeout(resolve, 1_600));
+      return checkbox.checked;
+    })()`,
+    awaitPromise: true,
+    returnByValue: true,
+  });
+  if (settingsSnapshotWorkflow) {
+    settingsSnapshotWorkflow.valueAfterSnapshot = changeAfterSnapshotEvaluation.result?.value;
+  }
+
+  const loadEventsBeforeRestore = pageLoadEvents;
+  const restoreEvaluation = await client.send('Runtime.evaluate', {
+    expression: `(async () => {
+      const waitFor = async (read, timeoutMs = 5_000) => {
+        const deadline = Date.now() + timeoutMs;
+        while (Date.now() < deadline) {
+          const value = read();
+          if (value) return value;
+          await new Promise((resolve) => setTimeout(resolve, 50));
+        }
+        return null;
+      };
+      const restoreButton = document.querySelector('.snapshotList .snapshotRestoreButton');
+      restoreButton?.click();
+      const confirmButton = await waitFor(() => {
+        const dialogs = [...document.querySelectorAll('.popup[open]')];
+        const button = dialogs.at(-1)?.querySelector('.popup-button-ok');
+        return button?.textContent?.trim() === 'Restore' ? button : null;
+      });
+      confirmButton?.click();
+      return Boolean(restoreButton && confirmButton);
+    })()`,
+    awaitPromise: true,
+    returnByValue: true,
+  });
+  if (settingsSnapshotWorkflow) {
+    settingsSnapshotWorkflow.restoreRequested = restoreEvaluation.result?.value === true;
+  }
+
+  const restoreDeadline = Date.now() + 10_000;
+  while (pageLoadEvents <= loadEventsBeforeRestore && Date.now() < restoreDeadline) {
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+  snapshot = await waitForApplicationSnapshot();
+  if (settingsSnapshotWorkflow) {
+    settingsSnapshotWorkflow.restoredValue = snapshot?.fastUiMode ?? null;
+  }
+
   // Allow animations, nested CSS imports, fonts, and images to finish so late failures are included.
   await new Promise((resolve) => setTimeout(resolve, 750));
 
@@ -502,6 +617,19 @@ try {
       settingsPersistence?.savedValue === settingsPersistence?.targetValue &&
       settingsPersistence?.reloadedValue === settingsPersistence?.targetValue &&
       settingsPersistence?.saveRequestHandled === true,
+    settingsSnapshotsReady:
+      settingsSnapshotWorkflow?.storage?.status === 'ready' &&
+      settingsSnapshotWorkflow?.storage?.backend === 'indexeddb',
+    settingsSnapshotRestoredThroughLegacyUi:
+      settingsSnapshotWorkflow?.available === true &&
+      settingsSnapshotWorkflow?.snapshotCount >= 1 &&
+      settingsSnapshotWorkflow?.previewValue === settingsPersistence?.targetValue &&
+      settingsSnapshotWorkflow?.routesHandled?.list === true &&
+      settingsSnapshotWorkflow?.routesHandled?.make === true &&
+      settingsSnapshotWorkflow?.routesHandled?.load === true &&
+      settingsSnapshotWorkflow?.valueAfterSnapshot === settingsPersistence?.initialValue &&
+      settingsSnapshotWorkflow?.restoreRequested === true &&
+      settingsSnapshotWorkflow?.restoredValue === settingsPersistence?.targetValue,
     upstreamMetadataLoaded:
       typeof snapshot?.upstreamVersion === 'string' && snapshot.upstreamVersion !== 'loading',
     documentComplete: snapshot?.documentReadyState === 'complete',
@@ -544,6 +672,7 @@ try {
     interactions,
     moduleContracts,
     settingsPersistence,
+    settingsSnapshotWorkflow,
     requestCount: requests.length,
     localScriptRequestCount: localScriptRequests.length,
     compatibilityNetworkRequests,

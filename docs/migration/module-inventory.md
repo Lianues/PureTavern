@@ -101,7 +101,7 @@ features/<module>/
 ## M01 — Runtime / 模块运行时
 
 - **优先级**：P0
-- **初始状态**：`designed`
+- **当前状态**：`designed`（Legacy Hook/诊断已运行；通用模块注册器尚未实现）
 - **核心性**：必需，不可删除
 - **新位置**：`apps/web/src/app/runtime/**`
 - **职责**：模块注册、依赖检查、Capability 注册、启动状态、错误隔离。
@@ -113,7 +113,7 @@ features/<module>/
 ## M02 — Local Database / 本地数据库
 
 - **优先级**：P0
-- **当前状态**：`browser-ready`（核心元数据 + M03 Settings schema）
+- **当前状态**：`browser-ready`（核心元数据 + M03 Settings schema v3）
 - **核心性**：必需，不可删除
 - **原始位置**：原项目主要依赖服务端文件系统；前端零散使用 LocalStorage/LocalForage。
 - **相关前端**：
@@ -124,6 +124,7 @@ features/<module>/
 - **新职责**：Dexie 生命周期、schema migration、事务、数据库健康状态、模块迁移日志。
 - **schema v1 表**：`meta`、`moduleStates`。
 - **schema v2 表**：新增由 M03 拥有的 `settings`；从 v1 原地升级并保留核心记录。
+- **schema v3 表**：新增由 M03 拥有的 `settingsSnapshots`；从 v2 升级并保留当前 settings 文档。
 - **其他模块数据表**：由后续模块 migration 独立增加。
 - **可选后端**：同步 Adapter；本地库始终保留为离线源或缓存。
 - **删除影响**：纯前端持久化失效，因此不可删除。
@@ -131,7 +132,7 @@ features/<module>/
 ## M03 — Settings / 设置
 
 - **优先级**：P1
-- **当前状态**：`browser-ready`（核心 settings 文档；快照和预设 CRUD 尚未迁移）
+- **当前状态**：`completed`（纯前端范围：核心 settings 文档与快照）
 - **原始前端**：
   - `public/script.js`（`getSettings`、`saveSettings`）
   - `public/scripts/power-user.js`
@@ -145,17 +146,19 @@ features/<module>/
   - `POST /api/settings/make-snapshot`
   - `POST /api/settings/restore-snapshot`
 - **问题**：原 `get` 接口同时聚合设置、预设、主题、世界书名称等多类数据，边界过宽。
-- **已实现 Port**：`SettingsRepository`，以 JSON-safe opaque document 保留上游动态字段。
+- **已实现 Port**：`SettingsRepository`、`SettingsSnapshotRepository`；以 JSON-safe opaque document 保留上游动态字段。
 - **浏览器实现**：
   - `/api/settings/get` 首次从上游默认设置初始化，之后读取 IndexedDB；
   - `/api/settings/save` 按原版全量覆盖语义串行写入 IndexedDB；
   - 每次读取/写入都克隆文档，避免 Legacy 代码持有数据库内部对象；
-  - IndexedDB 不可用时降级为页面会话内存存储并报告诊断。
-- **尚未实现**：设置快照、主题/预设 CRUD、跨标签页冲突控制、可选后端同步。
-- **可选后端**：未来通过同一 Port 提供设置同步和历史快照，不能成为本地启动前提。
+  - 原版快照列表、创建、内容预览与恢复路径使用 `settingsSnapshots`；
+  - IndexedDB 不可用时 settings 与 snapshots 分别降级为页面会话内存存储并报告诊断。
+- **模块边界**：主题、上下文、指令、系统提示词和快捷回复等预设 CRUD 属于 M09，不再由 M03 承担。
+- **已知限制**：遵循原版完整文档 last-writer-wins；多个标签页同时保存可能相互覆盖，未来由同步/协作能力处理。
+- **可选后端**：未来通过同一 Port 提供设置和快照同步，不能成为本地启动前提，也不影响 M03 纯前端完成状态。
 - **依赖**：M02。
 - **删除影响**：只能删除高级设置 UI，基础运行设置不可删除。
-- **验收**：原版 `#fast_ui_mode` 修改后经原版防抖保存写入 IndexedDB，刷新页面后恢复。
+- **验收**：原版 `#fast_ui_mode` 完成“修改 → 创建快照 → 再修改 → 原版确认弹窗恢复 → 自动刷新”，控件回到快照值。
 
 ## M04 — Characters / 角色与角色卡
 
@@ -474,7 +477,7 @@ features/<module>/
 
 ## 批次 B：最小可用本地酒馆
 
-- M03 Settings 快照、预设和可选同步（核心 settings 文档已完成）
+- M03 已完成；主题与提示词等预设转入 M09，可选同步转入 M22
 - M04 Characters
 - M05 Chats
 - M08 Personas 最小实现
@@ -526,7 +529,7 @@ features/<module>/
 
 当前只迁移 UI 外壳、原版交互和工程基础，不实现以下真实业务能力：
 
-- 设置快照、主题/预设 CRUD 和跨设备同步；
+- 主题/预设 CRUD（M09）和跨设备设置同步（M22）；
 - 角色、聊天、群组和世界书的 CRUD；
 - 模型生成与 Tokenizer；
 - 扩展安装、用户、远程存储或同步。

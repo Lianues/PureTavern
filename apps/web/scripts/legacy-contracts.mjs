@@ -149,9 +149,30 @@ export const STARTUP_COMPATIBILITY_REQUESTS = Object.freeze([
   {
     method: 'POST',
     pathname: '/api/settings/get-snapshots',
-    category: 'data-capability-pending-migration',
-    responseKind: 'empty-array-json',
-    migrationStatus: 'bootstrap-empty-response-not-migrated',
+    category: 'browser-data-capability',
+    responseKind: 'indexeddb-snapshot-summary-array-json',
+    migrationStatus: 'browser-ready-settings-snapshots',
+  },
+  {
+    method: 'POST',
+    pathname: '/api/settings/load-snapshot',
+    category: 'browser-data-capability',
+    responseKind: 'indexeddb-snapshot-content-text',
+    migrationStatus: 'browser-ready-settings-snapshots',
+  },
+  {
+    method: 'POST',
+    pathname: '/api/settings/make-snapshot',
+    category: 'browser-data-capability',
+    responseKind: 'indexeddb-snapshot-create-empty-204',
+    migrationStatus: 'browser-ready-settings-snapshots',
+  },
+  {
+    method: 'POST',
+    pathname: '/api/settings/restore-snapshot',
+    category: 'browser-data-capability',
+    responseKind: 'indexeddb-snapshot-restore-empty-204',
+    migrationStatus: 'browser-ready-settings-snapshots',
   },
   {
     method: 'POST',
@@ -539,7 +560,7 @@ export async function generateLegacyContract(options = {}) {
       },
       dataCapabilities: {
         description:
-          'Legacy request compatibility surface. Core settings get/save persist in IndexedDB; remaining empty bootstrap responses are not migrated character/chat/world-book implementations.',
+          'Legacy request compatibility surface. Core settings and snapshots persist in IndexedDB; remaining empty bootstrap responses are not migrated character/chat/world-book implementations.',
         startupCompatibilityRequests: [...STARTUP_COMPATIBILITY_REQUESTS],
       },
     },

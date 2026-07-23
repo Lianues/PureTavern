@@ -43,10 +43,11 @@ describe('initializeDatabase', () => {
       'meta',
       'moduleStates',
       'settings',
+      'settingsSnapshots',
     ]);
     await expect(database.moduleStates.get('M03-settings')).resolves.toMatchObject({
-      status: 'browser-ready',
-      version: 1,
+      status: 'completed',
+      version: 2,
     });
   });
 
@@ -80,5 +81,33 @@ describe('initializeDatabase', () => {
 
     await expect(database.meta.get('legacyProbe')).resolves.toMatchObject({ value: 'preserved' });
     expect(database.tables.some((table) => table.name === 'settings')).toBe(true);
+    expect(database.tables.some((table) => table.name === 'settingsSnapshots')).toBe(true);
+  });
+
+  it('upgrades schema v2 settings without losing the current document', async () => {
+    const name = `pure-tavern-test-${crypto.randomUUID()}`;
+    const legacyDatabase = new Dexie(name);
+    legacyDatabase.version(2).stores({
+      meta: '&key, updatedAt',
+      moduleStates: '&moduleId, status, updatedAt',
+      settings: '&id, updatedAt',
+    });
+    await legacyDatabase.open();
+    await legacyDatabase.table('settings').put({
+      id: 'current',
+      document: { power_user: { fast_ui_mode: false } },
+      documentVersion: 1,
+      updatedAt: new Date(0).toISOString(),
+    });
+    legacyDatabase.close();
+
+    const database = new AppDatabase(name);
+    databases.push(database);
+    await initializeDatabase(database);
+
+    await expect(database.settings.get('current')).resolves.toMatchObject({
+      document: { power_user: { fast_ui_mode: false } },
+    });
+    expect(database.tables.some((table) => table.name === 'settingsSnapshots')).toBe(true);
   });
 });

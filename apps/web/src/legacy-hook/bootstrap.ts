@@ -9,7 +9,12 @@ const router = new CompatibilityRouter();
 const nativeFetch = installCompatibilityFetch(router);
 const upstreamMetadata = loadUpstreamMetadata(nativeFetch);
 const settingsRuntime = createLegacySettingsRuntime(nativeFetch);
-registerBootstrapRoutes(router, upstreamMetadata, settingsRuntime.service);
+registerBootstrapRoutes(
+  router,
+  upstreamMetadata,
+  settingsRuntime.service,
+  settingsRuntime.snapshots,
+);
 
 const database = initializeDatabaseSafely();
 void database.then((state) => {
@@ -23,6 +28,7 @@ globalThis.__PURE_TAVERN__ = {
   diagnostics: router.diagnostics,
   database,
   settingsStorage: settingsRuntime.diagnostics,
+  settingsSnapshotStorage: settingsRuntime.snapshotDiagnostics,
 };
 void upstreamMetadata.then((metadata) => {
   globalThis.__PURE_TAVERN__.upstreamVersion = metadata.version;
