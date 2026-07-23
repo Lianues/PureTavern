@@ -19,9 +19,9 @@ pnpm dev
 ## 当前浏览器能力
 
 - 原版 `/api/settings/get` 与 `/api/settings/save` 已桥接到 IndexedDB；原版设置 UI 无需修改。
-- 原版设置快照列表、创建、内容预览和恢复流程已经接入 `settingsSnapshots`。
+- 原版设置快照列表、创建、内容预览和恢复流程已经接入 Settings 模块的 `snapshots` records collection。
 - 首次启动从上游默认设置初始化，之后保存完整 Legacy settings 文档。
-- IndexedDB 不可用时退化为当前页面会话内存存储，并在 `__PURE_TAVERN__.settingsStorage` / `settingsSnapshotStorage` 报告 `degraded`。
+- IndexedDB 不可用时退化为当前页面会话内存存储，并在 `__PURE_TAVERN__.features.settings` 下报告 `degraded`。
 - 主题与提示词预设 CRUD 属于 M09；角色、聊天和世界书仍未迁移。
 
 ## 常用命令
@@ -72,14 +72,16 @@ pnpm dev
 pnpm test:browser
 ```
 
-详细流程和验收项见 [`docs/architecture/legacy-ui-strategy.md`](docs/architecture/legacy-ui-strategy.md) 与 [`docs/architecture/legacy-compatibility-contract.md`](docs/architecture/legacy-compatibility-contract.md)。
+详细流程和验收项见 [`docs/architecture/legacy-ui-strategy.md`](docs/architecture/legacy-ui-strategy.md)、[`docs/architecture/legacy-compatibility-contract.md`](docs/architecture/legacy-compatibility-contract.md) 与 [`docs/architecture/feature-module-structure.md`](docs/architecture/feature-module-structure.md)。
 
 ## 目录
 
 - `apps/web`：浏览器应用、Legacy Hook、上游快照和升级工具。
 - `apps/web/legacy/upstream/public`：只读 SillyTavern 前端快照，禁止直接编辑。
 - `apps/web/legacy/contracts`：版本化 Legacy 兼容契约基线。
-- `apps/web/src/legacy-hook`：我方独立兼容脚本。
+- `apps/web/src/legacy-hook`：只保留注入启动入口。
+- `apps/web/src/platform`：通用 Legacy Router、Feature Runtime 与 records/blobs 存储平台。
+- `apps/web/src/features`：按模块聚合的装配、领域、存储、Legacy 路由、契约和测试。
 - `apps/server`：可选后端占位；不是 Web 应用的运行依赖。
 - `packages/contracts`：浏览器与可选后端共享的纯类型契约。
 - `packages/shared`：与运行环境无关的通用代码。

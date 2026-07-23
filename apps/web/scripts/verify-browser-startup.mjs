@@ -215,8 +215,8 @@ try {
       hookInstalled: document.documentElement.dataset.pureTavernHook ?? null,
       databaseState: document.documentElement.dataset.databaseState ?? null,
       upstreamVersion: globalThis.__PURE_TAVERN__?.upstreamVersion ?? null,
-      settingsStorage: globalThis.__PURE_TAVERN__?.settingsStorage
-        ? { ...globalThis.__PURE_TAVERN__.settingsStorage }
+      settingsStorage: globalThis.__PURE_TAVERN__?.features?.settings?.storage
+        ? { ...globalThis.__PURE_TAVERN__.features.settings.storage }
         : null,
       fastUiMode: document.getElementById('fast_ui_mode')?.checked ?? null,
       jqueryPresent: typeof globalThis.jQuery === 'function',
@@ -427,12 +427,13 @@ try {
       }
 
       const readStoredSettings = () => new Promise((resolve, reject) => {
-        const openRequest = indexedDB.open('pure-frontend-tavern');
+        const openRequest = indexedDB.open('pure-frontend-tavern-modular-dev');
         openRequest.onerror = () => reject(openRequest.error);
         openRequest.onsuccess = () => {
           const database = openRequest.result;
-          const transaction = database.transaction('settings', 'readonly');
-          const getRequest = transaction.objectStore('settings').get('current');
+          const transaction = database.transaction('records', 'readonly');
+          const key = ['settings', 'documents', 'current'].join('\\u001f');
+          const getRequest = transaction.objectStore('records').get(key);
           getRequest.onerror = () => reject(getRequest.error);
           getRequest.onsuccess = () => {
             database.close();
@@ -446,7 +447,7 @@ try {
       checkbox.click();
       await new Promise((resolve) => setTimeout(resolve, 1_600));
       const record = await readStoredSettings();
-      const storage = globalThis.__PURE_TAVERN__?.settingsStorage;
+      const storage = globalThis.__PURE_TAVERN__?.features?.settings?.storage;
       const saveRequestHandled = globalThis.__PURE_TAVERN__?.diagnostics.requests.some(
         ({ method, pathname, handled }) =>
           method === 'POST' && pathname === '/api/settings/save' && handled,
@@ -457,7 +458,7 @@ try {
         initialValue,
         targetValue,
         valueAfterClick: checkbox.checked,
-        savedValue: record?.document?.power_user?.fast_ui_mode ?? null,
+        savedValue: record?.value?.power_user?.fast_ui_mode ?? null,
         saveRequestHandled: Boolean(saveRequestHandled),
         storage: storage ? { ...storage } : null,
       };
@@ -521,8 +522,8 @@ try {
           make: routeHandled('/api/settings/make-snapshot'),
           load: routeHandled('/api/settings/load-snapshot'),
         },
-        storage: globalThis.__PURE_TAVERN__?.settingsSnapshotStorage
-          ? { ...globalThis.__PURE_TAVERN__.settingsSnapshotStorage }
+        storage: globalThis.__PURE_TAVERN__?.features?.settings?.snapshots
+          ? { ...globalThis.__PURE_TAVERN__.features.settings.snapshots }
           : null,
       };
     })()`,

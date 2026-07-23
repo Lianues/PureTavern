@@ -1,8 +1,6 @@
-import type { SettingsStorageDiagnostics } from '@/features/settings/adapters/resilient-settings-repository';
-import type { DatabaseBootstrapState } from '@/infrastructure/database/initialize-database';
-
-import type { CompatibilityDiagnostics } from './transport/compatibility-fetch';
-import type { UpstreamMetadata } from './upstream-metadata';
+import type { CompatibilityDiagnostics } from '@/platform/legacy/compatibility-router';
+import type { UpstreamMetadata } from '@/platform/legacy/upstream-metadata';
+import type { StorageBootstrapState } from '@/platform/storage/initialize-storage';
 
 declare global {
   var __PURE_TAVERN__: {
@@ -10,9 +8,8 @@ declare global {
     upstreamVersion: string;
     upstreamMetadata: Promise<UpstreamMetadata>;
     diagnostics: CompatibilityDiagnostics;
-    database: Promise<DatabaseBootstrapState>;
-    settingsStorage: SettingsStorageDiagnostics;
-    settingsSnapshotStorage: SettingsStorageDiagnostics;
+    database: Promise<StorageBootstrapState>;
+    features: Record<string, Record<string, unknown>>;
   };
 }
 

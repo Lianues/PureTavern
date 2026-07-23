@@ -113,7 +113,7 @@ features/<module>/
 ## M02 — Local Database / 本地数据库
 
 - **优先级**：P0
-- **当前状态**：`browser-ready`（核心元数据 + M03 Settings schema v3）
+- **当前状态**：`browser-ready`（固定通用 records/blobs 存储平台）
 - **核心性**：必需，不可删除
 - **原始位置**：原项目主要依赖服务端文件系统；前端零散使用 LocalStorage/LocalForage。
 - **相关前端**：
@@ -121,11 +121,12 @@ features/<module>/
   - `public/scripts/tokenizers.js`
   - `public/scripts/itemized-prompts.js`
   - `public/scripts/samplerSelect.js`
-- **新职责**：Dexie 生命周期、schema migration、事务、数据库健康状态、模块迁移日志。
-- **schema v1 表**：`meta`、`moduleStates`。
-- **schema v2 表**：新增由 M03 拥有的 `settings`；从 v1 原地升级并保留核心记录。
-- **schema v3 表**：新增由 M03 拥有的 `settingsSnapshots`；从 v2 升级并保留当前 settings 文档。
-- **其他模块数据表**：由后续模块 migration 独立增加。
+- **新职责**：Dexie 生命周期、事务、数据库健康状态和模块命名空间隔离。
+- **固定 Object Store**：
+  - `records`：JSON-safe 模块记录，平台组合 `module / collection / id` key；
+  - `blobs`：头像、附件等二进制数据及 JSON metadata。
+- **模块接入**：新增模块或 collection 不增加 Object Store，不维护递增 schema；模块只使用安装上下文分配的命名空间 Store。
+- **开发期重置**：已按决策切换到新数据库名，旧 prototype schema v3 测试数据不迁移。
 - **可选后端**：同步 Adapter；本地库始终保留为离线源或缓存。
 - **删除影响**：纯前端持久化失效，因此不可删除。
 
@@ -151,7 +152,7 @@ features/<module>/
   - `/api/settings/get` 首次从上游默认设置初始化，之后读取 IndexedDB；
   - `/api/settings/save` 按原版全量覆盖语义串行写入 IndexedDB；
   - 每次读取/写入都克隆文档，避免 Legacy 代码持有数据库内部对象；
-  - 原版快照列表、创建、内容预览与恢复路径使用 `settingsSnapshots`；
+  - 原版快照列表、创建、内容预览与恢复使用 `settings / snapshots / <name>` records collection；
   - IndexedDB 不可用时 settings 与 snapshots 分别降级为页面会话内存存储并报告诊断。
 - **模块边界**：主题、上下文、指令、系统提示词和快捷回复等预设 CRUD 属于 M09，不再由 M03 承担。
 - **已知限制**：遵循原版完整文档 last-writer-wins；多个标签页同时保存可能相互覆盖，未来由同步/协作能力处理。
@@ -469,7 +470,7 @@ features/<module>/
 
 - M00 Application Shell
 - M01 Runtime 骨架
-- M02 IndexedDB schema v2
+- M02 固定 records/blobs 模块存储平台
 - M03 核心 Settings 文档本地持久化
 - Legacy 文件完整复制、哈希校验和版本升级工具
 - 无服务端 Legacy-first 启动与原版 UI 交互

@@ -1,22 +1,26 @@
-import { initializeDatabaseSafely } from '../infrastructure/database/initialize-database';
-
-import { registerBootstrapRoutes } from './api-compat/bootstrap-routes';
-import { createLegacySettingsRuntime } from './settings-runtime';
-import { CompatibilityRouter, installCompatibilityFetch } from './transport/compatibility-fetch';
-import { loadUpstreamMetadata } from './upstream-metadata';
+import { featureModules } from '../features/registry';
+import { installFeatureModules } from '../platform/features/feature-module';
+import {
+  CompatibilityRouter,
+  installCompatibilityFetch,
+} from '../platform/legacy/compatibility-router';
+import { registerCoreLegacyRoutes } from '../platform/legacy/register-core-routes';
+import { loadUpstreamMetadata } from '../platform/legacy/upstream-metadata';
+import { appStorage } from '../platform/storage/app-storage';
+import { initializeStorageSafely } from '../platform/storage/initialize-storage';
 
 const router = new CompatibilityRouter();
 const nativeFetch = installCompatibilityFetch(router);
 const upstreamMetadata = loadUpstreamMetadata(nativeFetch);
-const settingsRuntime = createLegacySettingsRuntime(nativeFetch);
-registerBootstrapRoutes(
-  router,
-  upstreamMetadata,
-  settingsRuntime.service,
-  settingsRuntime.snapshots,
-);
+registerCoreLegacyRoutes(router, upstreamMetadata);
 
-const database = initializeDatabaseSafely();
+const features = installFeatureModules(featureModules, {
+  router,
+  nativeFetch,
+  storage: appStorage,
+});
+
+const database = initializeStorageSafely(appStorage);
 void database.then((state) => {
   document.documentElement.dataset.databaseState = state.status;
 });
@@ -27,8 +31,7 @@ globalThis.__PURE_TAVERN__ = {
   upstreamMetadata,
   diagnostics: router.diagnostics,
   database,
-  settingsStorage: settingsRuntime.diagnostics,
-  settingsSnapshotStorage: settingsRuntime.snapshotDiagnostics,
+  features: features.diagnostics,
 };
 void upstreamMetadata.then((metadata) => {
   globalThis.__PURE_TAVERN__.upstreamVersion = metadata.version;

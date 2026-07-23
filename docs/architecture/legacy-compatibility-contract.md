@@ -22,7 +22,7 @@ Pure Tavern 将 SillyTavern 原版 UI/交互作为长期保留的上游兼容层
 
 ## 2. 契约分类
 
-`1.18.0.json` 将兼容面分为三类，避免把“能启动”误判为业务已迁移。
+`1.18.0.json` 将兼容面分为三类，避免把“能启动”误判为业务已迁移。核心声明来自契约工具，已迁移模块的路径由 `src/features/*/legacy/contract.json` 自动聚合。
 
 ### UI 必需
 
@@ -75,7 +75,7 @@ pnpm legacy:contracts:check --source "F:\path\SillyTavern-1.19.0" --version 1.19
 
 `check` 会生成候选契约并与已提交基线比较，报告 `added`、`removed`、`changed` 和风险等级。关键 DOM、关键脚本/样式、关键模块导出、事件名/值或扩展核心模块被破坏时返回非零状态。
 
-`legacy:sync:check` 已在文件差异报告之后嵌入同一份契约报告，因此升级时固定顺序是先看文件差异，再看契约差异。
+`legacy:sync:check` 已在文件差异报告之后嵌入同一份契约报告，因此升级时固定顺序是先看文件差异，再看契约差异。新增模块不需要编辑中央请求数组，只维护本模块 manifest。
 
 ## 4. 浏览器契约验证
 

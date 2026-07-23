@@ -4,7 +4,11 @@ import path from 'node:path';
 
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { compareLegacyContracts, generateLegacyContract } from './legacy-contracts.mjs';
+import {
+  compareLegacyContracts,
+  generateLegacyContract,
+  mergeCompatibilityRequests,
+} from './legacy-contracts.mjs';
 
 const temporaryRoots: string[] = [];
 
@@ -134,6 +138,29 @@ afterEach(async () => {
 });
 
 describe('legacy compatibility contracts', () => {
+  it('lets a feature manifest override a core bootstrap declaration without duplicates', () => {
+    const requests = mergeCompatibilityRequests(
+      [
+        {
+          method: 'POST',
+          pathname: '/api/example/get',
+          migrationStatus: 'bootstrap-empty-response-not-migrated',
+        },
+      ],
+      [
+        {
+          method: 'POST',
+          pathname: '/api/example/get',
+          migrationStatus: 'browser-ready-example',
+        },
+      ],
+    );
+
+    expect(requests).toEqual([
+      expect.objectContaining({ migrationStatus: 'browser-ready-example' }),
+    ]);
+  });
+
   it('generates a categorized contract from a read-only upstream snapshot', async () => {
     const root = await createLegacyFixture();
 

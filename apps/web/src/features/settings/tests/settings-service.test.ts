@@ -1,23 +1,24 @@
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { AppDatabase } from '@/infrastructure/database/app-database';
-import { initializeDatabase } from '@/infrastructure/database/initialize-database';
+import { AppDatabase } from '@/platform/storage/app-database';
+import { AppStorage } from '@/platform/storage/app-storage';
+import { initializeStorage } from '@/platform/storage/initialize-storage';
 
-import { SettingsService } from './application/settings-service';
-import { IndexedDbSettingsRepository } from './adapters/indexeddb-settings-repository';
+import { SettingsService } from '../application/settings-service';
+import { IndexedDbSettingsRepository } from '../infrastructure/indexeddb-settings-repository';
 import {
   MemorySettingsRepository,
   ResilientSettingsRepository,
-} from './adapters/resilient-settings-repository';
-import type { SettingsDocument } from './domain/settings-document';
-import type { SettingsRepository } from './ports/settings-repository';
+} from '../infrastructure/resilient-settings-repository';
+import type { SettingsDocument } from '../domain/settings-document';
+import type { SettingsRepository } from '../ports/settings-repository';
 
 const databases: AppDatabase[] = [];
 
-function createTestDatabase() {
+function createTestStorage() {
   const database = new AppDatabase(`pure-tavern-settings-test-${crypto.randomUUID()}`);
   databases.push(database);
-  return database;
+  return new AppStorage(database);
 }
 
 function createDefaults(): SettingsDocument {
@@ -57,9 +58,9 @@ describe('SettingsService', () => {
   });
 
   it('persists an opaque Legacy settings document in IndexedDB across service instances', async () => {
-    const database = createTestDatabase();
-    await initializeDatabase(database);
-    const repository = new IndexedDbSettingsRepository(database);
+    const storage = createTestStorage();
+    await initializeStorage(storage);
+    const repository = new IndexedDbSettingsRepository(storage.records.forModule('settings'));
     const firstService = new SettingsService(repository, async () => createDefaults());
 
     await firstService.getSettings();

@@ -6,6 +6,7 @@ const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '
 const currentLegacyPublicRoot = path.join(packageRoot, 'legacy', 'upstream', 'public');
 const currentUpstreamMetadataPath = path.join(packageRoot, 'legacy', 'upstream.json');
 const contractsRoot = path.join(packageRoot, 'legacy', 'contracts');
+const featuresRoot = path.join(packageRoot, 'src', 'features');
 
 export const CONTRACT_SCHEMA_VERSION = 2;
 
@@ -96,7 +97,7 @@ export const EXPECTED_RUNTIME_GLOBALS = Object.freeze([
   '__PURE_TAVERN__',
 ]);
 
-export const STARTUP_COMPATIBILITY_REQUESTS = Object.freeze([
+export const CORE_COMPATIBILITY_REQUESTS = Object.freeze([
   {
     method: 'GET',
     pathname: '/csrf-token',
@@ -131,48 +132,6 @@ export const STARTUP_COMPATIBILITY_REQUESTS = Object.freeze([
     category: 'ui-required',
     responseKind: 'fixed-default-user-list-json',
     migrationStatus: 'bootstrap-compatibility-only',
-  },
-  {
-    method: 'POST',
-    pathname: '/api/settings/get',
-    category: 'browser-data-capability',
-    responseKind: 'indexeddb-settings-plus-bootstrap-preset-data-json',
-    migrationStatus: 'browser-ready-core-settings',
-  },
-  {
-    method: 'POST',
-    pathname: '/api/settings/save',
-    category: 'browser-data-capability',
-    responseKind: 'indexeddb-full-settings-document-write',
-    migrationStatus: 'browser-ready-core-settings',
-  },
-  {
-    method: 'POST',
-    pathname: '/api/settings/get-snapshots',
-    category: 'browser-data-capability',
-    responseKind: 'indexeddb-snapshot-summary-array-json',
-    migrationStatus: 'browser-ready-settings-snapshots',
-  },
-  {
-    method: 'POST',
-    pathname: '/api/settings/load-snapshot',
-    category: 'browser-data-capability',
-    responseKind: 'indexeddb-snapshot-content-text',
-    migrationStatus: 'browser-ready-settings-snapshots',
-  },
-  {
-    method: 'POST',
-    pathname: '/api/settings/make-snapshot',
-    category: 'browser-data-capability',
-    responseKind: 'indexeddb-snapshot-create-empty-204',
-    migrationStatus: 'browser-ready-settings-snapshots',
-  },
-  {
-    method: 'POST',
-    pathname: '/api/settings/restore-snapshot',
-    category: 'browser-data-capability',
-    responseKind: 'indexeddb-snapshot-restore-empty-204',
-    migrationStatus: 'browser-ready-settings-snapshots',
   },
   {
     method: 'POST',
@@ -302,6 +261,34 @@ async function exists(filePath) {
 async function readJsonIfExists(filePath) {
   if (!(await exists(filePath))) return null;
   return JSON.parse(await readFile(filePath, 'utf8'));
+}
+
+export function mergeCompatibilityRequests(coreRequests, featureRequests) {
+  const requests = new Map();
+  for (const request of [...coreRequests, ...featureRequests]) {
+    requests.set(`${request.method.toUpperCase()} ${request.pathname}`, request);
+  }
+  return [...requests.values()];
+}
+
+async function loadFeatureCompatibilityRequests() {
+  if (!(await exists(featuresRoot))) return [];
+  const entries = await readdir(featuresRoot, { withFileTypes: true });
+  const requests = [];
+
+  for (const entry of entries
+    .filter((item) => item.isDirectory())
+    .sort((a, b) => a.name.localeCompare(b.name))) {
+    const contractPath = path.join(featuresRoot, entry.name, 'legacy', 'contract.json');
+    const contract = await readJsonIfExists(contractPath);
+    if (!contract) continue;
+    if (contract.module !== entry.name || !Array.isArray(contract.legacyRequests)) {
+      throw new Error(`Invalid feature Legacy contract: ${contractPath}`);
+    }
+    requests.push(...contract.legacyRequests);
+  }
+
+  return requests;
 }
 
 async function listFiles(root, prefix = '') {
@@ -513,6 +500,10 @@ export async function generateLegacyContract(options = {}) {
 
   const scriptEntryPaths = resourceEntries.scripts.map((entry) => entry.src);
   const stylesheetEntryPaths = resourceEntries.stylesheets.map((entry) => entry.href);
+  const compatibilityRequests = mergeCompatibilityRequests(
+    CORE_COMPATIBILITY_REQUESTS,
+    await loadFeatureCompatibilityRequests(),
+  );
 
   return {
     schemaVersion: CONTRACT_SCHEMA_VERSION,
@@ -561,7 +552,7 @@ export async function generateLegacyContract(options = {}) {
       dataCapabilities: {
         description:
           'Legacy request compatibility surface. Core settings and snapshots persist in IndexedDB; remaining empty bootstrap responses are not migrated character/chat/world-book implementations.',
-        startupCompatibilityRequests: [...STARTUP_COMPATIBILITY_REQUESTS],
+        startupCompatibilityRequests: compatibilityRequests,
       },
     },
     extraction: {

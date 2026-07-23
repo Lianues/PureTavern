@@ -11,7 +11,6 @@ export type ModuleStatus =
 
 export interface ModuleStateContract {
   moduleId: string;
-  version: number;
   status: ModuleStatus;
   updatedAt: string;
   details?: string;

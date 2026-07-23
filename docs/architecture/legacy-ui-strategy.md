@@ -49,15 +49,15 @@ apps/web/
 │  ├─ verify-legacy.mjs
 │  └─ verify-browser-startup.mjs
 └─ src/
-   ├─ legacy-hook/**           # 我方兼容代码
-   ├─ infrastructure/**        # IndexedDB 等新基础设施
-   └─ features/**              # 后续按模块增加的新功能
+   ├─ legacy-hook/**           # 只保留注入启动入口
+   ├─ platform/**              # Router、Feature Runtime、records/blobs 通用平台
+   └─ features/**              # 模块装配、领域、存储、Legacy routes、契约和测试
 ```
 
 所有权规则：
 
 1. `legacy/upstream/**` 是上游只读快照，禁止直接编辑、格式化或重构。
-2. 我方代码只进入 `src/legacy-hook/**`、新模块目录或构建脚本。
+2. 功能代码只进入 `src/features/<module>/**`；`legacy-hook` 只负责启动，通用能力进入 `platform`。
 3. `index.html` 和 `.generated/**` 都是派生物，任何手工修改都会在下次启动时丢失。
 4. 上游快照不参加 ESLint/Prettier；哈希清单负责检查误改。
 5. 不在原版文件里散落 patch，避免升级时人工合并数百个文件。
@@ -93,7 +93,7 @@ Hook 注入使用稳定的 `lib/polyfill.js` 标签作为锚点，并要求它�
 
 Hook 必须在原版主模块执行前安装。当前职责仅有：
 
-- 初始化 IndexedDB schema v3；
+- 初始化固定的 records/blobs IndexedDB 存储平台；
 - 包装同源 `fetch`；
 - 将原版 settings get/save 与 snapshot 路径桥接到 Settings Use Case 与 IndexedDB；
 - 对其余启动阶段必需路径返回固定空数据或安全默认值；
@@ -101,7 +101,7 @@ Hook 必须在原版主模块执行前安装。当前职责仅有：
 - 暴露 `globalThis.__PURE_TAVERN__` 诊断信息；
 - 读取同步工具生成的上游版本元数据。
 
-当前 Settings 已是浏览器能力：首次使用上游默认设置初始化，原版 `/api/settings/get` 与 `/api/settings/save` 通过 Port/Adapter 在 IndexedDB 中读取和全量写入；原版快照弹窗通过 `settingsSnapshots` 完成列表、创建、内容预览和恢复。IndexedDB 不可用时两类仓库分别降级为页面会话内存存储。
+当前 Settings 已是浏览器能力：首次使用上游默认设置初始化，原版 `/api/settings/get` 与 `/api/settings/save` 通过模块 Port/Adapter 在 `settings / documents` collection 中读取和全量写入；原版快照弹窗使用 `settings / snapshots` collection 完成列表、创建、内容预览和恢复。IndexedDB 不可用时两类仓库分别降级为页面会话内存存储。
 
 空角色列表、空群组列表、空世界书列表、默认头像、空背景、空最近聊天和离线 Horde 状态等仍属于 **Bootstrap Compatibility Contract**，只用于让原版 UI 完成初始化。除 Settings 核心文档与快照外，它们不代表对应接口已经迁移：
 

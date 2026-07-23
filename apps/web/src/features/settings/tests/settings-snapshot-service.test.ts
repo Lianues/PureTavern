@@ -1,22 +1,23 @@
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { AppDatabase } from '@/infrastructure/database/app-database';
-import { initializeDatabase } from '@/infrastructure/database/initialize-database';
+import { AppDatabase } from '@/platform/storage/app-database';
+import { AppStorage } from '@/platform/storage/app-storage';
+import { initializeStorage } from '@/platform/storage/initialize-storage';
 
 import {
   InvalidSettingsSnapshotNameError,
   SettingsSnapshotNotFoundError,
   SettingsSnapshotService,
-} from './application/settings-snapshot-service';
-import { SettingsService } from './application/settings-service';
-import { IndexedDbSettingsRepository } from './adapters/indexeddb-settings-repository';
-import { IndexedDbSettingsSnapshotRepository } from './adapters/indexeddb-settings-snapshot-repository';
+} from '../application/settings-snapshot-service';
+import { SettingsService } from '../application/settings-service';
+import { IndexedDbSettingsRepository } from '../infrastructure/indexeddb-settings-repository';
+import { IndexedDbSettingsSnapshotRepository } from '../infrastructure/indexeddb-settings-snapshot-repository';
 import {
   MemorySettingsSnapshotRepository,
   ResilientSettingsSnapshotRepository,
-} from './adapters/resilient-settings-snapshot-repository';
-import { MemorySettingsRepository } from './adapters/resilient-settings-repository';
-import type { SettingsSnapshotRepository } from './ports/settings-snapshot-repository';
+} from '../infrastructure/resilient-settings-snapshot-repository';
+import { MemorySettingsRepository } from '../infrastructure/resilient-settings-repository';
+import type { SettingsSnapshotRepository } from '../ports/settings-snapshot-repository';
 
 const databases: AppDatabase[] = [];
 
@@ -26,10 +27,10 @@ function createSettingsService() {
   }));
 }
 
-function createTestDatabase() {
+function createTestStorage() {
   const database = new AppDatabase(`pure-tavern-snapshot-test-${crypto.randomUUID()}`);
   databases.push(database);
-  return database;
+  return new AppStorage(database);
 }
 
 afterEach(async () => {
@@ -80,20 +81,21 @@ describe('SettingsSnapshotService', () => {
   });
 
   it('persists snapshots in IndexedDB across repository instances', async () => {
-    const database = createTestDatabase();
-    await initializeDatabase(database);
-    const settings = new SettingsService(new IndexedDbSettingsRepository(database), async () => ({
+    const storage = createTestStorage();
+    await initializeStorage(storage);
+    const records = storage.records.forModule('settings');
+    const settings = new SettingsService(new IndexedDbSettingsRepository(records), async () => ({
       power_user: { fast_ui_mode: true },
     }));
     const firstService = new SettingsSnapshotService(
       settings,
-      new IndexedDbSettingsSnapshotRepository(database),
+      new IndexedDbSettingsSnapshotRepository(records),
     );
     const created = await firstService.createSnapshot();
 
     const reloadedService = new SettingsSnapshotService(
       settings,
-      new IndexedDbSettingsSnapshotRepository(database),
+      new IndexedDbSettingsSnapshotRepository(records),
     );
     await expect(reloadedService.listSnapshots()).resolves.toContainEqual(created);
     await expect(reloadedService.loadSnapshotContent(created.name)).resolves.toContain(

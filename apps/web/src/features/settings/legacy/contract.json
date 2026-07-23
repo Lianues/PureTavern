@@ -1,0 +1,47 @@
+{
+  "module": "settings",
+  "legacyRequests": [
+    {
+      "method": "POST",
+      "pathname": "/api/settings/get",
+      "category": "browser-data-capability",
+      "responseKind": "indexeddb-settings-plus-bootstrap-preset-data-json",
+      "migrationStatus": "browser-ready-core-settings"
+    },
+    {
+      "method": "POST",
+      "pathname": "/api/settings/save",
+      "category": "browser-data-capability",
+      "responseKind": "indexeddb-full-settings-document-write",
+      "migrationStatus": "browser-ready-core-settings"
+    },
+    {
+      "method": "POST",
+      "pathname": "/api/settings/get-snapshots",
+      "category": "browser-data-capability",
+      "responseKind": "indexeddb-snapshot-summary-array-json",
+      "migrationStatus": "browser-ready-settings-snapshots"
+    },
+    {
+      "method": "POST",
+      "pathname": "/api/settings/load-snapshot",
+      "category": "browser-data-capability",
+      "responseKind": "indexeddb-snapshot-content-text",
+      "migrationStatus": "browser-ready-settings-snapshots"
+    },
+    {
+      "method": "POST",
+      "pathname": "/api/settings/make-snapshot",
+      "category": "browser-data-capability",
+      "responseKind": "indexeddb-snapshot-create-empty-204",
+      "migrationStatus": "browser-ready-settings-snapshots"
+    },
+    {
+      "method": "POST",
+      "pathname": "/api/settings/restore-snapshot",
+      "category": "browser-data-capability",
+      "responseKind": "indexeddb-snapshot-restore-empty-204",
+      "migrationStatus": "browser-ready-settings-snapshots"
+    }
+  ]
+}
