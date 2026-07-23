@@ -1,14 +1,14 @@
-import { createRouter, createWebHistory } from 'vue-router';
+import { createMemoryHistory, createRouter } from 'vue-router';
 
-import LegacyUiView from './legacy-host/LegacyUiView.vue';
+import ModernStatusView from './modern/ModernStatusView.vue';
 
 export const router = createRouter({
-  history: createWebHistory(),
+  history: createMemoryHistory(),
   routes: [
     {
       path: '/',
-      name: 'legacy-ui',
-      component: LegacyUiView,
+      name: 'modern-status',
+      component: ModernStatusView,
     },
     {
       path: '/:pathMatch(.*)*',

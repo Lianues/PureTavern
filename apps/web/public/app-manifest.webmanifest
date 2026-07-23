@@ -1,8 +1,0 @@
-{
-  "name": "Pure Frontend Tavern",
-  "short_name": "Pure Tavern",
-  "start_url": "/",
-  "display": "standalone",
-  "theme_color": "#202124",
-  "background_color": "#202124"
-}

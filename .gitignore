@@ -22,7 +22,9 @@ npm-debug.log*
 # Read-only upstream source snapshot
 /SillyTavern-1.18.0/
 
-# Generated verification output
+# Generated Legacy runtime and verification output
+/apps/web/.generated/
+/apps/web/index.html
 /apps/web/legacy-verification-report.json
 
 # Accidental TypeScript config emission (configs are authored as .ts)

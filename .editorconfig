@@ -10,7 +10,7 @@ indent_size = 2
 [*.md]
 trim_trailing_whitespace = false
 
-[apps/web/public/legacy/**]
+[apps/web/legacy/upstream/**]
 # Legacy files are copied byte-for-byte and must not be formatted.
 insert_final_newline = unset
 trim_trailing_whitespace = unset

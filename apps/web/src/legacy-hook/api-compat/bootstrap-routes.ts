@@ -1,0 +1,121 @@
+import type { UpstreamMetadata } from '../upstream-metadata';
+import {
+  type CompatibilityRouter,
+  emptyResponse,
+  jsonResponse,
+} from '../transport/compatibility-fetch';
+
+const EMPTY_PRESET_DATA = {
+  koboldai_settings: [],
+  koboldai_setting_names: [],
+  world_names: [],
+  novelai_settings: [],
+  novelai_setting_names: [],
+  openai_settings: [],
+  openai_setting_names: [],
+  textgenerationwebui_presets: [],
+  textgenerationwebui_preset_names: [],
+  themes: [],
+  movingUIPresets: [],
+  quickReplyPresets: [],
+  instruct: [],
+  context: [],
+  sysprompt: [],
+  reasoning: [],
+};
+
+async function loadBootstrapSettings(nativeFetch: typeof window.fetch) {
+  const response = await nativeFetch('/__pure_tavern/default-settings.json');
+  if (!response.ok) throw new Error(`Default settings failed to load: HTTP ${response.status}`);
+  const settings = await response.json();
+
+  return {
+    ...settings,
+    firstRun: false,
+    active_character: null,
+    active_group: null,
+    accountStorage: settings.accountStorage ?? {},
+  };
+}
+
+export function registerBootstrapRoutes(
+  router: CompatibilityRouter,
+  nativeFetch: typeof window.fetch,
+  upstreamMetadata: Promise<UpstreamMetadata>,
+) {
+  let settingsPromise: ReturnType<typeof loadBootstrapSettings> | undefined;
+  const getSettings = () => (settingsPromise ??= loadBootstrapSettings(nativeFetch));
+
+  router.register('GET', '/csrf-token', () => jsonResponse({ token: 'pure-tavern-local' }));
+  router.register('GET', '/version', async () => {
+    const metadata = await upstreamMetadata;
+    return jsonResponse({
+      agent: `PureTavern-LegacyHook/${metadata.version}`,
+      pkgVersion: metadata.version,
+      gitBranch: 'legacy-hook',
+      gitRevision: 'local',
+    });
+  });
+  router.register('POST', '/api/ping', () => emptyResponse());
+
+  router.register('GET', '/api/users/me', () =>
+    jsonResponse({
+      handle: 'default-user',
+      name: 'User',
+      avatar: '/User Avatars/user-default.png',
+      admin: true,
+      password: false,
+      created: 0,
+    }),
+  );
+  router.register('POST', '/api/users/get', () =>
+    jsonResponse([
+      {
+        handle: 'default-user',
+        name: 'User',
+        avatar: '/User Avatars/user-default.png',
+        admin: true,
+        password: false,
+        created: 0,
+      },
+    ]),
+  );
+
+  router.register('POST', '/api/settings/get', async () =>
+    jsonResponse({
+      settings: JSON.stringify(await getSettings()),
+      ...EMPTY_PRESET_DATA,
+      enable_extensions: false,
+      enable_extensions_auto_update: false,
+      enable_accounts: false,
+      request_compression: {
+        enabled: false,
+        minPayloadSize: 0,
+        maxPayloadSize: 0,
+        timeout: 0,
+      },
+    }),
+  );
+  router.register('POST', '/api/settings/save', () => jsonResponse({ result: 'ok' }));
+  router.register('POST', '/api/settings/get-snapshots', () => jsonResponse([]));
+
+  router.register('POST', '/api/secrets/settings', () =>
+    jsonResponse({ allowKeysExposure: false }),
+  );
+  router.register('POST', '/api/secrets/read', () => jsonResponse({}));
+
+  router.register('GET', '/api/extensions/discover', () => jsonResponse([]));
+  router.register('POST', '/api/horde/status', () => jsonResponse({ ok: false }));
+  router.register('POST', '/api/horde/text-models', () => jsonResponse([]));
+  router.register('POST', '/api/chats/recent', () => jsonResponse([]));
+  router.register('POST', '/api/characters/all', () => jsonResponse([]));
+  router.register('POST', '/api/groups/all', () => jsonResponse([]));
+  router.register('POST', '/api/avatars/get', () => jsonResponse(['user-default.png']));
+  router.register('POST', '/api/worldinfo/list', () => jsonResponse([]));
+  router.register('POST', '/api/backgrounds/all', () => jsonResponse({ images: [], config: {} }));
+  router.register('POST', '/api/backgrounds/folders', () =>
+    jsonResponse({ folders: [], imageFolderMap: {} }),
+  );
+  router.register('POST', '/api/image-metadata/all', () => jsonResponse({ images: {} }));
+  router.register('POST', '/api/stats/get', () => jsonResponse({}));
+}

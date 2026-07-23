@@ -1,152 +1,204 @@
-# Legacy UI 隔离与渐进迁移策略
+# Legacy-first UI 与渐进迁移策略
 
-## 1. 决策
+## 1. 当前决策
 
-新应用使用 Vue 3、Vite 和 TypeScript。SillyTavern 1.18.0 的前端文件作为 Legacy 来源完整保留，但不直接成为新功能代码的维护位置。
-
-当前阶段采用以下结构：
+新工程使用 Vue 3、Vite、TypeScript 和 IndexedDB，但当前产品入口由 **SillyTavern 原版页面直接负责 DOM 与交互**。
 
 ```text
-Vue Application Shell
-└─ LegacyUiView
-   ├─ fetch /legacy/index.html
-   ├─ 内存中重写 base 并移除 script 标签
-   └─ sandbox iframe srcdoc + /legacy 原始静态资源
+浏览器访问 /
+└─ 生成的原版 index.html
+   ├─ 原版 HTML / CSS / 静态资源
+   ├─ Pure Tavern Hook（唯一注入点）
+   ├─ 原版 jQuery / lib.js / script.js / scripts/**
+   └─ Hook 提供的最小启动兼容响应
+
+浏览器访问 /modern.html
+└─ Vue 3 现代模块与诊断入口
 ```
 
-Vue Host 会读取原始 `index.html`，仅在内存副本中把 `<base href="/">` 改成 `/legacy/` 并删除所有 `<script>` 标签，然后交给 iframe 的 `srcdoc`。iframe 仍不授予 `allow-scripts`，作为第二层保护。这样旧页面不会发起脚本、CSRF 或 API 请求，也不会产生大量 sandbox blocked-script 控制台警告。
+这取代了早期“禁用脚本的 iframe 静态预览”方案。静态预览能显示页面，但无法保留按钮、抽屉、弹窗和设置控件的原版行为，不符合“尽量保留旧版 UI 和交互”的迁移目标。
 
-## 2. 为什么先使用 iframe
+当前浏览器测试已经确认：
 
-原始 `public/index.html` 超过 8,200 行，`public/script.js` 接近 500 KB；页面使用 jQuery、原生模块、全局状态和大量直接 DOM 操作。直接将 Vue 挂到同一棵 DOM 树会造成双重 DOM 所有权，难以判断问题来自旧代码还是 Vue。
+- 原版 CSS、jQuery、`lib.js`、`script.js` 和模块脚本正常加载；
+- 原版初始化流程能移除 `#preloader`；
+- 左侧配置抽屉、右侧角色抽屉和世界书抽屉由原版事件处理器完成打开与关闭；
+- 旧启动请求由 Hook 在浏览器内处理，不要求启动 SillyTavern Node 服务端；
+- 当前没有角色、聊天、世界书等真实接口迁移。
 
-初期 iframe 可以提供：
-
-- 原始 HTML/CSS/字体/图片文件保持不变；
-- 通过内存中的 `/legacy/` base 修复原项目根路径假设；
-- Legacy JavaScript 与 Vue 运行时隔离；
-- 不需要临时实现数百个旧 API；
-- 后续可以对比旧 UI 与新 Vue 功能岛；
-- 删除某个迁移模块时不会破坏 Legacy 原文件。
-
-iframe 只是迁移脚手架，不是最终产品架构。
-
-## 3. Legacy 文件规则
-
-Legacy 运行快照位于：
+## 2. 目录和文件所有权
 
 ```text
-apps/web/public/legacy/**
+apps/web/
+├─ legacy/
+│  ├─ upstream/
+│  │  ├─ public/**             # 完整、只读的上游 public 快照
+│  │  └─ default/content/**    # 启动需要的上游默认内容
+│  ├─ legacy-files.sha256      # public 文件哈希清单
+│  ├─ upstream.json            # 上游版本与来源元数据
+│  └─ reports/                 # 每次正式同步的差异报告
+├─ .generated/public/**        # 每次 dev/build 前生成，不提交
+├─ index.html                  # 注入 Hook 后的原版首页，不提交
+├─ modern.html                 # Vue 入口
+├─ scripts/
+│  ├─ sync-legacy.mjs
+│  ├─ prepare-legacy-runtime.mjs
+│  ├─ verify-legacy.mjs
+│  └─ verify-browser-startup.mjs
+└─ src/
+   ├─ legacy-hook/**           # 我方兼容代码
+   ├─ infrastructure/**        # IndexedDB 等新基础设施
+   └─ features/**              # 后续按模块增加的新功能
 ```
 
-规则：
+所有权规则：
 
-1. 从 `SillyTavern-1.18.0/public/**` 完整复制。
-2. 不在该目录直接修复、格式化或重构代码。
-3. 不对 Legacy 文件运行新项目的 ESLint/Prettier。
-4. 使用 SHA-256 清单检查误改。
-5. 必要兼容行为必须写在 `apps/web/src/legacy-host/**`。
-6. 新业务功能禁止写入 Legacy 目录。
-7. 上游许可证和来源说明必须随副本保留。
+1. `legacy/upstream/**` 是上游只读快照，禁止直接编辑、格式化或重构。
+2. 我方代码只进入 `src/legacy-hook/**`、新模块目录或构建脚本。
+3. `index.html` 和 `.generated/**` 都是派生物，任何手工修改都会在下次启动时丢失。
+4. 上游快照不参加 ESLint/Prettier；哈希清单负责检查误改。
+5. 不在原版文件里散落 patch，避免升级时人工合并数百个文件。
 
-如果确实需要修改旧逻辑，优先级为：
+## 3. 运行时生成过程
 
-1. Vue Host 外部补丁；
-2. Legacy Bridge；
-3. 独立 patch 文件；
-4. 最后才是生成一份有明确差异记录的 patched 文件。
+`pnpm dev` 和 `pnpm build` 会先运行 `prepare-legacy-runtime.mjs`：
 
-禁止静默修改原始副本。
+1. 读取原样保存的 `legacy/upstream/public/index.html`；
+2. 在原版 `lib/polyfill.js` 之前插入唯一的 Hook 模块标签；
+3. 将结果写为被忽略的开发首页，并复制到生产静态资源根目录；
+4. 将原版 public 资源复制到 `.generated/public`；
+5. 把原版 `lib.js` 的 npm imports 打包成浏览器可执行 ESM；
+6. 把我方 TypeScript Hook 打包成独立的 `/__pure_tavern/legacy-hook.js`；
+7. 准备默认设置、默认头像、背景和上游版本元数据；
+8. Vite 以 `.generated/public` 为静态资源根目录启动；生产构建只编译 `modern.html`，原版首页保持静态复制，避免 Vite 重写上游 HTML。
 
-## 4. 当前静态预览行为
+Hook 注入使用稳定的 `lib/polyfill.js` 标签作为锚点，并要求它恰好出现一次。若新上游修改了该锚点，同步会在覆盖当前快照前失败，要求人工审阅，而不是生成不确定的页面。
 
-不执行旧 JavaScript 时，原页面的 `#preloader` 会覆盖整个页面。Vue Host 会在 srcdoc iframe `load` 后访问同源文档，将 `#preloader` 隐藏。
+## 4. Hook 边界
 
-原页面还包含 `<base href="/">`。若直接加载 `/legacy/index.html`，浏览器会错误地从 `/style.css`、`/lib/*` 和 `/script.js` 请求资源。因此 Host 只在内存文档中把 base 改为 `/legacy/`；原文件和 SHA-256 不发生变化。
+Hook 必须在原版主模块执行前安装。当前职责仅有：
 
-这属于外部显示补丁：
+- 初始化 IndexedDB 基础 schema；
+- 包装同源 `fetch`；
+- 对原版启动阶段必需的少量路径返回固定空数据；
+- 记录已处理请求和未处理路径；
+- 暴露 `globalThis.__PURE_TAVERN__` 诊断信息；
+- 读取同步工具生成的上游版本元数据。
 
-- 不修改原始 `index.html`；
-- 只修改运行时内存副本的 base，并移除 script 标签；
-- 不模拟设置、角色或聊天数据；
-- 不注册按钮事件；
-- 不执行 `/api` 请求；
-- 只让静态 UI 骨架可见。
+当前启动响应包括设置、空角色列表、空群组列表、空世界书列表、默认头像、空背景、空最近聊天和离线 Horde 状态等。它们是 **Bootstrap Compatibility Contract**，作用只是让原版 UI 完成初始化。
 
-页面中依赖运行时数据生成的区域为空是当前阶段的预期结果。
+它们不代表对应接口已经迁移：
 
-## 5. 后续迁移方式
+- 不持久化真实角色或聊天；
+- 不实现角色卡导入导出；
+- 不实现模型请求；
+- 不把旧 `/api` 当成新架构的正式接口；
+- 不让新 Vue 代码依赖这些伪 HTTP 路径。
 
-每次迁移一个功能模块，执行以下步骤：
+当某个功能正式迁移时，才为该模块定义 Port、领域模型、IndexedDB Adapter 和可选后端 Adapter，然后逐步撤销对应 Legacy 兼容路径。
 
-1. 记录模块对应的 Legacy DOM、JS、接口和数据格式。
-2. 定义领域模型、Use Case 和 Port。
-3. 完成浏览器 Adapter 和 IndexedDB migration。
-4. 在 Vue 应用外层实现新的功能岛。
-5. 用契约测试确认新实现的行为。
-6. 从主页面切换到 Vue 功能岛。
-7. 保留 Legacy 对照入口，直到验收完成。
-8. 删除该模块的 Legacy Bridge，而不是修改其余模块。
+## 5. 保留原版交互的原则
 
-最终目标：
+当前阶段不在 Vue 中重新实现原版按钮。原版 DOM 应继续由原版脚本拥有：
 
 ```text
-阶段 0：完整 Legacy iframe
-阶段 1：Vue Shell + Legacy iframe
-阶段 2：Vue 功能岛覆盖部分区域
-阶段 3：Vue 主页面，Legacy 仅用于未迁移功能
-阶段 4：移除 Legacy 运行入口，只保留格式兼容代码和历史来源
+原版按钮 / DOM
+  → 原版 jQuery 或 ESM 事件处理器
+  → Legacy Hook（仅在需要数据能力时介入）
+  → 当前为空响应；未来转发到浏览器 Use Case 或可选后端
 ```
 
-## 6. CSS 策略
+这样可以保证：
 
-迁移初期 CSS 只在 iframe 内生效，不污染 Vue Shell。
+- 页面布局和控件行为尽量接近对应上游版本；
+- 上游新增按钮、HTML、CSS 和事件代码可以随快照一起升级；
+- 我方 Hook 不需要为每个纯 UI 操作复制事件处理器；
+- 删除某个尚未迁移模块时，可以通过 Hook/Capability 降级，而不是改乱整份上游脚本。
 
-逐块迁移时：
+禁止同时让 Vue 和原版 jQuery管理同一个 DOM 子树。后续 Vue 功能岛必须有明确挂载点和所有权切换步骤。
 
-- 保留必要的 SillyTavern CSS 自定义变量；
-- 将模块样式复制到对应 Vue 组件或模块样式入口；
-- 禁止新组件依赖不相关的全局选择器；
-- 使用视觉回归测试保证桌面和移动布局；
-- 最终整理通用 tokens、基础组件和主题系统。
+## 6. 上游升级流程
 
-## 7. JavaScript 兼容策略
+升级前先保留干净的新上游源码目录，例如 `SillyTavern-1.19.0/`。
 
-当前阶段 Legacy JavaScript 完全禁用。
+### 6.1 只读检查
 
-接口迁移开始后，如需短期复用旧模块，将通过显式 Bridge 调用，而不是直接恢复所有旧脚本。允许的临时形式：
-
-```text
-Legacy module
-  → legacyFetch / Legacy Capability Bridge
-  → Application Use Case
-  → Port
-  → Browser Adapter 或 Optional Backend Adapter
+```powershell
+pnpm legacy:sync:check --source "F:\path\SillyTavern-1.19.0" --version 1.19.0
 ```
 
-新的 Vue 代码禁止调用 `/api/...` 形式的本地伪接口。伪 HTTP 兼容只面向尚未迁移的 Legacy 代码。
+该命令不会写入快照，会输出：
 
-## 8. 可删除模块约束
+- 新增、删除、变化的文件；
+- `index.html` 是否变化；
+- 新增或变化的 JavaScript；
+- 新增扩展目录；
+- Hook 注入锚点是否兼容；
+- 默认设置、头像、背景和 `lib.js` 是否齐全。
 
-为了允许产品中途删除功能：
+重点审阅 `index.html`、`script.js`、`scripts/**`、`lib.js` 和新增扩展。HTML 新按钮通常会随完整快照自动进入运行时，但若它要求新的启动请求，浏览器测试会把路径记录到 `unhandledEndpoints`。
 
-- Vue 路由由模块注册表提供；
-- 模块菜单项由 Capability 动态出现；
-- 跨模块引用使用可选 Capability；
-- 模块数据库表由独立 migration 管理；
-- 核心启动流程不得 import 非核心功能模块；
-- 删除模块后应显示降级状态，而不是抛出启动异常。
+### 6.2 正式同步
 
-例如删除向量模块后，提示词流水线只跳过 Memory Step；删除翻译模块后，消息菜单不显示翻译操作；二者都不能影响基本聊天。
+```powershell
+pnpm legacy:sync --source "F:\path\SillyTavern-1.19.0" --version 1.19.0
+```
+
+正式同步会整体替换只读快照、默认内容、哈希清单和版本元数据，并生成差异报告；它不会修改 `src/legacy-hook/**`。
+
+### 6.3 同步后验证
+
+```powershell
+pnpm legacy:verify
+pnpm typecheck
+pnpm test
+pnpm build
+
+# 终端 A
+pnpm dev
+
+# 终端 B
+pnpm test:browser
+```
+
+浏览器测试至少验证：
+
+- Hook、IndexedDB 和上游元数据已就绪；
+- 原版 CSS 和主脚本成功加载；
+- 原版启动结束并移除 preloader；
+- 没有本地资源 404、运行时异常或控制台错误；
+- 没有兼容请求意外进入网络；
+- 没有未处理的启动路径；
+- 代表性的左右抽屉和世界书抽屉可打开并再次关闭。
+
+若测试发现新的 `unhandledEndpoints`，只补充完成 UI 启动所需的最小空响应；不要借升级之机一次性迁移真实业务接口。
+
+## 7. CSS 与资源策略
+
+当前根页面直接使用上游 CSS，因此原版选择器、变量、字体和媒体查询全部保留。新 Vue 页面不应全局导入这些样式。
+
+迁移单个功能岛时：
+
+- 先记录它依赖的 CSS 变量、全局类和响应式规则；
+- 为新组件复制最小必要样式或建立明确 token；
+- 不让新组件依赖无关的上游 DOM 层级；
+- 使用桌面与移动视觉回归验证所有权切换；
+- 未迁移区域仍由上游 CSS 控制。
+
+## 8. 安全与限制
+
+原版 JavaScript 现在会在主页面上下文执行，这是保留原版交互的必要条件，也意味着它能访问页面、浏览器存储和 Hook。当前快照必须视为受信任的固定上游代码；第三方扩展不能在没有权限模型的情况下自动启用。
+
+Hook 对未知同源 `/api/**` 返回 `501` 并记录诊断，不会静默转发到不存在的 Node 服务。外部请求和普通静态资源仍交给浏览器原生 `fetch`。
 
 ## 9. 许可证和来源
 
-SillyTavern 1.18.0 标记为 AGPL-3.0。当前策略会复制原始 HTML、CSS、JavaScript 和静态资源，因此：
+SillyTavern 1.18.0 标记为 AGPL-3.0。由于当前方案复制并执行原始 HTML、CSS、JavaScript 和静态资源：
 
-- 保留上游 LICENSE；
-- 保留版本和来源说明；
+- 保留上游 LICENSE 和来源说明；
+- 保留版本、同步时间与哈希清单；
 - 不移除原始版权信息；
-- 发布前继续审计单独资源的许可证；
-- 项目许可证决策必须与实际复用范围一致。
+- 发布前继续审计单独资源和 npm 依赖许可证；
+- 项目最终许可证必须与实际复用范围一致。
 
 本文只记录工程约束，不构成法律意见。

@@ -1,12 +1,14 @@
 :root {
   color-scheme: dark;
   font-family:
+    Inter,
     system-ui,
     -apple-system,
     BlinkMacSystemFont,
     'Segoe UI',
     sans-serif;
-  background: #202124;
+  color: #f4f4f5;
+  background: #18181b;
 }
 
 * {
@@ -16,42 +18,93 @@
 html,
 body,
 #app {
-  width: 100%;
-  height: 100%;
+  min-width: 100%;
+  min-height: 100%;
   margin: 0;
-  overflow: hidden;
 }
 
-.legacy-host {
-  position: relative;
-  width: 100%;
-  height: 100%;
-  background: #202124;
+body {
+  min-height: 100vh;
 }
 
-.legacy-host__frame {
-  display: block;
-  width: 100%;
-  height: 100%;
-  border: 0;
-  background: #202124;
+.modern-status {
+  display: grid;
+  min-height: 100vh;
+  padding: 2rem;
+  background: radial-gradient(circle at top left, rgb(91 33 182 / 28%), transparent 36rem), #18181b;
+  place-items: center;
 }
 
-.legacy-host__status {
-  position: absolute;
-  inset: 50% auto auto 50%;
-  z-index: 1;
-  max-width: min(28rem, calc(100vw - 2rem));
+.modern-status__card {
+  width: min(44rem, 100%);
+  padding: clamp(1.5rem, 5vw, 3rem);
+  border: 1px solid rgb(255 255 255 / 12%);
+  border-radius: 1rem;
+  background: rgb(39 39 42 / 88%);
+  box-shadow: 0 1.5rem 5rem rgb(0 0 0 / 35%);
+}
+
+.modern-status__card h1 {
+  margin: 0 0 1rem;
+  font-size: clamp(1.75rem, 5vw, 2.75rem);
+}
+
+.modern-status__card p {
+  color: #d4d4d8;
+  line-height: 1.7;
+}
+
+.modern-status__eyebrow {
+  margin: 0 0 0.5rem;
+  color: #c4b5fd !important;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.modern-status__facts {
+  display: grid;
+  gap: 0.75rem;
+  margin: 2rem 0;
+}
+
+.modern-status__facts div {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.8rem 1rem;
+  border-radius: 0.65rem;
+  background: rgb(0 0 0 / 18%);
+}
+
+.modern-status__facts dt {
+  color: #a1a1aa;
+}
+
+.modern-status__facts dd {
+  margin: 0;
+  font-weight: 600;
+}
+
+.modern-status__facts dd[data-status='ready'] {
+  color: #86efac;
+}
+
+.modern-status__facts dd[data-status='degraded'] {
+  color: #fca5a5;
+}
+
+.modern-status__link {
+  display: inline-flex;
   padding: 0.75rem 1rem;
-  border: 1px solid rgb(255 255 255 / 16%);
-  border-radius: 0.5rem;
-  color: #f4f4f5;
-  background: rgb(32 33 36 / 92%);
-  box-shadow: 0 0.5rem 2rem rgb(0 0 0 / 35%);
-  transform: translate(-50%, -50%);
+  border-radius: 0.6rem;
+  color: #18181b;
+  font-weight: 700;
+  text-decoration: none;
+  background: #c4b5fd;
 }
 
-.legacy-host__status--error {
-  border-color: rgb(248 113 113 / 60%);
-  color: #fecaca;
+.modern-status__link:hover {
+  background: #ddd6fe;
 }

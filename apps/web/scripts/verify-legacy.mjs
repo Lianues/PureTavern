@@ -5,8 +5,8 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const legacyRoot = path.join(packageRoot, 'public', 'legacy');
-const manifestPath = path.join(packageRoot, 'legacy-files.sha256');
+const legacyRoot = path.join(packageRoot, 'legacy', 'upstream', 'public');
+const manifestPath = path.join(packageRoot, 'legacy', 'legacy-files.sha256');
 const reportPath = path.join(packageRoot, 'legacy-verification-report.json');
 const provenanceFiles = new Set(['UPSTREAM_LICENSE', 'UPSTREAM_SOURCE.md']);
 

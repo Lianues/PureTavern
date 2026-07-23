@@ -85,14 +85,14 @@ features/<module>/
   - `public/locales/**`
 - **当前职责**：页面骨架、抽屉、聊天区、设置面板、弹窗容器和静态主题。
 - **迁移策略**：
-  1. 原文件完整复制到 `/legacy`，不修改；
-  2. 初期由 Vue Legacy Host 以禁用脚本的 iframe 展示；
-  3. 后续按功能岛逐块替换为 Vue 组件；
-  4. 最终移除 iframe，但保留兼容主题变量和必要 DOM contract。
-- **浏览器 Adapter**：无。
+  1. 原文件完整复制到 `apps/web/legacy/upstream/public`，不直接修改；
+  2. 根页面运行原版 DOM、CSS 与 JavaScript，只在生成的首页插入一个独立 Hook；
+  3. Hook 先提供完成 UI 初始化所需的固定空数据，真实功能再按模块迁移；
+  4. 后续按功能岛逐块切换 DOM 所有权，未迁移区域继续使用上游实现。
+- **浏览器 Adapter**：当前只有启动兼容 Hook，不属于正式业务 Adapter。
 - **可选后端**：无。
 - **删除影响**：应用无法运行。
-- **验收**：无 Node 服务端时可打开；静态资源完整；Legacy JS 不执行。
+- **验收**：无 Node 服务端时完成原版启动；静态资源完整；代表性原版抽屉交互正常；启动请求不进入网络。
 
 ## M01 — Runtime / 模块运行时
 
@@ -456,8 +456,9 @@ features/<module>/
 - M00 Application Shell
 - M01 Runtime 骨架
 - M02 IndexedDB 骨架
-- Legacy 文件完整复制和校验
-- 无服务端静态启动
+- Legacy 文件完整复制、哈希校验和版本升级工具
+- 无服务端 Legacy-first 启动与原版 UI 交互
+- 只提供启动所需固定空数据，不迁移真实业务接口
 
 ## 批次 B：最小可用本地酒馆
 
@@ -511,13 +512,11 @@ features/<module>/
 
 # 8. 当前阶段不迁移的内容
 
-当前只迁移 UI 外壳和工程基础，不实现以下任何接口：
+当前只迁移 UI 外壳、原版交互和工程基础，不实现以下真实业务能力：
 
-- `/api/settings/*`
-- `/api/characters/*`
-- `/api/chats/*`
-- `/api/groups/*`
-- `/api/worldinfo/*`
-- 模型生成、Tokenizer、扩展、用户或同步 API
+- 设置持久化与快照；
+- 角色、聊天、群组和世界书的 CRUD；
+- 模型生成与 Tokenizer；
+- 扩展安装、用户、远程存储或同步。
 
-Legacy JavaScript 在静态预览 iframe 中被 sandbox 禁止执行，避免它在尚无兼容层时访问旧服务端。
+Legacy JavaScript 会在根页面正常执行。Hook 对少量启动路径返回固定空数据，使旧 UI 完成初始化；这些路径不是已迁移接口，也不承诺业务语义。未知 `/api/**` 会返回 `501` 并记录在诊断信息中。

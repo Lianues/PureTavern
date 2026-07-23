@@ -4,6 +4,7 @@ import vue from '@vitejs/plugin-vue';
 import { defineConfig } from 'vite';
 
 export default defineConfig({
+  publicDir: '.generated/public',
   plugins: [vue()],
   resolve: {
     alias: {
@@ -11,7 +12,14 @@ export default defineConfig({
     },
   },
   optimizeDeps: {
-    entries: ['index.html'],
+    entries: ['modern.html'],
+  },
+  build: {
+    rollupOptions: {
+      input: {
+        modern: fileURLToPath(new URL('./modern.html', import.meta.url)),
+      },
+    },
   },
   server: {
     host: '127.0.0.1',
