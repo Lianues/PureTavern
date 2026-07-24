@@ -33,7 +33,10 @@ markers (GIF/APNG/animated WebP). Avatar crop/resize uses `createImageBitmap` pl
 
 All entry points enforce filename/path traversal rules, unsafe extension checks, MIME/signature
 checks, per-file limits, and ZIP compressed/expanded byte and file-count limits. Sprite ZIP paths
-are checked for zip-slip before extraction.
+are checked for zip-slip before extraction. The original `/api/content/importURL` flow downloads a
+bounded PNG through native browser `fetch`, validates its signature, and returns the original
+`X-Custom-Content-Type: character` and filename headers so `importFromExternalUrl()` can pass it to
+the existing Character Card importer.
 
 ## Shared Service Worker
 
@@ -53,11 +56,13 @@ version conflicts with the application database.
 
 ## Browser-only limitations
 
-Remote extension asset downloads use the injected native browser `fetch`. CORS and network errors
-are returned explicitly; this module cannot bypass remote CORS policy. Clearing site data removes
-IndexedDB blobs and the Service Worker, and browser quota still bounds large local libraries.
+Remote extension asset and external character-card downloads use the injected native browser
+`fetch`. CORS and network errors are returned explicitly; this module cannot bypass remote CORS
+policy. Direct PNG CDNs such as Discord work while their signed URL remains valid and sends CORS
+headers. Clearing site data removes IndexedDB blobs and the Service Worker, and browser quota still
+bounds large local libraries.
 
 The production Chrome gate covers default backgrounds, upload/list/direct URL/thumbnail/rename/
 delete, folders, attachments persisted through M05 chat metadata, user images, persona avatars,
-sprites, extension assets/packages, Persona alias lifecycle, shared Worker routing, IndexedDB
-diagnostics, and zero local 404s.
+sprites, extension assets/packages, the original external-URL Character Card import flow, Persona
+alias lifecycle, shared Worker routing, IndexedDB diagnostics, and zero local 404s.

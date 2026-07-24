@@ -2,7 +2,7 @@
   "schemaVersion": 2,
   "project": "SillyTavern",
   "version": "1.18.0",
-  "generatedAt": "2026-07-24T14:10:47.533Z",
+  "generatedAt": "2026-07-24T17:41:00.074Z",
   "source": {
     "publicRoot": "legacy/upstream/public",
     "repositoryRoot": "legacy/upstream"
@@ -4746,6 +4746,13 @@
           "pathname": "/api/assets/character",
           "category": "browser-data-capability",
           "responseKind": "native-fetch-character-blob",
+          "migrationStatus": "browser-ready-assets-cors-limited"
+        },
+        {
+          "method": "POST",
+          "pathname": "/api/content/importURL",
+          "category": "browser-data-capability",
+          "responseKind": "validated-native-fetch-character-png-blob",
           "migrationStatus": "browser-ready-assets-cors-limited"
         },
         {

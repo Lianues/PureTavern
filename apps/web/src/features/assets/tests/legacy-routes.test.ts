@@ -274,22 +274,85 @@ describe('M13 Legacy route DTOs', () => {
     expect(character.status).toBe(200);
     expect(character.headers.get('content-type')).toBe('image/png');
     expect((await character.blob()).size).toBeGreaterThan(0);
+
+    const externalCharacter = await postJson(router, '/api/content/importURL', {
+      url: 'https://cdn.discordapp.com/attachments/123/456/14.png?ex=abc&hm=def',
+    });
+    expect(externalCharacter.status).toBe(200);
+    expect(externalCharacter.headers.get('content-type')).toBe('image/png');
+    expect(externalCharacter.headers.get('content-disposition')).toBe(
+      'attachment; filename="14.png"',
+    );
+    expect(externalCharacter.headers.get('x-custom-content-type')).toBe('character');
+    expect((await externalCharacter.blob()).size).toBeGreaterThan(0);
     expect(nativeFetch).toHaveBeenCalled();
+  });
+
+  it('normalizes extensionless PNG cards and rejects non-PNG or failed CORS downloads', async () => {
+    const pngFetch = vi.fn<typeof fetch>(async () =>
+      Promise.resolve(
+        new Response(arrayBufferFromBytes(bytesFromBase64(ONE_BY_ONE_PNG_BASE64)), {
+          status: 200,
+          headers: { 'Content-Type': 'image/png' },
+        }),
+      ),
+    );
+    const { router } = createRouteHarness(pngFetch);
+    const extensionless = await postJson(router, '/api/content/importURL', {
+      url: 'https://cards.example/download',
+    });
+    expect(extensionless.status).toBe(200);
+    expect(extensionless.headers.get('content-disposition')).toBe(
+      'attachment; filename="download.png"',
+    );
+
+    const nonPngFetch = vi.fn<typeof fetch>(async () =>
+      Promise.resolve(
+        new Response(new TextEncoder().encode('<!doctype html>'), {
+          status: 200,
+          headers: { 'Content-Type': 'text/html' },
+        }),
+      ),
+    );
+    const nonPngHarness = createRouteHarness(nonPngFetch);
+    const nonPng = await postJson(nonPngHarness.router, '/api/content/importURL', {
+      url: 'https://cards.example/error.png',
+    });
+    expect(nonPng.status).toBe(400);
+    await expect(nonPng.json()).resolves.toMatchObject({
+      code: 'ASSET_VALIDATION_ERROR',
+      pureTavern: true,
+    });
+
+    const corsFetch = vi.fn<typeof fetch>(() => Promise.reject(new TypeError('Failed to fetch')));
+    const corsHarness = createRouteHarness(corsFetch);
+    const corsFailure = await postJson(corsHarness.router, '/api/content/importURL', {
+      url: 'https://blocked.example/card.png',
+    });
+    expect(corsFailure.status).toBe(502);
+    await expect(corsFailure.json()).resolves.toMatchObject({
+      code: 'ASSET_FETCH_FAILED',
+      error: expect.stringContaining('may block CORS'),
+      pureTavern: true,
+    });
   });
 });
 
-function createRouteHarness() {
-  const nativeFetch = vi.fn<typeof fetch>(async (input) => {
-    return String(input).endsWith('.png')
-      ? new Response(arrayBufferFromBytes(bytesFromBase64(ONE_BY_ONE_PNG_BASE64)), {
-          status: 200,
-          headers: { 'Content-Type': 'image/png' },
-        })
-      : new Response(new TextEncoder().encode('audio'), {
-          status: 200,
-          headers: { 'Content-Type': 'audio/mpeg' },
-        });
-  });
+function createRouteHarness(fetchImplementation?: typeof fetch) {
+  const nativeFetch =
+    fetchImplementation ??
+    vi.fn<typeof fetch>(async (input) => {
+      const pathname = new URL(String(input)).pathname;
+      return pathname.endsWith('.png')
+        ? new Response(arrayBufferFromBytes(bytesFromBase64(ONE_BY_ONE_PNG_BASE64)), {
+            status: 200,
+            headers: { 'Content-Type': 'image/png' },
+          })
+        : new Response(new TextEncoder().encode('audio'), {
+            status: 200,
+            headers: { 'Content-Type': 'audio/mpeg' },
+          });
+    });
   const service = new AssetService(
     new MemoryBlobRepository(),
     new MemoryAssetIndex(),

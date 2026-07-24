@@ -101,7 +101,7 @@ pnpm legacy:contracts:check --source "F:\path\SillyTavern-1.19.0" --version 1.19
 - 原版单角色 Chats 完成消息、附件、刷新恢复、搜索/recent、重命名和 JSONL 导入导出；
 - 原版 World Books 编辑器与 matcher 完成 CRUD、导入、关键词/constant/disabled 和 opaque 字段验证；
 - Presets 完成 11 类默认种子、原版 selector、PresetManager CRUD/恢复以及 theme/Quick Reply/Moving UI；
-- Assets 完成背景、文件夹、附件、用户图片/persona、sprites、library、extension package 与共享 Worker 直接 URL；
+- Assets 完成背景、文件夹、附件、用户图片/persona、sprites、library、extension package、共享 Worker 直接 URL，以及原版外链 CORS PNG 角色卡导入；
 - Personas 完成原版头像上传、创建、选择、默认、角色绑定、刷新恢复、删除和本地身份降级；
 - Extensions 完成 trusted built-ins，以及原版第三方警告、install/discover、manifest/JS/CSS、hooks、disable/enable、version/update/branches/switch/move/delete 和 Settings/registry/M13 同步；
 - Prompt Pipeline 验证原版 prepare 函数仍为唯一权威，项目内不存在重复实现，并由 M12 完成生成 transport 闭环；

@@ -53,6 +53,7 @@ async function getAvailablePort() {
 
 async function startMockChatCompletionProvider() {
   let extensionVersion = '1.0.0';
+  let externalCharacterCard = null;
   const server = createHttpServer(async (request, response) => {
     response.setHeader('Access-Control-Allow-Origin', '*');
     response.setHeader(
@@ -84,6 +85,21 @@ async function startMockChatCompletionProvider() {
     if (pathname === '/browser-extension-control') {
       extensionVersion = requestUrl.searchParams.get('version') || extensionVersion;
       sendJson({ version: extensionVersion });
+      return;
+    }
+    if (pathname === '/browser-character-card-control' && request.method === 'POST') {
+      externalCharacterCard = Buffer.concat(chunks);
+      sendJson({ size: externalCharacterCard.byteLength });
+      return;
+    }
+    if (pathname === '/attachments/browser/channel/14.png') {
+      if (!externalCharacterCard) {
+        response.writeHead(404).end();
+        return;
+      }
+      response.setHeader('Content-Type', 'image/png');
+      response.setHeader('Content-Length', String(externalCharacterCard.byteLength));
+      response.end(externalCharacterCard);
       return;
     }
     if (pathname === '/browser-extension.zip') {
@@ -2640,6 +2656,7 @@ try {
   const characterPostReloadEvaluation = await client.send('Runtime.evaluate', {
     expression: `(async () => {
       const createdAvatar = ${JSON.stringify(chatPostReload?.renamedAvatar ?? characterCreateEdit?.createdAvatar ?? '')};
+      const mockProviderBaseUrl = ${JSON.stringify(mockProvider.baseUrl)};
       const scriptModule = await import('/script.js');
       const jsonHeaders = scriptModule.getRequestHeaders();
       const formHeaders = scriptModule.getRequestHeaders({ omitContentType: true });
@@ -2696,6 +2713,35 @@ try {
         ? Array.from(new Uint8Array(await exportPngBlob.slice(0, 8).arrayBuffer()))
         : [];
 
+      let externalCardUploadOk = false;
+      let externalUrlImportError = null;
+      let externalUrlImportedAvatars = [];
+      if (exportPngBlob) {
+        const uploadResponse = await fetch(mockProviderBaseUrl + '/browser-character-card-control', {
+          method: 'POST',
+          body: exportPngBlob,
+        });
+        externalCardUploadOk = uploadResponse.ok;
+        if (externalCardUploadOk) {
+          const beforeResponse = await postJson('/api/characters/all', {});
+          const before = beforeResponse.ok ? await beforeResponse.json() : [];
+          const beforeAvatars = new Set(before.map((character) => character.avatar));
+          try {
+            const utilsModule = await import('/scripts/utils.js');
+            await utilsModule.importFromExternalUrl(
+              mockProviderBaseUrl + '/attachments/browser/channel/14.png?ex=browser&hm=character-card',
+            );
+          } catch (error) {
+            externalUrlImportError = error instanceof Error ? error.message : String(error);
+          }
+          const afterResponse = await postJson('/api/characters/all', {});
+          const after = afterResponse.ok ? await afterResponse.json() : [];
+          externalUrlImportedAvatars = after
+            .map((character) => character.avatar)
+            .filter((avatar) => avatar && !beforeAvatars.has(avatar));
+        }
+      }
+
       const importJsonForm = new FormData();
       importJsonForm.append('avatar', new File([exportJsonText], 'browser-alice.json', { type: 'application/json' }));
       importJsonForm.append('file_type', 'json');
@@ -2729,6 +2775,7 @@ try {
         renamedAvatar,
         importJsonData?.file_name ? importJsonData.file_name + '.png' : '',
         importPngData?.file_name ? importPngData.file_name + '.png' : '',
+        ...externalUrlImportedAvatars,
       ].filter(Boolean);
       const deleteResults = [];
       for (const avatar of avatarsToDelete) {
@@ -2761,6 +2808,11 @@ try {
         importJsonFileName: importJsonData?.file_name ?? null,
         importPngOk: importPngResponse?.ok ?? false,
         importPngFileName: importPngData?.file_name ?? null,
+        externalCardUploadOk,
+        externalUrlImportOk:
+          externalCardUploadOk && !externalUrlImportError && externalUrlImportedAvatars.length > 0,
+        externalUrlImportError,
+        externalUrlImportedAvatars,
         deleteResults,
         deleteChatsTrueOk: Array.isArray(chatsAfterDelete) && chatsAfterDelete.length === 0,
         listAfterDeleteEmpty: listAfterDelete.length === 0,
@@ -2769,6 +2821,7 @@ try {
           rename: routeHandled('/api/characters/rename'),
           export: routeHandled('/api/characters/export'),
           import: routeHandled('/api/characters/import'),
+          externalUrlImport: routeHandled('/api/content/importURL'),
           delete: routeHandled('/api/characters/delete'),
         },
       };
@@ -3365,7 +3418,8 @@ try {
       characterWorkflow?.exportPngIsPng === true &&
       characterWorkflow?.importJsonOk === true &&
       characterWorkflow?.importPngOk === true &&
-      characterWorkflow?.deleteResults?.length >= 4 &&
+      characterWorkflow?.externalUrlImportOk === true &&
+      characterWorkflow?.deleteResults?.length >= 5 &&
       characterWorkflow.deleteResults.every((result) => result.ok) &&
       characterWorkflow?.deleteChatsTrueOk === true &&
       characterWorkflow?.listAfterDeleteEmpty === true &&

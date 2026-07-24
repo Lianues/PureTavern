@@ -833,6 +833,39 @@ export class AssetService {
     return { blob, filename };
   }
 
+  async fetchExternalCharacterCard(input: { url: unknown; filename?: unknown }): Promise<{
+    blob: Blob;
+    filename: string;
+  }> {
+    const url = parseRemoteUrl(input.url);
+    const requestedFilename =
+      typeof input.filename === 'string' && input.filename.trim()
+        ? assertSafeFilename(input.filename, 'filename')
+        : sanitizeFilename(remoteFilename(url), 'character');
+    const blob = await this.#fetchRemoteBlob(url);
+    const declaredMimeType = blob.type.toLowerCase();
+    if (
+      declaredMimeType &&
+      declaredMimeType !== 'image/png' &&
+      declaredMimeType !== 'application/octet-stream'
+    ) {
+      throw new AssetValidationError(
+        `External character card must be a PNG image, but the server returned ${blob.type}.`,
+      );
+    }
+    const image = await this.#images.inspect(blob);
+    if (image.format !== 'png') {
+      throw new AssetValidationError('External character card is not a PNG image.');
+    }
+    const filename = assertSafeFilename(
+      getExtension(requestedFilename) === 'png'
+        ? requestedFilename
+        : replaceExtension(requestedFilename, 'png'),
+      'remote filename',
+    );
+    return { blob, filename };
+  }
+
   async deleteLibraryAsset(categoryValue: unknown, filenameValue: unknown): Promise<void> {
     const category = parseLibraryCategory(categoryValue);
     if (category === 'character') {

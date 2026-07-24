@@ -240,6 +240,17 @@ export function registerAssetsLegacyRoutes(
       return assetErrorResponse(error);
     }
   });
+  router.register('POST', '/api/content/importURL', async (request) => {
+    try {
+      const body = await readJsonObject(request);
+      const result = await assets.fetchExternalCharacterCard({ url: body.url });
+      return blobResponse(result.blob, result.filename, {
+        'X-Custom-Content-Type': 'character',
+      });
+    } catch (error) {
+      return assetErrorResponse(error);
+    }
+  });
 }
 
 function registerJson(
@@ -340,13 +351,18 @@ function libraryDownloadResponse(result: LibraryDownloadResult): Response {
     : jsonResponse({ path: result.path });
 }
 
-function blobResponse(blob: Blob, filename: string): Response {
+function blobResponse(
+  blob: Blob,
+  filename: string,
+  extraHeaders: Record<string, string> = {},
+): Response {
   return new Response(blob, {
     status: 200,
     headers: {
       'Content-Type': blob.type || 'application/octet-stream',
       'Content-Disposition': `attachment; filename="${encodeURIComponent(filename)}"`,
       'X-Pure-Tavern-Hook': '1',
+      ...extraHeaders,
     },
   });
 }

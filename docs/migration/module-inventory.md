@@ -395,13 +395,13 @@ features/<module>/
 - **已实现 Port/模块**：`apps/web/src/features/assets/**` 中的 `BlobRepository`、`AssetIndex`、`ImageProcessor`、默认背景 seeder 与 Legacy adapters。
 - **浏览器实现**：
   - 固定通用 `blobs`/`records` 使用 assets 命名空间存放稳定 Blob ID、索引、Legacy path alias、背景文件夹与 seed state，不新增 IndexedDB Object Store 或数据库版本；
-  - files、images、backgrounds、image-metadata、avatars、sprites、assets 各 route family 已接入；背景 rename 只迁移 alias/metadata，不复制 Blob；
+  - files、images、backgrounds、image-metadata、avatars、sprites、assets 各 route family 已接入；`/api/content/importURL` 复用原版按钮，直接导入允许 CORS 的外链 PNG 角色卡；背景 rename 只迁移 alias/metadata，不复制 Blob；
   - `BrowserImageProcessor` 验证 PNG/JPEG/GIF/WebP、尺寸和动画标记，并通过 Canvas 能力提供头像 crop/resize；不支持时返回明确错误；
   - 文件名、MIME/signature、单文件大小、ZIP 文件数/压缩与展开总量、zip-slip 均有门禁；远程 asset 遵循浏览器 CORS；
   - 构建生成默认背景 hash 清单，新 upstream 默认可增量补入，用户删除以 seed state 保留；
   - 共享根 scope Service Worker 统一解析 Character 头像、背景、persona、聊天附件、用户图片、sprites 与 extension/library URL；Worker 无版本打开现有数据库，不创建 schema；
   - Characters 通过 `AssetServiceWorkerCapability` 复用该 Worker；聊天只保存附件 metadata，实际 Blob 生命周期归 M13。
-- **验收**：真实 Chrome 覆盖默认背景、原版背景列表 DOM、上传/缩略图/文件夹/rename/delete、聊天附件跨刷新、用户图片、persona、sprite、extension asset 与直接 Blob URL；零资源 404、零运行时异常。
+- **验收**：真实 Chrome 覆盖默认背景、原版背景列表 DOM、上传/缩略图/文件夹/rename/delete、聊天附件跨刷新、用户图片、persona、sprite、extension asset、直接 Blob URL，以及原版 `importFromExternalUrl` 的 CORS PNG 下载→角色导入闭环；零资源 404、零运行时异常。
 - **可选后端**：未来提供远程 Blob/S3/WebDAV Adapter；浏览器 CORS 与站点配额不能被本地实现绕过。
 - **依赖**：M02；与 M04/M05 仅通过 capability 或公开 URL DTO 协作。
 - **删除影响**：媒体子模块可删；文本聊天仍应工作。
