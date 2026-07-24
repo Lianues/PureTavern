@@ -78,6 +78,11 @@ export interface TokenizerCapability {
   countMessages(messages: unknown): Promise<number>;
 }
 
+export interface CredentialResolverCapability {
+  resolveCredential(key: string, id?: string): Promise<string | null>;
+  hasCredential(key: string): Promise<boolean>;
+}
+
 export const characterIdentityCapability =
   defineCapability<CharacterIdentityCapability>('characters.identity.v1');
 
@@ -112,4 +117,8 @@ export const legacyExtensionSettingsCapability =
 
 export const tokenizerCapability = defineCapability<TokenizerCapability>(
   'tokenizers.unified-estimator.v1',
+);
+
+export const credentialResolverCapability = defineCapability<CredentialResolverCapability>(
+  'secrets.credential-resolver.v1',
 );

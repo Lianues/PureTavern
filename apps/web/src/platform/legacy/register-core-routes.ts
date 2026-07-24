@@ -40,11 +40,6 @@ export function registerCoreLegacyRoutes(
     ]),
   );
 
-  router.register('POST', '/api/secrets/settings', () =>
-    jsonResponse({ allowKeysExposure: false }),
-  );
-  router.register('POST', '/api/secrets/read', () => jsonResponse({}));
-
   router.register('GET', '/api/extensions/discover', () => jsonResponse([]));
   router.register('POST', '/api/horde/status', () => jsonResponse({ ok: false }));
   router.register('POST', '/api/horde/text-models', () => jsonResponse([]));

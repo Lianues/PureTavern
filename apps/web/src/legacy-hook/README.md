@@ -14,6 +14,7 @@
 
 ```js
 globalThis.__PURE_TAVERN__.features.settings;
+globalThis.__PURE_TAVERN__.features.secrets;
 globalThis.__PURE_TAVERN__.features.assets;
 globalThis.__PURE_TAVERN__.features.personas;
 globalThis.__PURE_TAVERN__.features.characters;

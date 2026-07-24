@@ -398,15 +398,22 @@ features/<module>/
 ## M14 — Secrets / 密钥
 
 - **优先级**：P2
-- **初始状态**：`inventory`
+- **当前状态**：`completed-local-plaintext`（本地持久化与原版管理 UI 已闭环；明确不是加密 Vault）
 - **原始前端**：`public/scripts/secrets.js`
 - **原始服务端**：`src/endpoints/secrets.js`
 - **原始接口**：`write`、`read`、`view`、`find`、`delete`、`rotate`、`rename`、`settings`。
-- **目标 Port**：`SecretStore`、`CredentialResolver`。
-- **浏览器实现**：Web Crypto 加密存储；用户解锁后密钥仍会存在于浏览器内存，不能宣称为真正保密。
-- **可选后端**：Vault，仅返回代理执行结果，不把明文密钥交给浏览器。
-- **依赖**：M02。
-- **删除影响**：仍允许用户每次请求临时输入 Key；不影响本地数据浏览。
+- **已实现 Port/模块**：`apps/web/src/features/secrets/**` 中的 `SecretStore`、`CredentialResolver`、本地 service、8 条 Legacy routes 与 `CredentialResolverCapability`。
+- **浏览器实现**：
+  - 使用固定通用 records 的 `secrets / store / current` aggregate 保存多值密钥、stable ID、label 与 active 状态，不增加 Object Store 或数据库版本；
+  - 原版 `scripts/secrets.js` 的 write/read/view/find/delete/rotate/rename/settings DTO 与事件流程继续运行；read 返回掩码，显式 find/view 和内部 resolver 返回明文；
+  - 写操作串行化；删除 active 后自动启用同 key 第一项；IndexedDB 失败后固定降级到页面会话内存并报告数据将在刷新后丢失；
+  - 按产品决策不使用 Web Crypto、解锁口令或自动加密；diagnostics 明确 `atRest=plaintext`，且不包含 key/value；
+  - M12 后续通过窄 `CredentialResolverCapability` 取值，不直接读取 Repository；M11 untrusted extensions 不自动获得 resolver。
+- **安全边界**：DevTools、浏览器 Profile、XSS、浏览器扩展、trusted same-context 脚本和运行时 fetch/XHR 包装都可能获取密钥。本模块只是本地凭据持久化，不能宣称真正保密。
+- **验收**：9 项模块测试覆盖多密钥、轮换/重命名/删除、掩码与明文出口、验证、串行写入、IndexedDB 和内存降级；生产 Chrome 使用原版 `secrets.js` 验证跨刷新持久化与完整删除回退，零未处理端点和零异常。
+- **可选后端**：当前项目未实现任何可选后端，因此本阶段不实现 Vault、密钥代理或同步；未来可通过同一 resolver/Port 增加。
+- **依赖**：M02；M12 使用其 Capability。
+- **删除影响**：仍允许用户每次请求临时输入 Key；不影响本地数据浏览，但 M12 无法持久化 Provider 凭据。
 
 ## M15 — Tokenizers / Token 计算
 

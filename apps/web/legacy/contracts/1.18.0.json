@@ -2,7 +2,7 @@
   "schemaVersion": 2,
   "project": "SillyTavern",
   "version": "1.18.0",
-  "generatedAt": "2026-07-24T07:32:08.036Z",
+  "generatedAt": "2026-07-24T08:07:51.946Z",
   "source": {
     "publicRoot": "legacy/upstream/public",
     "repositoryRoot": "legacy/upstream"
@@ -4436,16 +4436,16 @@
         {
           "method": "POST",
           "pathname": "/api/secrets/settings",
-          "category": "extension-ecosystem-required",
-          "responseKind": "safe-default-json",
-          "migrationStatus": "bootstrap-empty-response-not-migrated"
+          "category": "browser-data-capability",
+          "responseKind": "local-key-exposure-enabled-json",
+          "migrationStatus": "browser-ready-local-plaintext-secrets"
         },
         {
           "method": "POST",
           "pathname": "/api/secrets/read",
-          "category": "extension-ecosystem-required",
-          "responseKind": "empty-object-json",
-          "migrationStatus": "bootstrap-empty-response-not-migrated"
+          "category": "browser-data-capability",
+          "responseKind": "indexeddb-masked-secret-state-json",
+          "migrationStatus": "browser-ready-local-plaintext-secrets"
         },
         {
           "method": "GET",
@@ -5006,6 +5006,48 @@
           "category": "browser-data-capability",
           "responseKind": "indexeddb-moving-ui-save-ok",
           "migrationStatus": "browser-ready-presets"
+        },
+        {
+          "method": "POST",
+          "pathname": "/api/secrets/write",
+          "category": "browser-data-capability",
+          "responseKind": "indexeddb-plaintext-secret-create-json",
+          "migrationStatus": "browser-ready-local-plaintext-secrets"
+        },
+        {
+          "method": "POST",
+          "pathname": "/api/secrets/view",
+          "category": "browser-data-capability",
+          "responseKind": "indexeddb-active-plaintext-secrets-json",
+          "migrationStatus": "browser-ready-local-plaintext-secrets"
+        },
+        {
+          "method": "POST",
+          "pathname": "/api/secrets/find",
+          "category": "browser-data-capability",
+          "responseKind": "indexeddb-plaintext-secret-value-json",
+          "migrationStatus": "browser-ready-local-plaintext-secrets"
+        },
+        {
+          "method": "POST",
+          "pathname": "/api/secrets/delete",
+          "category": "browser-data-capability",
+          "responseKind": "indexeddb-secret-delete-empty-204",
+          "migrationStatus": "browser-ready-local-plaintext-secrets"
+        },
+        {
+          "method": "POST",
+          "pathname": "/api/secrets/rotate",
+          "category": "browser-data-capability",
+          "responseKind": "indexeddb-secret-rotate-empty-204",
+          "migrationStatus": "browser-ready-local-plaintext-secrets"
+        },
+        {
+          "method": "POST",
+          "pathname": "/api/secrets/rename",
+          "category": "browser-data-capability",
+          "responseKind": "indexeddb-secret-rename-empty-204",
+          "migrationStatus": "browser-ready-local-plaintext-secrets"
         },
         {
           "method": "POST",

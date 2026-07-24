@@ -798,6 +798,66 @@ try {
   });
   const tokenizerWorkflow = tokenizerWorkflowEvaluation.result?.value;
 
+  const secretWorkflowEvaluation = await client.send('Runtime.evaluate', {
+    expression: `(async () => {
+      const secretsModule = await import('/scripts/secrets.js');
+      const key = secretsModule.SECRET_KEYS.OPENAI;
+      const headers = { 'Content-Type': 'application/json' };
+      const routeHandled = (pathname) =>
+        globalThis.__PURE_TAVERN__?.diagnostics.requests.some(
+          (request) => request.pathname === pathname && request.handled,
+        ) ?? false;
+
+      await secretsModule.readSecretState();
+      const exposureAllowed = await secretsModule.canViewSecrets();
+      const firstId = await secretsModule.writeSecret(
+        key,
+        'browser-secret-first-123',
+        'Browser First',
+      );
+      const secondId = await secretsModule.writeSecret(
+        key,
+        'browser-secret-second-456',
+        'Browser Second',
+      );
+      await secretsModule.rotateSecret(key, firstId);
+      await secretsModule.renameSecret(key, firstId, 'Browser Primary');
+      const foundFirst = await secretsModule.findSecret(key, firstId);
+      const viewResponse = await fetch('/api/secrets/view', { method: 'POST', headers });
+      const viewed = viewResponse.ok ? await viewResponse.json() : null;
+      const state = secretsModule.secret_state[key] ?? [];
+      const feature = globalThis.__PURE_TAVERN__?.features?.secrets;
+
+      return {
+        available: true,
+        key,
+        firstId,
+        secondId,
+        exposureAllowed,
+        firstMasked: state.find((secret) => secret.id === firstId)?.value ?? null,
+        secondMasked: state.find((secret) => secret.id === secondId)?.value ?? null,
+        firstActive: state.find((secret) => secret.id === firstId)?.active === true,
+        firstRenamed: state.find((secret) => secret.id === firstId)?.label === 'Browser Primary',
+        foundFirst,
+        viewedActive: viewed?.[key] ?? null,
+        routesHandled: {
+          settings: routeHandled('/api/secrets/settings'),
+          write: routeHandled('/api/secrets/write'),
+          read: routeHandled('/api/secrets/read'),
+          view: routeHandled('/api/secrets/view'),
+          find: routeHandled('/api/secrets/find'),
+          rotate: routeHandled('/api/secrets/rotate'),
+          rename: routeHandled('/api/secrets/rename'),
+        },
+        storage: feature?.storage ? { ...feature.storage } : null,
+        security: feature?.security ? { ...feature.security } : null,
+      };
+    })()`,
+    awaitPromise: true,
+    returnByValue: true,
+  });
+  const secretWorkflow = secretWorkflowEvaluation.result?.value ?? {};
+
   const presetWorkflowEvaluation = await client.send('Runtime.evaluate', {
     expression: `(async () => {
       const scriptModule = await import('/script.js');
@@ -2075,6 +2135,48 @@ try {
   const personaDelete = personaDeleteEvaluation.result?.value;
   Object.assign(personaWorkflow, personaDelete ?? {});
 
+  const secretReloadEvaluation = await client.send('Runtime.evaluate', {
+    expression: `(async () => {
+      const secretsModule = await import('/scripts/secrets.js');
+      const key = ${JSON.stringify('api_key_openai')};
+      const firstId = ${JSON.stringify(secretWorkflow?.firstId ?? '')};
+      const secondId = ${JSON.stringify(secretWorkflow?.secondId ?? '')};
+      await secretsModule.readSecretState();
+      const stateAfterReload = secretsModule.secret_state[key] ?? [];
+      const persisted =
+        stateAfterReload.find((secret) => secret.id === firstId)?.label === 'Browser Primary' &&
+        stateAfterReload.find((secret) => secret.id === firstId)?.active === true &&
+        stateAfterReload.find((secret) => secret.id === secondId)?.active === false;
+
+      await secretsModule.deleteSecret(key, firstId);
+      const fallbackValue = await secretsModule.findSecret(key);
+      const fallbackActivated =
+        secretsModule.secret_state[key]?.find((secret) => secret.id === secondId)?.active === true;
+      await secretsModule.deleteSecret(key, secondId);
+      const deletedAll = secretsModule.secret_state[key] === null;
+      const missingResponse = await fetch('/api/secrets/find', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key }),
+      });
+
+      return {
+        persisted,
+        fallbackValue,
+        fallbackActivated,
+        deletedAll,
+        missingStatus: missingResponse.status,
+        deleteHandled:
+          globalThis.__PURE_TAVERN__?.diagnostics.requests.some(
+            (request) => request.pathname === '/api/secrets/delete' && request.handled,
+          ) ?? false,
+      };
+    })()`,
+    awaitPromise: true,
+    returnByValue: true,
+  });
+  Object.assign(secretWorkflow, secretReloadEvaluation.result?.value ?? {});
+
   // Allow animations, nested CSS imports, fonts, and images to finish so late failures are included.
   await new Promise((resolve) => setTimeout(resolve, 750));
 
@@ -2200,6 +2302,28 @@ try {
       tokenizerWorkflow?.openAiApproximate === true &&
       tokenizerWorkflow?.remoteLocalCount === true &&
       Object.values(tokenizerWorkflow?.routesHandled ?? {}).every(Boolean),
+    secretsStorageReady:
+      secretWorkflow?.storage?.status === 'ready' &&
+      secretWorkflow?.storage?.backend === 'indexeddb' &&
+      secretWorkflow?.security?.atRest === 'plaintext' &&
+      secretWorkflow?.security?.encrypted === false &&
+      secretWorkflow?.security?.sameOriginSecurityBoundary === false,
+    secretsBrowserWorkflow:
+      secretWorkflow?.available === true &&
+      secretWorkflow?.exposureAllowed === true &&
+      secretWorkflow?.firstMasked === '*******123' &&
+      secretWorkflow?.secondMasked === '*******456' &&
+      secretWorkflow?.firstActive === true &&
+      secretWorkflow?.firstRenamed === true &&
+      secretWorkflow?.foundFirst === 'browser-secret-first-123' &&
+      secretWorkflow?.viewedActive === 'browser-secret-first-123' &&
+      secretWorkflow?.persisted === true &&
+      secretWorkflow?.fallbackValue === 'browser-secret-second-456' &&
+      secretWorkflow?.fallbackActivated === true &&
+      secretWorkflow?.deletedAll === true &&
+      secretWorkflow?.missingStatus === 404 &&
+      secretWorkflow?.deleteHandled === true &&
+      Object.values(secretWorkflow?.routesHandled ?? {}).every(Boolean),
     presetsStorageReady:
       presetWorkflow?.storage?.status === 'ready' &&
       presetWorkflow?.storage?.backend === 'indexeddb',
@@ -2367,6 +2491,7 @@ try {
     extensionWorkflow,
     promptPipelineWorkflow,
     tokenizerWorkflow,
+    secretWorkflow,
     personaWorkflow,
     presetWorkflow,
     worldBookWorkflow,
