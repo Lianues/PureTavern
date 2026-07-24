@@ -1,3 +1,5 @@
+import { readFile } from 'node:fs/promises';
+
 import { describe, expect, it } from 'vitest';
 
 import { generateHookedIndex } from './legacy-index-generator.mjs';
@@ -40,6 +42,17 @@ describe('generateHookedIndex', () => {
     expect(() => generateHookedIndex(upstream, '0123456789abcdef')).toThrow(
       'Expected exactly one Legacy script anchor, found 2.',
     );
+  });
+
+  it('restores the historical lodash global through the generated lib entry', async () => {
+    const [entry, prepare] = await Promise.all([
+      readFile('scripts/legacy-lib-entry.mjs', 'utf8'),
+      readFile('scripts/prepare-legacy-runtime.mjs', 'utf8'),
+    ]);
+
+    expect(entry).toContain('globalThis._ = lodash');
+    expect(entry).toContain("export * from '../legacy/upstream/public/lib.js'");
+    expect(prepare).toContain("'legacy-lib-entry.mjs'");
   });
 
   it('rejects unsafe build identifiers before generating executable HTML', () => {

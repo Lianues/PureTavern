@@ -116,7 +116,7 @@ export async function prepareLegacyRuntime() {
   await copyFeatureRuntimeAssets();
 
   await build({
-    entryPoints: [path.join(upstreamPublicRoot, 'lib.js')],
+    entryPoints: [path.join(packageRoot, 'scripts', 'legacy-lib-entry.mjs')],
     outfile: path.join(generatedPublicRoot, 'lib.js'),
     bundle: true,
     format: 'esm',

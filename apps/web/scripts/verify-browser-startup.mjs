@@ -377,6 +377,8 @@ try {
         : null,
       fastUiMode: document.getElementById('fast_ui_mode')?.checked ?? null,
       jqueryPresent: typeof globalThis.jQuery === 'function',
+      legacyLodashGlobal:
+        typeof globalThis._ === 'function' && globalThis._ === globalThis.SillyTavern?.libs?.lodash,
       criticalDomAnchors,
       missingCriticalDomAnchors: Object.entries(criticalDomAnchors)
         .filter(([, anchor]) => !anchor.exists)
@@ -3382,7 +3384,9 @@ try {
     extensionContextAvailable: moduleContracts?.extensionContext?.ok === true,
     legacyCssLoaded:
       snapshot?.styleSheetHrefs?.some((href) => href.endsWith('/style.css')) === true,
-    legacyLibraryLoaded: localScriptRequests.some((url) => new URL(url).pathname === '/lib.js'),
+    legacyLibraryLoaded:
+      localScriptRequests.some((url) => new URL(url).pathname === '/lib.js') &&
+      snapshot?.legacyLodashGlobal === true,
     legacyMainScriptLoaded: localScriptRequests.some(
       (url) => new URL(url).pathname === '/script.js',
     ),
