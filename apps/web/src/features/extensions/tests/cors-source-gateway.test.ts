@@ -30,15 +30,16 @@ describe('CORS extension source gateway', () => {
     );
   });
 
-  it('downloads GitHub repository files through CORS-enabled jsDelivr', async () => {
+  it('downloads the GitHub default branch through jsDelivr HEAD without GitHub REST', async () => {
     const files = makeLegacyPackage();
     const byPath = new Map(files.map((file) => [file.path, file.data]));
     const nativeFetch = vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
-      if (url === 'https://api.github.com/repos/Lianues/cocktail') {
-        return json({ default_branch: 'main' });
+      if (url.includes('api.github.com')) {
+        return new Response('GitHub REST must not be used during installation', { status: 500 });
       }
       if (url.includes('data.jsdelivr.com') && url.endsWith('/flat')) {
+        expect(url).toContain('/Lianues/cocktail@HEAD/flat');
         return json({
           files: files.map((file) => ({
             name: `/${file.path}`,
@@ -47,7 +48,7 @@ describe('CORS extension source gateway', () => {
           })),
         });
       }
-      const match = /cdn\.jsdelivr\.net\/gh\/Lianues\/cocktail@main\/(.+)$/u.exec(url);
+      const match = /cdn\.jsdelivr\.net\/gh\/Lianues\/cocktail@HEAD\/(.+)$/u.exec(url);
       if (match) {
         const path = decodeURIComponent(match[1]!);
         const blob = byPath.get(path);
@@ -61,9 +62,12 @@ describe('CORS extension source gateway', () => {
 
     expect(snapshot).toMatchObject({
       provider: 'github',
-      resolvedRef: 'main',
+      resolvedRef: 'HEAD',
       folderName: 'cocktail',
     });
+    expect(
+      nativeFetch.mock.calls.every(([input]) => !String(input).includes('api.github.com')),
+    ).toBe(true);
     expect(snapshot.files.map((file) => file.path)).toEqual([
       'manifest.json',
       'index.js',

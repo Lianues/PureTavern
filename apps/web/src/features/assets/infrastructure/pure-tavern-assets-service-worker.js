@@ -1,6 +1,6 @@
 /* global self, URL, Response, fetch, Headers, console, indexedDB */
 
-const DATABASE_NAME = 'pure-frontend-tavern-modular-dev';
+const DATABASE_NAME = 'pure-tavern-modular-dev';
 const KEY_SEPARATOR = '\u001f';
 const ASSETS_MODULE = 'assets';
 const CHARACTERS_MODULE = 'characters';

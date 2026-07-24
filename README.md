@@ -1,4 +1,4 @@
-# Pure Frontend Tavern
+# Pure Tavern
 
 一个以浏览器本地能力为默认实现、可选连接后端增强能力的酒馆项目。
 

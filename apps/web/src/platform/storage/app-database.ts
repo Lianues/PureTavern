@@ -1,6 +1,6 @@
 import Dexie, { type Table } from 'dexie';
 
-export const DATABASE_NAME = 'pure-frontend-tavern-modular-dev';
+export const DATABASE_NAME = 'pure-tavern-modular-dev';
 
 export interface StoredModuleRecord {
   key: string;

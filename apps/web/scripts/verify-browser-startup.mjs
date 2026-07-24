@@ -580,7 +580,7 @@ try {
       }
 
       const readStoredSettings = () => new Promise((resolve, reject) => {
-        const openRequest = indexedDB.open('pure-frontend-tavern-modular-dev');
+        const openRequest = indexedDB.open('pure-tavern-modular-dev');
         openRequest.onerror = () => reject(openRequest.error);
         openRequest.onsuccess = () => {
           const database = openRequest.result;

@@ -133,7 +133,7 @@ export class CorsExtensionSourceGateway implements ExtensionSourceGateway {
     limits: ExtensionPackageLimits,
     signal?: AbortSignal,
   ): Promise<ExtensionSourceSnapshot> {
-    const resolvedRef = requestedRef || (await this.#resolveGitHubDefaultRef(location, signal));
+    const resolvedRef = requestedRef || 'HEAD';
     const packagePath = jsDelivrPackagePath(location.owner, location.repository, resolvedRef);
     const listingUrl = `https://data.jsdelivr.com/v1/package/gh/${packagePath}/flat`;
     const listing = await this.#fetchJson<unknown>(listingUrl, signal);
@@ -163,35 +163,6 @@ export class CorsExtensionSourceGateway implements ExtensionSourceGateway {
       folderName: location.folderName,
       files,
     };
-  }
-
-  async #resolveGitHubDefaultRef(location: GitHubLocation, signal?: AbortSignal): Promise<string> {
-    try {
-      const metadata = await this.#fetchJson<unknown>(
-        `https://api.github.com/repos/${encodeURIComponent(location.owner)}/${encodeURIComponent(location.repository)}`,
-        signal,
-      );
-      if (isRecord(metadata) && typeof metadata.default_branch === 'string') {
-        return normalizeRef(metadata.default_branch);
-      }
-    } catch {
-      // Shared unauthenticated GitHub API limits are common. Probe conventional branch names below.
-    }
-    for (const candidate of ['main', 'master']) {
-      const response = await this.#fetch(
-        `https://data.jsdelivr.com/v1/package/gh/${jsDelivrPackagePath(
-          location.owner,
-          location.repository,
-          candidate,
-        )}/flat`,
-        { cache: 'no-store', ...(signal ? { signal } : {}) },
-      ).catch(() => null);
-      if (response?.ok) return candidate;
-    }
-    throw new ExtensionSourceError(
-      'default-ref',
-      'Unable to resolve the repository default branch. Enter a branch or tag explicitly.',
-    );
   }
 
   async #fetchGitLabSnapshot(

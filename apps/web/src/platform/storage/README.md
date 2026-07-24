@@ -3,7 +3,7 @@
 浏览器 IndexedDB 使用固定的通用容器，而不是按功能增加 Object Store：
 
 ```text
-pure-frontend-tavern-modular-dev
+pure-tavern-modular-dev
 ├─ records   # JSON-safe 模块记录
 └─ blobs     # 模块二进制数据与 JSON metadata
 ```
