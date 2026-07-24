@@ -43,11 +43,6 @@ jobs:
             exit 1
           fi
           node scripts/set-release-version.mjs "$RELEASE_VERSION" --check
-          CURRENT_VERSION="$(node -p "require('./package.json').version")"
-          if [[ "$CURRENT_VERSION" == "$RELEASE_VERSION" ]]; then
-            echo "Version $RELEASE_VERSION is already committed." >&2
-            exit 1
-          fi
           TAG="test-v$RELEASE_VERSION"
           if git ls-remote --exit-code --tags origin "refs/tags/$TAG" >/dev/null 2>&1; then
             echo "Tag $TAG already exists." >&2
@@ -408,7 +403,7 @@ jobs:
             apps/web/src/legacy-hook/bootstrap.ts \
             packages/contracts/package.json \
             packages/shared/package.json
-          git commit -m "chore(test-release): $RELEASE_VERSION"
+          git commit --allow-empty -m "chore(test-release): $RELEASE_VERSION"
           TAG="test-v$RELEASE_VERSION"
           git tag -a "$TAG" -m "$RELEASE_VERSION Test"
           git push --atomic origin HEAD:main "refs/tags/$TAG"

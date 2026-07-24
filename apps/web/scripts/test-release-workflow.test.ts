@@ -50,7 +50,9 @@ describe('manual test release workflow', () => {
     expect(source).toContain('apps/vscode-extension/release/*.vsix');
     expect(source).toContain('TAG="test-v$RELEASE_VERSION"');
     expect(source).toContain('TITLE="$RELEASE_VERSION Test"');
+    expect(source).toContain('git commit --allow-empty');
     expect(source).toContain('git push --atomic');
+    expect(source).not.toContain('is already committed');
     expect(source).toContain('--prerelease');
     expect(source).toContain('--notes-file release-notes.txt');
   });
