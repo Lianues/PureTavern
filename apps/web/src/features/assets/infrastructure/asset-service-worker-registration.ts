@@ -1,4 +1,6 @@
-const ASSET_WORKER_PATH = '/pure-tavern-assets-service-worker.js';
+import { RUNTIME_BUILD_ID } from '@/platform/runtime/build-id';
+
+const ASSET_WORKER_PATH = `/pure-tavern-assets-service-worker.js?v=${encodeURIComponent(RUNTIME_BUILD_ID)}`;
 
 export async function registerAssetServiceWorker(): Promise<'ready' | 'skipped'> {
   if (typeof navigator === 'undefined' || !('serviceWorker' in navigator)) return 'skipped';
@@ -6,7 +8,11 @@ export async function registerAssetServiceWorker(): Promise<'ready' | 'skipped'>
     return 'skipped';
 
   const expectedScriptUrl = new URL(ASSET_WORKER_PATH, window.location.href).href;
-  const registration = await navigator.serviceWorker.register(ASSET_WORKER_PATH, { scope: '/' });
+  const registration = await navigator.serviceWorker.register(ASSET_WORKER_PATH, {
+    scope: '/',
+    updateViaCache: 'none',
+  });
+  await registration.update().catch(() => undefined);
   const candidate = registration.installing ?? registration.waiting ?? registration.active;
   if (candidate && candidate.scriptURL === expectedScriptUrl && candidate.state !== 'activated') {
     await waitForActivation(candidate);

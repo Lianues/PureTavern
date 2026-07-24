@@ -45,6 +45,21 @@ describe('Assets cross-feature bridges', () => {
           data: textBlob('self.postMessage("ready")', 'text/javascript'),
           sha256: 'c'.repeat(64),
         },
+        {
+          path: '.github/workflows/ci.yml',
+          data: textBlob('name: CI', 'text/yaml'),
+          sha256: 'd'.repeat(64),
+        },
+        {
+          path: '.gitignore',
+          data: textBlob('dist/', 'text/plain'),
+          sha256: 'e'.repeat(64),
+        },
+        {
+          path: 'src/file..name.js',
+          data: textBlob('export default true;', 'text/javascript'),
+          sha256: 'f'.repeat(64),
+        },
       ],
     });
 
@@ -53,6 +68,15 @@ describe('Assets cross-feature bridges', () => {
     expect(htmlUrl).toBe('/scripts/extensions/third-party/browser-probe/index.html');
     expect(workerUrl).toBe('/scripts/extensions/third-party/browser-probe/worker/index.js');
     expect((await service.getAssetByPath(workerUrl!))?.blob.data.size).toBeGreaterThan(0);
+    expect(
+      await service.resolveExtensionPackageAssetUrl(extensionId, '.github/workflows/ci.yml'),
+    ).toBe('/scripts/extensions/third-party/browser-probe/.github/workflows/ci.yml');
+    expect(await service.resolveExtensionPackageAssetUrl(extensionId, '.gitignore')).toBe(
+      '/scripts/extensions/third-party/browser-probe/.gitignore',
+    );
+    expect(await service.resolveExtensionPackageAssetUrl(extensionId, 'src/file..name.js')).toBe(
+      '/scripts/extensions/third-party/browser-probe/src/file..name.js',
+    );
 
     await service.saveExtensionPackage({
       extensionId,

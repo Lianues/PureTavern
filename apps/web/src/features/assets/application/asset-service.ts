@@ -1283,16 +1283,10 @@ function normalizeExtensionPackageRelativePath(value: unknown): string {
   const segments = value.split('/');
   if (
     segments.some(
-      (segment) =>
-        !segment ||
-        segment === '.' ||
-        segment === '..' ||
-        segment.startsWith('.') ||
-        segment.includes('..') ||
-        hasControlCharacters(segment),
+      (segment) => !segment || segment === '.' || segment === '..' || hasControlCharacters(segment),
     )
   ) {
-    throw new AssetValidationError('Extension package path contains an unsafe segment.');
+    throw new AssetValidationError(`Extension package path contains an unsafe segment: ${value}`);
   }
   return segments.join('/');
 }

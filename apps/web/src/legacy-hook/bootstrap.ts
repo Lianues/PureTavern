@@ -7,6 +7,8 @@ import {
 } from '../platform/legacy/compatibility-router';
 import { registerCoreLegacyRoutes } from '../platform/legacy/register-core-routes';
 import { loadUpstreamMetadata } from '../platform/legacy/upstream-metadata';
+import { RUNTIME_BUILD_ID } from '../platform/runtime/build-id';
+import { installRuntimeUpdateWatcher } from '../platform/runtime/runtime-update';
 import { appStorage } from '../platform/storage/app-storage';
 import { initializeStorageSafely } from '../platform/storage/initialize-storage';
 
@@ -29,6 +31,7 @@ void database.then((state) => {
 
 globalThis.__PURE_TAVERN__ = {
   hookVersion: '0.1.0',
+  buildId: RUNTIME_BUILD_ID,
   upstreamVersion: 'loading',
   upstreamMetadata,
   diagnostics: router.diagnostics,
@@ -38,6 +41,7 @@ globalThis.__PURE_TAVERN__ = {
 void upstreamMetadata.then((metadata) => {
   globalThis.__PURE_TAVERN__.upstreamVersion = metadata.version;
 });
+installRuntimeUpdateWatcher(nativeFetch, RUNTIME_BUILD_ID);
 
 document.documentElement.dataset.pureTavernHook = 'installed';
 console.info('[PureTavern Hook] Legacy compatibility runtime installed.');

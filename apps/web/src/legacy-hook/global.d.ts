@@ -5,6 +5,7 @@ import type { StorageBootstrapState } from '@/platform/storage/initialize-storag
 declare global {
   var __PURE_TAVERN__: {
     hookVersion: string;
+    buildId: string;
     upstreamVersion: string;
     upstreamMetadata: Promise<UpstreamMetadata>;
     diagnostics: CompatibilityDiagnostics;

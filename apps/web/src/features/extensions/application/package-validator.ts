@@ -185,6 +185,7 @@ export function validatePackagePath(path: string, maxPathLength = 300): string {
     normalized !== normalized.trim() ||
     normalized.startsWith('/') ||
     normalized.includes('\\') ||
+    normalized.includes('%') ||
     normalized.includes('?') ||
     normalized.includes('#') ||
     normalized.includes(':') ||

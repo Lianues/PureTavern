@@ -197,11 +197,6 @@ export function normalizeLegacyPath(value: unknown, allowedPrefixes?: readonly s
   if (segments.some((segment) => !segment || segment === '.' || segment === '..')) {
     throw new AssetValidationError('Asset path contains an unsafe traversal segment.');
   }
-  for (const segment of segments) {
-    if (segment.startsWith('.') || segment.includes('..')) {
-      throw new AssetValidationError('Asset path contains an unsafe traversal sequence.');
-    }
-  }
   if (allowedPrefixes && !allowedPrefixes.some((prefix) => pathname.startsWith(prefix))) {
     throw new AssetValidationError('Asset path is outside the supported asset namespaces.');
   }

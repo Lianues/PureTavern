@@ -1,4 +1,4 @@
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { access, cp, mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -26,10 +26,25 @@ const generatedIndexPath = path.join(packageRoot, 'index.html');
 const featuresRoot = path.join(packageRoot, 'src', 'features');
 
 const RUNTIME_EXCLUDES = new Set(['index.html', 'UPSTREAM_LICENSE', 'UPSTREAM_SOURCE.md']);
+const CLOUDFLARE_PAGES_HEADERS = `
+/
+  Cache-Control: no-cache, no-store, must-revalidate
+/index.html
+  Cache-Control: no-cache, no-store, must-revalidate
+/__pure_tavern/runtime-version.json
+  Cache-Control: no-cache, no-store, must-revalidate
+/__pure_tavern/legacy-hook.js
+  Cache-Control: no-cache, must-revalidate
+/pure-tavern-assets-service-worker.js
+  Cache-Control: no-cache, must-revalidate
+/scripts/extensions/pure-tavern-data-management/*
+  Cache-Control: no-cache, must-revalidate
+`.trimStart();
 
 export async function prepareLegacyRuntime() {
   const upstreamIndex = await readFile(path.join(upstreamPublicRoot, 'index.html'), 'utf8');
-  const generatedIndex = generateHookedIndex(upstreamIndex);
+  const buildId = randomUUID().replaceAll('-', '');
+  const generatedIndex = generateHookedIndex(upstreamIndex, buildId);
 
   await rm(generatedPublicRoot, { recursive: true, force: true });
   await mkdir(generatedPublicRoot, { recursive: true });
@@ -80,6 +95,12 @@ export async function prepareLegacyRuntime() {
       JSON.stringify(trustedExtensionManifest),
       'utf8',
     ),
+    writeFile(
+      path.join(compatibilityAssetsRoot, 'runtime-version.json'),
+      JSON.stringify({ buildId }),
+      'utf8',
+    ),
+    writeFile(path.join(generatedPublicRoot, '_headers'), CLOUDFLARE_PAGES_HEADERS, 'utf8'),
   ]);
   await mkdir(path.join(generatedPublicRoot, 'User Avatars'), { recursive: true });
   await cp(
@@ -116,6 +137,9 @@ export async function prepareLegacyRuntime() {
     target: ['es2022'],
     sourcemap: false,
     logLevel: 'silent',
+    define: {
+      __PURE_TAVERN_BUILD_ID__: JSON.stringify(buildId),
+    },
   });
 
   await writeFile(generatedIndexPath, generatedIndex, 'utf8');

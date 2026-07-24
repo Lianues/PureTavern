@@ -6,9 +6,12 @@
 - 注册真正的核心启动兼容路径；
 - 通过 `features/registry.ts` 安装各功能模块；
 - 初始化固定 records/blobs 存储平台；
-- 暴露 `globalThis.__PURE_TAVERN__` 聚合诊断。
+- 暴露 `globalThis.__PURE_TAVERN__` 聚合诊断；
+- 通过构建 ID、`runtime-version.json` 和运行时 watcher 检测新部署，版本变化时自动刷新一次并防止刷新循环。
 
 功能代码禁止继续加入本目录。每个模块必须把装配、Repository、Legacy routes、契约声明和测试放在 `src/features/<module>/**`。
+
+Cloudflare Pages 的首页、Hook、版本文件、Assets Service Worker 与第一方数据管理扩展由构建生成的 `_headers` 强制重新验证。Hook 和 Worker URL 同时携带 build ID，因此新版本不会复用旧脚本缓存；此机制只刷新代码，不清除 IndexedDB。
 
 模块诊断统一位于：
 

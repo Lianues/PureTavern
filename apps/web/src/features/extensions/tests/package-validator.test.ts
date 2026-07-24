@@ -38,6 +38,31 @@ describe('Legacy extension package validation', () => {
     ).rejects.toMatchObject({ code: 'duplicate-path' });
   });
 
+  it('accepts safe dotfiles, dot-directories and repeated dots inside names', async () => {
+    const result = await validateLegacyExtensionPackage([
+      ...makeLegacyPackage(),
+      { path: '.gitignore', data: new Blob(['dist/']) },
+      { path: '.github/workflows/ci.yml', data: new Blob(['name: CI']) },
+      { path: 'src/file..name.js', data: new Blob(['export default true']) },
+    ]);
+
+    expect(result.files.map((file) => file.path)).toEqual(
+      expect.arrayContaining(['.gitignore', '.github/workflows/ci.yml', 'src/file..name.js']),
+    );
+  });
+
+  it.each(['../evil.js', 'nested/../evil.js', 'nested\\evil.js', 'nested/%2e%2e/evil.js'])(
+    'rejects truly unsafe package path %s',
+    async (path) => {
+      await expect(
+        validateLegacyExtensionPackage([
+          ...makeLegacyPackage(),
+          { path, data: new Blob(['evil']) },
+        ]),
+      ).rejects.toMatchObject({ code: 'unsafe-path' });
+    },
+  );
+
   it('strips one archive root and validates the extracted package', async () => {
     const zip = zipSync({
       'cocktail-main/manifest.json': stringBytes(

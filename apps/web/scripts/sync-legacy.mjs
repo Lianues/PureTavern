@@ -154,7 +154,7 @@ for (const requiredPath of requiredRuntimeAssets) {
 }
 
 // Fail before replacing the pristine snapshot if an upstream HTML change breaks Hook injection.
-generateHookedIndex(await readFile(source.indexPath, 'utf8'));
+generateHookedIndex(await readFile(source.indexPath, 'utf8'), 'sync-validation');
 
 const previousHashes = await hashTree(targetPublicRoot);
 const nextHashes = await hashTree(source.publicRoot);

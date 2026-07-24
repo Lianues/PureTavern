@@ -17,16 +17,17 @@ describe('generateHookedIndex', () => {
   </head>
 </html>`;
 
-    const generated = generateHookedIndex(upstream);
+    const generated = generateHookedIndex(upstream, '0123456789abcdef');
 
     expect(countOccurrences(generated, hookMarker)).toBe(1);
     expect(generated.indexOf(hookMarker)).toBeLessThan(generated.indexOf('lib/polyfill.js'));
     expect(generated).toContain('GENERATED FROM legacy/upstream/public/index.html');
+    expect(generated).toContain('/__pure_tavern/legacy-hook.js?v=0123456789abcdef');
     expect(upstream).not.toContain(hookMarker);
   });
 
   it('rejects an upstream index when the stable injection anchor is absent', () => {
-    expect(() => generateHookedIndex('<!doctype html><html></html>')).toThrow(
+    expect(() => generateHookedIndex('<!doctype html><html></html>', '0123456789abcdef')).toThrow(
       'Expected exactly one Legacy script anchor, found 0.',
     );
   });
@@ -36,8 +37,14 @@ describe('generateHookedIndex', () => {
 <script src="lib/polyfill.js"></script>
 <script src="/lib/polyfill.js"></script>`;
 
-    expect(() => generateHookedIndex(upstream)).toThrow(
+    expect(() => generateHookedIndex(upstream, '0123456789abcdef')).toThrow(
       'Expected exactly one Legacy script anchor, found 2.',
     );
+  });
+
+  it('rejects unsafe build identifiers before generating executable HTML', () => {
+    expect(() =>
+      generateHookedIndex('<!doctype html><script src="lib/polyfill.js"></script>', '../unsafe'),
+    ).toThrow('build ID');
   });
 });
