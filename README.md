@@ -8,6 +8,8 @@ PureTavern 是一个以 SillyTavern 为上游的第三方客户端，采用“�
 
 ## 在线演示
 
+[https://pure-tavern.netlify.app/](https://pure-tavern.netlify.app/)
+
 [https://pure-tavern.pages.dev/](https://pure-tavern.pages.dev/)
 
 ## 密钥与隐私（重点）
