@@ -6,6 +6,10 @@ PureTavern 是一个以 SillyTavern 为上游的第三方客户端，采用“�
 
 > PureTavern 是独立第三方项目，不是 SillyTavern 官方发行版。
 
+## 在线演示
+
+[https://pure-tavern.pages.dev/](https://pure-tavern.pages.dev/)
+
 ## 密钥与隐私（重点）
 
 PureTavern 当前为纯前端应用，API Key 等密钥只保存在用户当前浏览器的 IndexedDB 中，不会上传到 PureTavern 服务器；项目不会收集或窃取用户密钥。发起模型请求时，密钥只会发送给用户主动配置的模型服务商。
