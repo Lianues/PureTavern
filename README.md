@@ -2,7 +2,7 @@
 
 一个以浏览器本地能力为默认实现、可选连接后端增强能力的酒馆项目。
 
-当前阶段采用 **Legacy-first**：根页面长期运行原版 SillyTavern UI、CSS 和交互脚本，我方 Hook 将原版能力桥接到浏览器实现。Settings、角色卡、单角色聊天、世界书、预设和本地 Assets 已由浏览器模块接管；群聊、模型生成、密钥与扩展安装等能力仍待迁移。Vue 仅用于隔离的新页面或完成所有权切换的新能力。
+当前阶段采用 **Legacy-first**：根页面长期运行原版 SillyTavern UI、CSS 和交互脚本，我方 Hook 将原版能力桥接到浏览器实现。Settings、角色卡、单角色聊天、用户人格、世界书、预设、本地 Assets 和 trusted 内置扩展已接入浏览器模块；群聊、模型生成、密钥与远程扩展安装等能力仍待迁移。Vue 仅用于隔离的新页面或完成所有权切换的新能力。
 
 ## 开发
 
@@ -24,6 +24,9 @@ pnpm dev
 - World Books：原版编辑器、导入、角色卡嵌入 lore 和原版匹配算法继续运行，文档由 M07 IndexedDB 模块提供。
 - Presets：11 类提示词预设、主题、Moving UI 与快捷回复由独立 M09 模块管理，默认内容通过构建清单增量初始化，不再由 Settings 存储拥有。
 - Assets：附件、用户图片、背景、persona 头像、sprites 与扩展资产使用通用 Blob/索引模块；共享 Service Worker 为原版 URL 提供本地资源响应。
+- Personas：原版 Persona UI 继续使用 Settings 与头像接口；M08 负责 stable identity、默认/当前选择、角色绑定、opaque descriptor 和删除降级。
+- Extensions：构建从当前 upstream 生成 trusted manifest，原版 loader 可发现和加载 14 个内置扩展；用户包默认使用权限受控的 iframe/Worker sandbox，远程 Git 操作明确需要可选后端。
+- Prompt Pipeline：纯 TypeScript 候选、宏引擎和预算服务已经安装，但仍标记为 `conformance-candidate`；原版 `prepareOpenAIMessages` 暂时保持权威，避免提前破坏生成兼容性。
 - 各模块 IndexedDB 不可用时降级为当前页面会话内存存储，并在 `__PURE_TAVERN__.features.<module>` 下报告诊断状态。
 
 ## 常用命令

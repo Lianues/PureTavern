@@ -1,0 +1,8 @@
+{
+  "extends": "../../../tsconfig.app.json",
+  "compilerOptions": {
+    "composite": false,
+    "tsBuildInfoFile": "../../../node_modules/.tmp/tsconfig.personas.tsbuildinfo"
+  },
+  "include": ["./**/*.ts"]
+}

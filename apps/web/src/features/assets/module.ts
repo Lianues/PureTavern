@@ -2,6 +2,8 @@ import type { FeatureModule } from '@/platform/features/feature-module';
 import {
   assetServiceWorkerCapability,
   characterIdentityCapability,
+  extensionPackageAssetsCapability,
+  personaAvatarAssetsCapability,
 } from '@/platform/features/standard-capabilities';
 
 import { AssetService } from './application/asset-service';
@@ -87,6 +89,23 @@ export function createAssetsFeature(options: AssetsFeatureOptions = {}): Feature
         nativeFetch,
         ownerResolver,
       );
+      capabilities.register(personaAvatarAssetsCapability, {
+        hasAvatar: (avatarAlias) => service.hasAvatar(avatarAlias),
+        ensureAvatar: (avatarAlias) => service.hasAvatar(avatarAlias),
+        createAvatar: (preferredAlias, image) => service.uploadAvatar(image, preferredAlias),
+        replaceAvatar: async (avatarAlias, image) => {
+          await service.uploadAvatar(image, avatarAlias, avatarAlias);
+        },
+        moveAvatarAlias: (fromAlias, preferredAlias) =>
+          service.renameAvatar(fromAlias, preferredAlias),
+        deleteAvatar: (avatarAlias) => service.deleteAvatar(avatarAlias),
+      });
+      capabilities.register(extensionPackageAssetsCapability, {
+        savePackage: (asset) => service.saveExtensionPackage(asset),
+        removePackage: (extensionId) => service.removeExtensionPackage(extensionId),
+        resolveAssetUrl: (extensionId, path) =>
+          service.resolveExtensionPackageAssetUrl(extensionId, path),
+      });
       const defaultBackgrounds: DefaultBackgroundSeedDiagnostics = {
         status: 'pending',
         seeded: 0,
@@ -108,6 +127,8 @@ export function createAssetsFeature(options: AssetsFeatureOptions = {}): Feature
           service: service.diagnostics,
           defaultBackgrounds,
           resourceNamespaces: ASSET_RESOURCE_NAMESPACES,
+          personaAvatarBridge: 'ready',
+          extensionPackageBridge: 'ready',
           serviceWorker,
         },
       };

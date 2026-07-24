@@ -1,0 +1,68 @@
+{
+  "module": "extensions",
+  "legacyRequests": [
+    {
+      "method": "GET",
+      "pathname": "/api/extensions/discover",
+      "category": "extension-ecosystem-required",
+      "responseKind": "indexeddb-trusted-builtin-extension-list-json",
+      "migrationStatus": "browser-ready-trusted-builtins"
+    },
+    {
+      "method": "POST",
+      "pathname": "/api/extensions/version",
+      "category": "browser-data-capability",
+      "responseKind": "local-extension-version-metadata-json",
+      "migrationStatus": "browser-ready-local-extension-metadata"
+    },
+    {
+      "method": "POST",
+      "pathname": "/api/extensions/delete",
+      "category": "browser-data-capability",
+      "responseKind": "local-extension-delete-or-trusted-denied-text",
+      "migrationStatus": "browser-ready-local-extension-management"
+    },
+    {
+      "method": "POST",
+      "pathname": "/api/extensions/install",
+      "category": "browser-data-capability",
+      "responseKind": "explicit-unsupported-server-git-json",
+      "migrationStatus": "browser-unsupported-server-git"
+    },
+    {
+      "method": "POST",
+      "pathname": "/api/extensions/update",
+      "category": "browser-data-capability",
+      "responseKind": "explicit-unsupported-server-git-json",
+      "migrationStatus": "browser-unsupported-server-git"
+    },
+    {
+      "method": "POST",
+      "pathname": "/api/extensions/branches",
+      "category": "browser-data-capability",
+      "responseKind": "explicit-unsupported-server-git-json",
+      "migrationStatus": "browser-unsupported-server-git"
+    },
+    {
+      "method": "POST",
+      "pathname": "/api/extensions/switch",
+      "category": "browser-data-capability",
+      "responseKind": "explicit-unsupported-server-git-json",
+      "migrationStatus": "browser-unsupported-server-git"
+    },
+    {
+      "method": "POST",
+      "pathname": "/api/extensions/move",
+      "category": "browser-data-capability",
+      "responseKind": "explicit-unsupported-server-filesystem-json",
+      "migrationStatus": "browser-unsupported-server-filesystem"
+    },
+    {
+      "method": "POST",
+      "pathname": "/api/sd/comfy/workflows",
+      "category": "extension-ecosystem-required",
+      "responseKind": "empty-array-json",
+      "migrationStatus": "bootstrap-empty-extension-provider-not-migrated"
+    }
+  ]
+}

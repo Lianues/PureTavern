@@ -11,6 +11,10 @@ The feature uses the fixed generic stores without changing the IndexedDB schema:
   `user-avatars`, `sprites`, and `library`, keyed by stable asset UUID;
 - records: module `assets`, collections `index`, `path-aliases`, `background-folders`, and seed state.
 
+M08 consumes a narrow Persona avatar capability. M11 consumes a narrow extension-package capability;
+validated iframe/Worker files use `/assets/extensions/<stable-id>/<path>` aliases and remain served by
+the same root Service Worker. Neither consumer receives raw access to the Assets stores.
+
 Legacy URLs are aliases in the index. A rename updates alias/metadata without copying the Blob.
 Application writes compensate index/alias/blob failures, while resilient adapters fall back to
 page memory and expose degradation diagnostics if IndexedDB is unavailable.
@@ -54,4 +58,5 @@ IndexedDB blobs and the Service Worker, and browser quota still bounds large loc
 
 The production Chrome gate covers default backgrounds, upload/list/direct URL/thumbnail/rename/
 delete, folders, attachments persisted through M05 chat metadata, user images, persona avatars,
-sprites, extension assets, shared Worker routing, IndexedDB diagnostics, and zero local 404s.
+sprites, extension assets/packages, Persona alias lifecycle, shared Worker routing, IndexedDB
+diagnostics, and zero local 404s.

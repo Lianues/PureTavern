@@ -7,6 +7,7 @@ import { build } from 'esbuild';
 import { generateDefaultAssetManifest } from './default-asset-manifest-generator.mjs';
 import { generateHookedIndex } from './legacy-index-generator.mjs';
 import { generatePresetSeedManifest } from './preset-manifest-generator.mjs';
+import { generateTrustedExtensionManifest } from './trusted-extension-manifest-generator.mjs';
 
 const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const upstreamPublicRoot = path.join(packageRoot, 'legacy', 'upstream', 'public');
@@ -53,9 +54,10 @@ export async function prepareLegacyRuntime() {
   await cp(upstreamMetadataPath, path.join(compatibilityAssetsRoot, 'upstream.json'), {
     force: true,
   });
-  const [presetManifest, defaultAssetManifest] = await Promise.all([
+  const [presetManifest, defaultAssetManifest, trustedExtensionManifest] = await Promise.all([
     generatePresetSeedManifest(upstreamDefaultContentRoot),
     generateDefaultAssetManifest(upstreamDefaultContentRoot),
+    generateTrustedExtensionManifest(upstreamPublicRoot),
   ]);
   await Promise.all([
     writeFile(
@@ -66,6 +68,11 @@ export async function prepareLegacyRuntime() {
     writeFile(
       path.join(compatibilityAssetsRoot, 'default-assets.json'),
       JSON.stringify(defaultAssetManifest),
+      'utf8',
+    ),
+    writeFile(
+      path.join(compatibilityAssetsRoot, 'trusted-extensions.json'),
+      JSON.stringify(trustedExtensionManifest),
       'utf8',
     ),
   ]);

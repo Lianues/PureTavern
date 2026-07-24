@@ -64,6 +64,13 @@ export interface AssetWithBlob {
 export type LibraryDownloadResult =
   { kind: 'stored'; path: string } | { kind: 'blob'; blob: Blob; filename: string };
 
+export interface ExtensionPackageAssetInput {
+  extensionId: string;
+  packageHash: string;
+  files: readonly { path: string; data: Blob; sha256: string }[];
+  installedAt: string;
+}
+
 export class AssetService {
   readonly diagnostics: AssetsServiceDiagnostics = {
     lastCompensationError: null,
@@ -567,6 +574,50 @@ export class AssetService {
     await this.#deleteByPath(makeLegacyPath('/User Avatars', safeFilename), ['/User Avatars/']);
   }
 
+  async hasAvatar(filename: unknown): Promise<boolean> {
+    const safeFilename = assertSafeFilename(filename, 'avatar');
+    if (safeFilename === 'user-default.png') return true;
+    return (await this.getAssetByPath(makeLegacyPath('/User Avatars', safeFilename))) !== null;
+  }
+
+  async renameAvatar(fromFilename: unknown, toFilename: unknown): Promise<string> {
+    const from = assertSafeFilename(fromFilename, 'current avatar');
+    const to = assertSafeFilename(toFilename, 'new avatar');
+    if (from === 'user-default.png' || to === 'user-default.png') {
+      throw new AssetValidationError('The built-in default avatar alias cannot be moved.');
+    }
+    assertImageExtension(to);
+    const fromPath = makeLegacyPath('/User Avatars', from);
+    const toPath = makeLegacyPath('/User Avatars', to);
+    const record = await this.#requireByPath(fromPath);
+    if (record.collection !== 'user-avatars') {
+      throw new AssetNotFoundError('Persona avatar not found.');
+    }
+    const collision = await this.#index.getByLegacyPath(toPath);
+    if (collision && collision.id !== record.id) {
+      throw new AssetConflictError(`A persona avatar named ${to} already exists.`);
+    }
+    assertMimeMatchesExtension(to, record.mimeType);
+
+    const previous = structuredClone(record);
+    record.filename = to;
+    record.legacyPath = toPath;
+    record.updatedAt = new Date().toISOString();
+    try {
+      await this.#index.setAlias(toPath, record.id);
+      await this.#index.put(record);
+      await this.#index.deleteAlias(fromPath);
+    } catch (error) {
+      await this.#compensate([
+        () => this.#index.put(previous),
+        () => this.#index.setAlias(fromPath, previous.id),
+        () => this.#index.deleteAlias(toPath),
+      ]);
+      throw error;
+    }
+    return to;
+  }
+
   async listSprites(name: unknown): Promise<{ label: string; path: string }[]> {
     const ownerAlias = normalizeOwnerAlias(name);
     const owner = await this.#resolveOwner(ownerAlias);
@@ -789,6 +840,96 @@ export class AssetService {
     }
     const filename = assertSafeFilename(filenameValue, 'filename');
     await this.#deleteByPath(makeLegacyPath('/assets', category, filename), ['/assets/']);
+  }
+
+  async saveExtensionPackage(input: ExtensionPackageAssetInput): Promise<void> {
+    const extensionId = assertSafeExtensionPackageSegment(input.extensionId, 'extensionId');
+    const owner = extensionPackageOwner(extensionId);
+    const existing = await this.#index.list({ collection: 'library', owner });
+    const previousByPath = new Map<string, AssetWithBlob>();
+    for (const record of existing) {
+      const blob = await this.#blobs.get(record.collection, record.id);
+      if (blob) previousByPath.set(record.legacyPath, { record, blob });
+    }
+
+    const prepared = input.files.map((file) => {
+      const relativePath = normalizeExtensionPackageRelativePath(file.path);
+      const path = normalizeLegacyPath(`/assets/extensions/${extensionId}/${relativePath}`, [
+        '/assets/',
+      ]);
+      const filename = relativePath.split('/').at(-1) ?? '';
+      return {
+        path,
+        filename,
+        blob: file.data,
+        mimeType: extensionPackageMimeType(filename, file.data.type),
+      };
+    });
+    const expectedPaths = new Set(prepared.map((file) => file.path));
+    const written: string[] = [];
+
+    try {
+      for (const file of prepared) {
+        assertFileSize(file.blob, ASSET_LIMITS.maxFileBytes);
+        await this.#storeAsset({
+          collection: 'library',
+          path: file.path,
+          filename: file.filename,
+          blob: file.blob,
+          mimeType: file.mimeType,
+          owner,
+          folder: extensionId,
+          replace: true,
+        });
+        written.push(file.path);
+      }
+      for (const stale of existing.filter((record) => !expectedPaths.has(record.legacyPath))) {
+        await this.#deleteRecord(stale);
+      }
+    } catch (error) {
+      await this.#compensate(
+        written.map((path) => async () => {
+          const previous = previousByPath.get(path);
+          if (previous) {
+            await this.#storeAsset({
+              collection: previous.record.collection,
+              path: previous.record.legacyPath,
+              filename: previous.record.filename,
+              blob: previous.blob.data,
+              mimeType: previous.record.mimeType,
+              ...(previous.record.owner ? { owner: previous.record.owner } : {}),
+              ...(previous.record.folder ? { folder: previous.record.folder } : {}),
+              replace: true,
+            });
+            return;
+          }
+          const current = await this.#index.getByLegacyPath(path);
+          if (current) await this.#deleteRecord(current);
+        }),
+      );
+      throw error;
+    }
+  }
+
+  async removeExtensionPackage(extensionIdInput: unknown): Promise<void> {
+    const extensionId = assertSafeExtensionPackageSegment(extensionIdInput, 'extensionId');
+    const records = await this.#index.list({
+      collection: 'library',
+      owner: extensionPackageOwner(extensionId),
+    });
+    for (const record of records) await this.#deleteRecord(record);
+  }
+
+  async resolveExtensionPackageAssetUrl(
+    extensionIdInput: unknown,
+    relativePathInput: unknown,
+  ): Promise<string | null> {
+    const extensionId = assertSafeExtensionPackageSegment(extensionIdInput, 'extensionId');
+    const relativePath = normalizeExtensionPackageRelativePath(relativePathInput);
+    const path = normalizeLegacyPath(`/assets/extensions/${extensionId}/${relativePath}`, [
+      '/assets/',
+    ]);
+    return (await this.#index.getByLegacyPath(path)) ? path : null;
   }
 
   async #storeAsset(input: {
@@ -1110,6 +1251,56 @@ function requireString(value: unknown, label: string): string {
     throw new AssetValidationError(`${label} must be a non-empty string.`);
   }
   return value.trim();
+}
+
+function extensionPackageOwner(extensionId: string): string {
+  return `extension-package:${extensionId}`;
+}
+
+function assertSafeExtensionPackageSegment(value: unknown, label: string): string {
+  if (typeof value !== 'string' || !/^[a-z0-9][a-z0-9._-]{2,127}$/u.test(value)) {
+    throw new AssetValidationError(`${label} is not a safe extension package identifier.`);
+  }
+  return value;
+}
+
+function normalizeExtensionPackageRelativePath(value: unknown): string {
+  if (typeof value !== 'string' || !value || value.includes('\\') || value.includes('%')) {
+    throw new AssetValidationError('Extension package path is unsafe.');
+  }
+  const segments = value.split('/');
+  if (
+    segments.some(
+      (segment) =>
+        !segment ||
+        segment === '.' ||
+        segment === '..' ||
+        segment.startsWith('.') ||
+        segment.includes('..') ||
+        hasControlCharacters(segment),
+    )
+  ) {
+    throw new AssetValidationError('Extension package path contains an unsafe segment.');
+  }
+  return segments.join('/');
+}
+
+function extensionPackageMimeType(filename: string, declaredType: string): string {
+  if (declaredType && declaredType !== 'application/octet-stream') return declaredType;
+  switch (getExtension(filename)) {
+    case 'html':
+    case 'htm':
+      return 'text/html';
+    case 'js':
+    case 'mjs':
+      return 'text/javascript';
+    case 'css':
+      return 'text/css';
+    case 'json':
+      return 'application/json';
+    default:
+      return mimeTypeForFilename(filename);
+  }
 }
 
 function parseLibraryCategory(value: unknown): AssetLibraryCategory {

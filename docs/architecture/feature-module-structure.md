@@ -87,7 +87,7 @@ IndexedDB 标准仍要求首次创建时有一个物理格式编号；平台内�
 
 `platform/legacy/register-core-routes.ts` 提供尚未迁移能力的启动默认响应。Feature 在 core 之后安装，因此注册同一个 method/path 时会自动覆盖默认 handler；契约聚合也由 feature manifest 覆盖同 key 的 core 声明，不产生重复项。
 
-当前跨模块示例：Settings 动态读取 World Names 与 Preset Bootstrap capability；Characters 与 Chats 通过 stable identity / owner lifecycle capability 协作；Characters 复用 Assets 提供的共享 Service Worker capability。Capability 必须可选查询，并在 provider 缺失时提供明确降级。
+当前跨模块示例：Settings 动态读取 World Names、Preset Bootstrap、Persona state 与 Extension enable-state capability；Characters 与 Chats 通过 stable identity / owner lifecycle capability 协作；Characters 复用 Assets 的共享 Service Worker；Personas 和本地 extension packages 分别复用 Assets 的 avatar/package capability。Prompt Pipeline candidate 只接受注入 provider，不 import World Books/Presets/Extensions 内部实现。Capability 必须可选查询，并在 provider 缺失时提供明确降级。
 
 某项能力开始迁移时只需：
 

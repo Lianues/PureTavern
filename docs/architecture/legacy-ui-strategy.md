@@ -85,7 +85,7 @@ Hook 注入使用稳定的 `lib/polyfill.js` 标签作为锚点，并要求它�
 
 - **UI 必需**：关键 DOM ID、首页脚本/样式入口和原版交互锚点；
 - **扩展生态必需**：扩展面板 DOM、`scripts/extensions.js`、`scripts/extensions/**`、关键模块导出、事件名和运行时全局对象；
-- **数据能力**：各 Feature 的 `legacy/contract.json` 声明浏览器就绪路径；尚未迁移的群组、模型、扩展发现、统计等启动请求继续标记为 Bootstrap Compatibility。
+- **数据能力**：各 Feature 的 `legacy/contract.json` 声明浏览器就绪路径；尚未迁移的群组、模型、远程扩展操作、统计等请求继续标记为 Bootstrap Compatibility 或 explicit unsupported。
 
 `pnpm legacy:contracts:generate` 只生成契约 JSON，不写回上游目录。`pnpm legacy:contracts:check --source <新上游> --version <版本>` 会报告 added/removed/changed；关键契约破坏时返回非零状态。
 
@@ -95,19 +95,19 @@ Hook 必须在原版主模块执行前安装。当前职责仅有：
 
 - 初始化固定的 records/blobs IndexedDB 存储平台；
 - 包装同源 `fetch`；
-- 通过 Feature Registry 安装 Settings、Characters、Chats、World Books、Presets 与 Assets，并将对应 Legacy 路径桥接到浏览器 Use Case；
+- 通过 Feature Registry 安装 Settings、Characters、Chats、Personas、World Books、Presets、Assets、Extensions 与 Prompt Pipeline candidate，并将对应 Legacy 路径或 capability 桥接到浏览器 Use Case；
 - 通过类型化 Capability Registry 连接模块间的可选能力，而不是互相 import Repository；
 - 对尚未迁移但启动阶段必需的路径返回固定空数据或安全默认值；
 - 记录已处理请求和未处理路径；
 - 暴露 `globalThis.__PURE_TAVERN__` 诊断信息；
 - 读取同步工具生成的上游版本元数据。
 
-当前浏览器模块已经接管 Settings/Snapshots、Characters、单角色 Chats、World Books、Presets 与本地 Assets。模块只使用固定 `records` / `blobs` Object Store；新增 feature 或 collection 不递增数据库业务版本。IndexedDB 不可用时各 Repository 可降级为页面会话内存，并在模块 diagnostics 中明确报告。
+当前浏览器模块已经接管 Settings/Snapshots、Characters、单角色 Chats、Personas、World Books、Presets、本地 Assets 与 trusted built-in Extensions。Prompt Pipeline 已安装纯 TypeScript candidate，但原版 Pipeline 仍持有所有权。模块只使用固定 `records` / `blobs` Object Store；新增 feature 或 collection 不递增数据库业务版本。IndexedDB 不可用时各 Repository 可降级为页面会话内存，并在模块 diagnostics 中明确报告。
 
-空群组、离线 Horde、扩展发现、近似 tokenizer 和丢弃式 stats 等仍属于 **Bootstrap Compatibility Contract**，只用于让原版 UI 完成初始化或渲染，不代表相应业务已经迁移：
+空群组、离线 Horde、远程扩展 Git 操作、近似 tokenizer 和丢弃式 stats 等仍属于 **Bootstrap Compatibility Contract** 或显式浏览器限制，不代表相应业务已经迁移：
 
 - 不实现群组聊天或模型请求；
-- 不启用第三方扩展安装/发现；
+- trusted built-ins 可由原版 loader 运行，但用户第三方包只能进入 sandbox；不实现浏览器无法保证的 Git/Node plugins；
 - tokenizer 估算不能用于真实模型上下文预算；
 - 不把旧 `/api` 当成新架构的内部正式接口；
 - 不让新 Vue 代码依赖这些兼容 HTTP 路径。

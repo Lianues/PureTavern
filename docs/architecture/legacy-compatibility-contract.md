@@ -45,16 +45,18 @@ Pure Tavern 将 SillyTavern 原版 UI/交互作为长期保留的上游兼容层
 - `script.js`、`scripts/extensions.js`、`scripts/st-context.js` 等关键模块导出；
 - 上游运行时全局对象，如 `SillyTavern`、`DOMPurify`、`Handlebars`、`Fuse` 和 jQuery 相关对象等。
 
-当前状态必须明确为：扩展 UI 基础仍在，扩展发现接口返回空列表，第三方扩展加载未启用。契约保留入口，不等于恢复了完整第三方扩展运行能力。
+当前状态必须明确为：扩展 UI 基础与 14 个随 upstream snapshot 分发的 trusted built-ins 已恢复，`discover` 只暴露该构建清单。用户第三方包不进入原页面 loader，必须使用显式权限的 iframe/Worker sandbox；远程 Git 和 Node plugins 仍未迁移。
 
 ### 数据能力
 
 记录 Hook 当前处理的 Legacy 请求，并明确区分已实现与待迁移能力：
 
 - Settings 文档与快照标记为浏览器就绪，并保持原版完整文档/快照 DTO；
-- Characters、单角色 Chats、World Books、Presets 与 Assets 的路径由各模块 manifest 覆盖 core placeholder，标记对应 browser-ready 状态；
+- Characters、单角色 Chats、World Books、Presets、Assets 与 trusted Extensions 的路径由各模块 manifest 覆盖 core placeholder，标记对应 browser-ready 状态；
+- Personas 没有专属 API，通过 Settings provider/composer 和 Assets capability 接入，因此模块 contract 记录 bridge 而非伪造请求；
+- Prompt Pipeline candidate 没有 Legacy API，当前保持 `ownership=legacy` 与 `replacementEnabled=false`；
 - `/csrf-token`、`/version`、`/api/users/me` 等仍是 UI 启动固定兼容响应；
-- 群组、Horde、扩展发现、Secrets、近似 tokenizer 与丢弃式 stats 等仍是空数据、安全默认或明确降级响应。
+- 群组、Horde、Secrets、远程 Git 扩展操作、近似 tokenizer 与丢弃式 stats 等仍是空数据、安全默认或明确降级响应。
 
 契约 schema v2 使用 `dataCapabilities` 分类。标记为 `bootstrap-compatibility-only`、`bootstrap-empty-response-not-migrated`、`extension-loading-disabled` 或其他明确降级状态的路径都不是已完成业务能力；是否迁移以 feature manifest 的 `migrationStatus` 为准。
 
@@ -85,7 +87,7 @@ pnpm legacy:contracts:check --source "F:\path\SillyTavern-1.19.0" --version 1.19
 - jQuery 与关键上游全局对象存在；
 - `script.js`、`scripts/events.js`、`scripts/extensions.js` 等模块可动态导入且关键导出存在；
 - `eventSource` 可注册、触发和移除监听器；
-- 扩展上下文入口和扩展设置对象存在，但不启用第三方扩展；
+- 扩展上下文入口、扩展设置对象和 14 个 trusted built-ins 由原版 loader 加载；用户第三方扩展不进入 same-context；
 - 关键 DOM 锚点存在；
 - 左右抽屉、世界书抽屉可打开并关闭；
 - 原版 `#fast_ui_mode` 触发原版防抖保存，IndexedDB 记录与刷新后的控件状态一致；
@@ -94,7 +96,10 @@ pnpm legacy:contracts:check --source "F:\path\SillyTavern-1.19.0" --version 1.19
 - 原版单角色 Chats 完成消息、附件、刷新恢复、搜索/recent、重命名和 JSONL 导入导出；
 - 原版 World Books 编辑器与 matcher 完成 CRUD、导入、关键词/constant/disabled 和 opaque 字段验证；
 - Presets 完成 11 类默认种子、原版 selector、PresetManager CRUD/恢复以及 theme/Quick Reply/Moving UI；
-- Assets 完成背景、文件夹、附件、用户图片/persona、sprites、library 与共享 Worker 直接 URL；
+- Assets 完成背景、文件夹、附件、用户图片/persona、sprites、library、extension package 与共享 Worker 直接 URL；
+- Personas 完成原版头像上传、创建、选择、默认、角色绑定、刷新恢复、删除和本地身份降级；
+- Extensions 完成 trusted discover/manifest/script/style、version 与原版 disable/enable 的 Settings/registry 同步；
+- Prompt Pipeline candidate 就绪，但真实 Chrome 明确验证原版 prepare 函数仍为权威且替换关闭；
 - 本地资源无 404、运行时无异常、控制台无错误、启动兼容请求不进入网络。
 
 测试使用临时浏览器 Profile 创建并清理模块验收数据；结束后删除整个 Profile，不污染开发者的浏览器数据。

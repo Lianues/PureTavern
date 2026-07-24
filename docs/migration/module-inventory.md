@@ -250,13 +250,20 @@ features/<module>/
 ## M08 — Personas / 用户人格
 
 - **优先级**：P1
-- **初始状态**：`inventory`
+- **当前状态**：`completed`（纯前端范围：原版 Persona UI、元数据、头像、默认/当前选择、角色绑定与删除降级）
 - **原始前端**：`public/scripts/personas.js`
-- **原始服务端**：主要通过设置、头像与文件接口持久化。
-- **目标 Port**：`PersonaRepository`、`PersonaAssetRepository`。
-- **浏览器实现**：IndexedDB + OPFS/Blob。
-- **可选后端**：同步。
-- **依赖**：M02、M13。
+- **原始服务端**：没有 Persona 专属 API；元数据随完整 Settings 保存，头像使用 M13 `/api/avatars/*`。
+- **已实现 Port/模块**：`apps/web/src/features/personas/**` 中的 `PersonaRepository`、`PersonaAssetRepository` 与 `LegacyPersonaStateProvider/Composer`。
+- **浏览器实现**：
+  - stable Persona UUID 与 avatar alias/显示名解耦，descriptor 与未来 `persona_*` 字段按 opaque JSON 保留；
+  - 通用 records 使用 `personas / state / current`，不增加 Object Store/数据库版本；IndexedDB 失败后降级到页面内存；
+  - Settings 首次 get hydrate Persona aggregate，后续 get/save/snapshot 在同一串行流程 compose；避免 Settings 与 Personas 各自覆盖；
+  - 头像完全由 M13 `PersonaAvatarAssetsCapability` 管理，M08 不复制 Blob/index 代码；
+  - 支持默认/当前 Persona、角色 bind/unbind、multi-connection 语义和删除后的默认本地用户身份降级；
+  - 原版 `chat_metadata.persona` 仍由 M05 作为 opaque metadata 保存，不改变原版 alias DTO。
+- **验收**：真实 Chrome 通过原版 `personas.js` 完成头像上传、创建、选择、设为默认、绑定角色、原版卡片 DOM/缩略图、刷新恢复、删除头像与 metadata、清除默认并回退本地身份。
+- **可选后端**：未来通过同一 Port 增加 Persona 同步。
+- **依赖**：M02、M03、M13；与 M05 仅通过原版 chat metadata 协作。
 - **删除影响**：使用默认本地用户身份；聊天功能不应崩溃。
 
 ## M09 — Presets / 提示词预设、主题与快捷回复
@@ -291,7 +298,7 @@ features/<module>/
 ## M10 — Prompt Pipeline / 提示词装配
 
 - **优先级**：P2
-- **初始状态**：`inventory`
+- **当前状态**：`browser-ready-candidate`（纯 TypeScript 候选已完成；所有权仍为 Legacy，尚未全量替换原版 Pipeline）
 - **原始前端**：
   - `public/scripts/openai.js`
   - `public/scripts/PromptManager.js`
@@ -299,28 +306,42 @@ features/<module>/
   - `public/scripts/authors-note.js`
   - `public/scripts/macros/**`
   - `public/scripts/variables.js`
-- **目标 Port**：`PromptAssembler`、`MacroEngine`、`ContextBudgetService`。
-- **浏览器实现**：纯 TypeScript；复杂计算可放 Worker。
+- **已实现 Port/模块**：`apps/web/src/features/prompt-pipeline/**` 中的 `PromptAssembler`、`MacroEngine`、`ContextBudgetService`、可选 step provider 与 conformance adapter。
+- **浏览器候选实现**：
+  - 确定性 stage/block 排序，阶段可 disable/delete；opaque message 未来字段不清洗；
+  - system、World Before/After、Presets、Character、Instruction、Author Note、History、Extension Before/After、Control 等阶段以 provider 注入，禁止跨模块硬 import；
+  - 常用角色/用户/Prompt/Instruct/聊天/变量宏、转义、有界递归与未知宏原文保留已实现；未覆盖宏在 compatibility matrix 中明确列出；
+  - 预算服务优先使用注入 tokenizer；M15 未完成时使用显式 `approximate` estimator，不冒充精确 token；
+  - `PromptPipelineRuntimeCapability` 已安装，但 `replacementEnabled=false`，原版 `prepareOpenAIMessages` 继续作为权威实现。
+- **验收**：48 项三模块定向测试中的 M10 15 项覆盖阶段、宏、变量、provider 降级、预算和 canonical fixture；生产 Chrome 验证 candidate 已安装、原版 prepare 函数仍存在且未切换所有权。
+- **未完成所有权切换**：完整 examples 预算竞争、continue/impersonate/quiet/group/tool/media/backend conversion、全部宏和真实 tokenizer 仍需捕获原版 fixture 做 conformance；不满足前不得标记 `completed`。
 - **可选后端**：无必要；只可提供实验性远端模板服务。
-- **依赖**：M03、M04、M05；可选依赖 M07、M09、M11。
-- **删除影响**：宏、作者注、特定提示词阶段均应作为可选 Pipeline Step 独立删除。
+- **依赖**：M03、M04、M05；可选依赖 M07、M09、M11；精确预算依赖 M15。
+- **删除影响**：当前删除候选模块不会影响原版生成；切换后各 Pipeline Step 仍应可独立删除。
 
 ## M11 — Extensions / 扩展系统
 
 - **优先级**：P3
-- **初始状态**：`inventory`
+- **当前状态**：`browser-ready-trusted-builtins`（14 个上游内置扩展已恢复；第三方 sandbox/本地包为可用基础，尚无完整用户安装 UI）
 - **原始前端**：`public/scripts/extensions.js`、`public/scripts/extensions/**`
 - **原始服务端**：`src/endpoints/extensions.js`、`plugins/**`
 - **原始接口**：安装、更新、分支、切换、移动、版本、删除、发现。
-- **问题**：旧扩展直接运行在页面上下文，可访问 DOM、全局状态和密钥。
-- **目标 Port**：`ExtensionRegistry`、`PluginStorage`、`PluginPermissionBroker`。
-- **浏览器实现**：
-  - 内置扩展可临时兼容；
-  - 新第三方扩展使用 iframe/Worker 沙箱；
-  - 显式 Capability 权限。
-- **可选后端**：Git 下载、包审计、远端扩展仓库。
-- **依赖**：M01、M02；其他能力只能声明为可选依赖。
-- **删除影响**：可整体删除，不影响核心聊天。
+- **已实现 Port/模块**：`apps/web/src/features/extensions/**` 中的 `ExtensionRegistry`、`PluginStorage`、`PluginPermissionBroker`、package validator、sandbox protocol 与 Legacy routes。
+- **信任模型**：
+  - 构建从当前只读 upstream manifest 生成 14 项 SHA-256 trusted 清单；只有这些 built-ins 可通过 `/api/extensions/discover` 进入原页面 same-context；
+  - 用户本地包必须 iframe/Worker sandbox，默认 disabled；iframe 仅 `allow-scripts`，不加 `allow-same-origin`；
+  - permission broker 默认拒绝 secrets/network/DOM/其他模块存储，manifest request 与用户 grant 必须同时满足；plugin KV 绑定 stable extension ID；
+  - 用户包 Blob 通过 M13 `ExtensionPackageAssetsCapability` 保存与 Worker URL 解析，不增加 Object Store 或第二个根 Service Worker。
+- **浏览器接口**：
+  - discover/version/local delete 使用真实本地数据；trusted built-in 禁止删除；
+  - Git install/update/branches/switch 与服务端 filesystem move 返回结构化 501，明确说明纯浏览器不支持，不伪造成功；
+  - Stable Diffusion built-in 启动所需 Comfy workflow 列表返回空兼容响应，明确不代表图片生成 Provider 已迁移；
+  - Settings `disabledExtensions` 与 registry enable 状态双向串行同步。
+- **验收**：生产 Chrome 发现并由原版 loader 加载 14 个 built-ins，Regex manifest/script/style 就绪，原版 disable/enable 跨 Settings/registry 持久化；registry/plugin storage/permissions 均为 IndexedDB records，零未处理端点、零异常。Package/sandbox/权限安全由 23 项模块测试覆盖。
+- **仍未完成**：第三方本地包的正式 UI、iframe/Worker runner 生命周期、object URL 回收、远程 Git/CORS、Node server plugins、代码签名与作者认证。
+- **可选后端**：Git 下载/更新、包审计、远端扩展仓库和 Node plugins 只能由可选后端提供。
+- **依赖**：M01、M02、M03、M13；其他能力只能声明为可选依赖。
+- **删除影响**：可整体删除，不影响核心聊天；对应内置扩展能力消失。
 
 ## M12 — Generation Providers / 模型生成
 

@@ -1,5 +1,7 @@
 import type { CapabilityRegistry } from '@/platform/features/capability-registry';
 import {
+  legacyExtensionSettingsCapability,
+  legacyPersonaStateCapability,
   legacyPresetBootstrapCapability,
   worldNamesCapability,
 } from '@/platform/features/standard-capabilities';
@@ -19,16 +21,60 @@ export function registerSettingsLegacyRoutes(
   snapshots: SettingsSnapshotService,
   capabilities: CapabilityRegistry,
 ) {
+  let personasHydrated = false;
+  let extensionsHydrated = false;
+
+  const composeSettingsForLegacy = async () => {
+    let document = await settings.getSettings();
+    const personas = capabilities.get(legacyPersonaStateCapability);
+    if (personas) {
+      if (!personasHydrated) {
+        await personas.importLegacyPersonaState(document);
+        personasHydrated = true;
+      }
+      document = await personas.composeLegacyPersonaState(document);
+    }
+
+    const extensions = capabilities.get(legacyExtensionSettingsCapability);
+    if (extensions) {
+      if (!extensionsHydrated) {
+        await extensions.applyDisabledLegacyNames(readDisabledExtensions(document));
+        extensionsHydrated = true;
+      }
+      document = composeDisabledExtensions(document, await extensions.getDisabledLegacyNames());
+    }
+    return document;
+  };
+
+  const synchronizeSettingsFromLegacy = async (value: unknown) => {
+    let document = cloneSettingsObject(value);
+    const personas = capabilities.get(legacyPersonaStateCapability);
+    if (personas) {
+      await personas.importLegacyPersonaState(document);
+      personasHydrated = true;
+      document = await personas.composeLegacyPersonaState(document);
+    }
+
+    const extensions = capabilities.get(legacyExtensionSettingsCapability);
+    if (extensions) {
+      await extensions.applyDisabledLegacyNames(readDisabledExtensions(document));
+      extensionsHydrated = true;
+      document = composeDisabledExtensions(document, await extensions.getDisabledLegacyNames());
+    }
+    return document;
+  };
+
   router.register('POST', '/api/settings/get', async () => {
-    const [presetData, worldNames] = await Promise.all([
+    const [presetData, worldNames, composedSettings] = await Promise.all([
       loadPresetBootstrapData(capabilities),
       loadWorldNames(capabilities),
+      composeSettingsForLegacy(),
     ]);
     return jsonResponse({
-      settings: JSON.stringify(await settings.getSettings()),
+      settings: JSON.stringify(composedSettings),
       ...presetData,
       world_names: worldNames,
-      enable_extensions: false,
+      enable_extensions: capabilities.has(legacyExtensionSettingsCapability),
       enable_extensions_auto_update: false,
       enable_accounts: false,
       request_compression: {
@@ -42,7 +88,7 @@ export function registerSettingsLegacyRoutes(
 
   router.register('POST', '/api/settings/save', async (request) => {
     try {
-      await settings.saveSettings(await request.json());
+      await settings.saveSettings(await synchronizeSettingsFromLegacy(await request.json()));
       return jsonResponse({ result: 'ok' });
     } catch (error) {
       return jsonResponse(
@@ -68,6 +114,7 @@ export function registerSettingsLegacyRoutes(
   });
   router.register('POST', '/api/settings/make-snapshot', async () => {
     try {
+      await settings.saveSettings(await composeSettingsForLegacy());
       await snapshots.createSnapshot();
       return emptyResponse();
     } catch (error) {
@@ -78,6 +125,8 @@ export function registerSettingsLegacyRoutes(
     try {
       const { name } = (await request.json()) as { name?: unknown };
       await snapshots.restoreSnapshot(name);
+      personasHydrated = false;
+      extensionsHydrated = false;
       return emptyResponse();
     } catch (error) {
       return settingsSnapshotErrorResponse(error);
@@ -107,6 +156,45 @@ async function loadWorldNames(capabilities: CapabilityRegistry): Promise<string[
     console.warn('[PureTavern Settings] World Book names are unavailable.', error);
     return [];
   }
+}
+
+function cloneSettingsObject(value: unknown): Record<string, unknown> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new TypeError('Settings payload must be a JSON object.');
+  }
+  return structuredClone(value) as Record<string, unknown>;
+}
+
+function readDisabledExtensions(settings: Record<string, unknown>): string[] {
+  const extensionSettings = settings.extension_settings;
+  if (
+    !extensionSettings ||
+    typeof extensionSettings !== 'object' ||
+    Array.isArray(extensionSettings)
+  ) {
+    return [];
+  }
+  const disabled = (extensionSettings as Record<string, unknown>).disabledExtensions;
+  return Array.isArray(disabled)
+    ? disabled.filter((value): value is string => typeof value === 'string')
+    : [];
+}
+
+function composeDisabledExtensions(
+  settings: Record<string, unknown>,
+  disabledExtensions: readonly string[],
+): Record<string, unknown> {
+  const document = structuredClone(settings);
+  const current = document.extension_settings;
+  const extensionSettings =
+    current && typeof current === 'object' && !Array.isArray(current)
+      ? (current as Record<string, unknown>)
+      : {};
+  document.extension_settings = {
+    ...extensionSettings,
+    disabledExtensions: [...disabledExtensions],
+  };
+  return document;
 }
 
 function settingsSnapshotErrorResponse(error: unknown): Response {

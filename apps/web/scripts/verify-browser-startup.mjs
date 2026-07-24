@@ -585,6 +585,124 @@ try {
     settingsSnapshotWorkflow.restoredValue = snapshot?.fastUiMode ?? null;
   }
 
+  const extensionWorkflowEvaluation = await client.send('Runtime.evaluate', {
+    expression: `(async () => {
+      const extensionModule = await import('/scripts/extensions.js');
+      const scriptModule = await import('/script.js');
+      const headers = scriptModule.getRequestHeaders();
+      const routeHandled = (pathname) =>
+        globalThis.__PURE_TAVERN__?.diagnostics.requests.some(
+          (request) => request.pathname === pathname && request.handled,
+        ) ?? false;
+      const waitFor = async (read, timeout = 10_000) => {
+        const deadline = Date.now() + timeout;
+        while (Date.now() < deadline) {
+          const value = read();
+          if (value) return value;
+          await new Promise((resolve) => setTimeout(resolve, 50));
+        }
+        return null;
+      };
+      await waitFor(() => extensionModule.extensionNames.length >= 14);
+
+      const discoverResponse = await fetch('/api/extensions/discover', { headers });
+      const discovered = discoverResponse.ok ? await discoverResponse.json() : [];
+      const versionResponse = await fetch('/api/extensions/version', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ extensionName: 'regex', global: false }),
+      });
+      const version = versionResponse.ok ? await versionResponse.json() : null;
+      const manifest = extensionModule.getExtensionManifest('regex');
+      const regexScriptLoaded = [...document.scripts].some((script) =>
+        script.src.endsWith('/scripts/extensions/regex/index.js'),
+      );
+      const regexStyleLoaded = [...document.styleSheets].some((sheet) =>
+        sheet.href?.endsWith('/scripts/extensions/regex/style.css'),
+      );
+
+      await extensionModule.disableExtension('regex', false);
+      const disabledResponse = await fetch('/api/settings/get', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({}),
+      });
+      const disabledSettings = disabledResponse.ok
+        ? JSON.parse((await disabledResponse.json()).settings)
+        : null;
+      const disabledPersisted =
+        disabledSettings?.extension_settings?.disabledExtensions?.includes('regex') === true;
+
+      await extensionModule.enableExtension('regex', false);
+      const enabledResponse = await fetch('/api/settings/get', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({}),
+      });
+      const enabledSettings = enabledResponse.ok
+        ? JSON.parse((await enabledResponse.json()).settings)
+        : null;
+      const enabledPersisted =
+        enabledSettings?.extension_settings?.disabledExtensions?.includes('regex') === false;
+
+      return {
+        available: true,
+        discoveredCount: discovered.length,
+        discoveredNames: discovered.map((extension) => extension.name),
+        originalRuntimeCount: extensionModule.extensionNames.length,
+        manifestLoaded: manifest?.display_name === 'Regex',
+        regexScriptLoaded,
+        regexStyleLoaded,
+        versionOk:
+          versionResponse.ok &&
+          version?.isUpToDate === true &&
+          version?.currentBranchName === '',
+        disabledPersisted,
+        enabledPersisted,
+        routesHandled: {
+          discover: routeHandled('/api/extensions/discover'),
+          version: routeHandled('/api/extensions/version'),
+          comfyBootstrap: routeHandled('/api/sd/comfy/workflows'),
+        },
+        registry: globalThis.__PURE_TAVERN__?.features?.extensions?.registry
+          ? { ...globalThis.__PURE_TAVERN__.features.extensions.registry }
+          : null,
+        pluginStorage: globalThis.__PURE_TAVERN__?.features?.extensions?.pluginStorage
+          ? { ...globalThis.__PURE_TAVERN__.features.extensions.pluginStorage }
+          : null,
+        permissions: globalThis.__PURE_TAVERN__?.features?.extensions?.permissions
+          ? { ...globalThis.__PURE_TAVERN__.features.extensions.permissions }
+          : null,
+        trustedBuiltIns: globalThis.__PURE_TAVERN__?.features?.extensions?.trustedBuiltIns
+          ? { ...globalThis.__PURE_TAVERN__.features.extensions.trustedBuiltIns }
+          : null,
+        localPackageAssetsInjected:
+          globalThis.__PURE_TAVERN__?.features?.extensions?.localPackageAssetsInjected === true,
+      };
+    })()`,
+    awaitPromise: true,
+    returnByValue: true,
+  });
+  const extensionWorkflow = extensionWorkflowEvaluation.result?.value;
+
+  const promptPipelineWorkflowEvaluation = await client.send('Runtime.evaluate', {
+    expression: `(async () => {
+      const openAiModule = await import('/scripts/openai.js');
+      const diagnostics = globalThis.__PURE_TAVERN__?.features?.['prompt-pipeline'];
+      return {
+        available: Boolean(diagnostics),
+        status: diagnostics?.status ?? null,
+        ownership: diagnostics?.ownership ?? null,
+        tokenizerPrecision: diagnostics?.tokenizerPrecision ?? null,
+        replacementEnabled: diagnostics?.replacementEnabled ?? null,
+        originalPrepareFunction: typeof openAiModule.prepareOpenAIMessages === 'function',
+      };
+    })()`,
+    awaitPromise: true,
+    returnByValue: true,
+  });
+  const promptPipelineWorkflow = promptPipelineWorkflowEvaluation.result?.value;
+
   const presetWorkflowEvaluation = await client.send('Runtime.evaluate', {
     expression: `(async () => {
       const scriptModule = await import('/script.js');
@@ -1256,8 +1374,143 @@ try {
   });
   const characterCreateEdit = characterCreateEditEvaluation.result?.value;
 
+  const personaCreateEvaluation = await client.send('Runtime.evaluate', {
+    expression: `(async () => {
+      const scriptModule = await import('/script.js');
+      const personaModule = await import('/scripts/personas.js');
+      const headers = scriptModule.getRequestHeaders();
+      const formHeaders = scriptModule.getRequestHeaders({ omitContentType: true });
+      const createdAvatar = ${JSON.stringify(characterCreateEdit?.createdAvatar ?? '')};
+      const pngBytes = Uint8Array.from(
+        atob('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII='),
+        (character) => character.charCodeAt(0),
+      );
+      const avatarForm = new FormData();
+      avatarForm.append(
+        'avatar',
+        new File([pngBytes], 'browser-persona.png', { type: 'image/png' }),
+      );
+      const uploadResponse = await fetch('/api/avatars/upload', {
+        method: 'POST',
+        headers: formHeaders,
+        body: avatarForm,
+      });
+      const upload = uploadResponse.ok ? await uploadResponse.json() : null;
+      const personaAlias = upload?.path ?? '';
+
+      await personaModule.initPersona(
+        personaAlias,
+        'Browser Persona',
+        'Browser Persona description',
+        'Browser Persona title',
+        { silent: true, depth: 3, role: 0 },
+      );
+      await personaModule.setUserAvatar(personaAlias, {
+        toastPersonaNameChange: false,
+        navigateToCurrent: true,
+      });
+      if (!personaModule.isPersonaLocked('default')) {
+        await personaModule.setPersonaLockState(true, 'default');
+      }
+      await scriptModule.getCharacters();
+      const characterId = scriptModule.characters.findIndex(
+        (character) => character.avatar === createdAvatar,
+      );
+      if (characterId >= 0) await scriptModule.selectCharacterById(characterId);
+      if (!personaModule.isPersonaLocked('character')) {
+        await personaModule.setPersonaLockState(true, 'character');
+      }
+      const defaultLockedAfterCall = personaModule.isPersonaLocked('default');
+      const characterLockedAfterCall = personaModule.isPersonaLocked('character');
+      await scriptModule.saveSettings();
+      await personaModule.getUserAvatars(true, personaAlias);
+      await new Promise((resolve) => setTimeout(resolve, 150));
+
+      const settingsResponse = await fetch('/api/settings/get', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({}),
+      });
+      const settingsPayload = settingsResponse.ok ? await settingsResponse.json() : null;
+      const persisted = settingsPayload ? JSON.parse(settingsPayload.settings) : null;
+      const descriptor = persisted?.power_user?.persona_descriptions?.[personaAlias];
+      const thumbnailResponse = personaAlias
+        ? await fetch(
+            '/thumbnail?type=persona&file=' + encodeURIComponent(personaAlias) + '&t=' + Date.now(),
+            { cache: 'reload' },
+          )
+        : null;
+      const card = [...document.querySelectorAll('#user_avatar_block .avatar-container')].find(
+        (element) => element.getAttribute('data-avatar-id') === personaAlias,
+      );
+
+      return {
+        available: true,
+        personaAlias,
+        uploadOk: uploadResponse.ok && Boolean(personaAlias),
+        selected: personaModule.user_avatar === personaAlias,
+        defaultLockedAfterCall,
+        characterLockedAfterCall,
+        defaultPersona: persisted?.power_user?.default_persona === personaAlias,
+        persistedName: persisted?.power_user?.personas?.[personaAlias] ?? null,
+        persistedDescription: descriptor?.description ?? null,
+        persistedDepth: descriptor?.depth ?? null,
+        currentConnection: personaModule.getCurrentConnectionObj(),
+        connectedAfterCall: personaModule
+          .getConnectedPersonas(createdAvatar)
+          .map((persona) => persona.avatar),
+        persistedConnections: descriptor?.connections ?? [],
+        characterBound:
+          descriptor?.connections?.some(
+            (connection) => connection.type === 'character' && connection.id === createdAvatar,
+          ) === true,
+        legacyCardVisible: Boolean(card),
+        thumbnailSource: thumbnailResponse?.headers.get('X-Pure-Tavern-Asset') ?? null,
+        storage: globalThis.__PURE_TAVERN__?.features?.personas?.storage
+          ? { ...globalThis.__PURE_TAVERN__.features.personas.storage }
+          : null,
+        service: globalThis.__PURE_TAVERN__?.features?.personas?.service
+          ? { ...globalThis.__PURE_TAVERN__.features.personas.service }
+          : null,
+        assets: globalThis.__PURE_TAVERN__?.features?.personas?.assets
+          ? { ...globalThis.__PURE_TAVERN__.features.personas.assets }
+          : null,
+      };
+    })()`,
+    awaitPromise: true,
+    returnByValue: true,
+  });
+  const personaCreate = personaCreateEvaluation.result?.value;
+
   await client.send('Page.navigate', { url: appUrl });
   snapshot = await waitForApplicationSnapshot();
+
+  const personaReloadEvaluation = await client.send('Runtime.evaluate', {
+    expression: `(async () => {
+      const personaModule = await import('/scripts/personas.js');
+      const scriptModule = await import('/script.js');
+      const expectedAlias = ${JSON.stringify(personaCreate?.personaAlias ?? '')};
+      const avatars = await personaModule.getUserAvatars(false);
+      const response = await fetch('/api/settings/get', {
+        method: 'POST',
+        headers: scriptModule.getRequestHeaders(),
+        body: JSON.stringify({}),
+      });
+      const payload = response.ok ? await response.json() : null;
+      const settings = payload ? JSON.parse(payload.settings) : null;
+      return {
+        avatarListed: avatars.includes(expectedAlias),
+        selectedAfterReload: personaModule.user_avatar === expectedAlias,
+        defaultAfterReload: settings?.power_user?.default_persona === expectedAlias,
+        descriptorAfterReload:
+          settings?.power_user?.persona_descriptions?.[expectedAlias]?.description ?? null,
+      };
+    })()`,
+    awaitPromise: true,
+    returnByValue: true,
+  });
+  const personaReload = personaReloadEvaluation.result?.value;
+  const personaWorkflow = { ...(personaCreate ?? {}), ...(personaReload ?? {}) };
 
   const chatCreateEvaluation = await client.send('Runtime.evaluate', {
     expression: `(async () => {
@@ -1687,6 +1940,46 @@ try {
     },
   };
 
+  const personaDeleteEvaluation = await client.send('Runtime.evaluate', {
+    expression: `(async () => {
+      const personaModule = await import('/scripts/personas.js');
+      const scriptModule = await import('/script.js');
+      const personaAlias = ${JSON.stringify(personaWorkflow?.personaAlias ?? '')};
+      if (!personaAlias) return { deleteRequested: false, error: 'Persona alias is missing.' };
+      await personaModule.setUserAvatar(personaAlias, { toastPersonaNameChange: false });
+      const deleteButton = document.getElementById('persona_delete_button');
+      deleteButton?.click();
+      const deadline = Date.now() + 5_000;
+      let confirmButton = null;
+      while (!confirmButton && Date.now() < deadline) {
+        const dialogs = [...document.querySelectorAll('.popup[open]')];
+        confirmButton = dialogs.at(-1)?.querySelector('.popup-button-ok') ?? null;
+        if (!confirmButton) await new Promise((resolve) => setTimeout(resolve, 50));
+      }
+      confirmButton?.click();
+      await new Promise((resolve) => setTimeout(resolve, 1_500));
+      const avatars = await personaModule.getUserAvatars(false);
+      const response = await fetch('/api/settings/get', {
+        method: 'POST',
+        headers: scriptModule.getRequestHeaders(),
+        body: JSON.stringify({}),
+      });
+      const payload = response.ok ? await response.json() : null;
+      const settings = payload ? JSON.parse(payload.settings) : null;
+      return {
+        deleteRequested: Boolean(deleteButton && confirmButton),
+        avatarRemoved: !avatars.includes(personaAlias),
+        metadataRemoved: !settings?.power_user?.personas?.[personaAlias],
+        defaultCleared: settings?.power_user?.default_persona !== personaAlias,
+        fallbackSelected: personaModule.user_avatar !== personaAlias,
+      };
+    })()`,
+    awaitPromise: true,
+    returnByValue: true,
+  });
+  const personaDelete = personaDeleteEvaluation.result?.value;
+  Object.assign(personaWorkflow, personaDelete ?? {});
+
   // Allow animations, nested CSS imports, fonts, and images to finish so late failures are included.
   await new Promise((resolve) => setTimeout(resolve, 750));
 
@@ -1738,6 +2031,62 @@ try {
       characterWorkflow?.storage?.backend === 'indexeddb' &&
       characterWorkflow?.assets?.status === 'ready' &&
       characterWorkflow?.assets?.backend === 'indexeddb',
+    personasStorageReady:
+      personaWorkflow?.storage?.status === 'ready' &&
+      personaWorkflow?.storage?.backend === 'indexeddb' &&
+      personaWorkflow?.assets?.status === 'configured',
+    personaBrowserWorkflow:
+      personaWorkflow?.available === true &&
+      personaWorkflow?.uploadOk === true &&
+      personaWorkflow?.selected === true &&
+      personaWorkflow?.defaultLockedAfterCall === true &&
+      personaWorkflow?.characterLockedAfterCall === true &&
+      personaWorkflow?.defaultPersona === true &&
+      personaWorkflow?.persistedName === 'Browser Persona' &&
+      personaWorkflow?.persistedDescription === 'Browser Persona description' &&
+      personaWorkflow?.persistedDepth === 3 &&
+      personaWorkflow?.characterBound === true &&
+      personaWorkflow?.legacyCardVisible === true &&
+      personaWorkflow?.thumbnailSource === 'assets/user-avatars' &&
+      personaWorkflow?.avatarListed === true &&
+      personaWorkflow?.selectedAfterReload === true &&
+      personaWorkflow?.defaultAfterReload === true &&
+      personaWorkflow?.descriptorAfterReload === 'Browser Persona description' &&
+      personaWorkflow?.deleteRequested === true &&
+      personaWorkflow?.avatarRemoved === true &&
+      personaWorkflow?.metadataRemoved === true &&
+      personaWorkflow?.defaultCleared === true &&
+      personaWorkflow?.fallbackSelected === true,
+    extensionsStorageReady:
+      extensionWorkflow?.registry?.status === 'ready' &&
+      extensionWorkflow?.registry?.backend === 'records' &&
+      extensionWorkflow?.pluginStorage?.status === 'ready' &&
+      extensionWorkflow?.pluginStorage?.backend === 'records' &&
+      extensionWorkflow?.permissions?.status === 'ready' &&
+      extensionWorkflow?.permissions?.backend === 'records' &&
+      extensionWorkflow?.trustedBuiltIns?.status === 'ready' &&
+      extensionWorkflow?.trustedBuiltIns?.source === 'generated-manifest' &&
+      extensionWorkflow?.trustedBuiltIns?.count === 14 &&
+      extensionWorkflow?.localPackageAssetsInjected === true,
+    trustedExtensionsBrowserWorkflow:
+      extensionWorkflow?.available === true &&
+      extensionWorkflow?.discoveredCount === 14 &&
+      extensionWorkflow?.originalRuntimeCount === 14 &&
+      extensionWorkflow?.discoveredNames?.includes('regex') === true &&
+      extensionWorkflow?.manifestLoaded === true &&
+      extensionWorkflow?.regexScriptLoaded === true &&
+      extensionWorkflow?.regexStyleLoaded === true &&
+      extensionWorkflow?.versionOk === true &&
+      extensionWorkflow?.disabledPersisted === true &&
+      extensionWorkflow?.enabledPersisted === true &&
+      Object.values(extensionWorkflow?.routesHandled ?? {}).every(Boolean),
+    promptPipelineCandidateReady:
+      promptPipelineWorkflow?.available === true &&
+      promptPipelineWorkflow?.status === 'conformance-candidate' &&
+      promptPipelineWorkflow?.ownership === 'legacy' &&
+      promptPipelineWorkflow?.tokenizerPrecision === 'approximate' &&
+      promptPipelineWorkflow?.replacementEnabled === false &&
+      promptPipelineWorkflow?.originalPrepareFunction === true,
     presetsStorageReady:
       presetWorkflow?.storage?.status === 'ready' &&
       presetWorkflow?.storage?.backend === 'indexeddb',
@@ -1902,6 +2251,9 @@ try {
     moduleContracts,
     settingsPersistence,
     settingsSnapshotWorkflow,
+    extensionWorkflow,
+    promptPipelineWorkflow,
+    personaWorkflow,
     presetWorkflow,
     worldBookWorkflow,
     assetsWorkflow,

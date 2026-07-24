@@ -1,0 +1,36 @@
+{
+  "module": "personas",
+  "legacyRequests": [],
+  "bridges": {
+    "settings": {
+      "owner": "settings",
+      "mode": "serialized-provider-composer",
+      "topLevelFields": ["username", "user_avatar"],
+      "powerUserFields": [
+        "personas",
+        "default_persona",
+        "persona_descriptions",
+        "persona_description",
+        "persona_description_position",
+        "persona_description_depth",
+        "persona_description_role",
+        "persona_description_lorebook",
+        "persona_show_notifications",
+        "persona_sort_order",
+        "persona_allow_multi_connections",
+        "persona_auto_lock"
+      ]
+    },
+    "assets": {
+      "owner": "assets",
+      "mode": "injected-persona-asset-repository",
+      "legacyRoutes": ["/api/avatars/get", "/api/avatars/upload", "/api/avatars/delete"],
+      "resourcePath": "/User Avatars/<avatarAlias>"
+    }
+  },
+  "notes": [
+    "SillyTavern 1.18.0 has no Persona-specific HTTP endpoint.",
+    "Persona metadata is embedded in the complete Legacy Settings document.",
+    "Avatar HTTP compatibility remains exclusively owned by M13 Assets."
+  ]
+}
