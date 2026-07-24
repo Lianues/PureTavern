@@ -1,0 +1,89 @@
+{
+  "name": "pure-tavern",
+  "displayName": "PureTavern",
+  "description": "Open the complete PureTavern web application inside VS Code.",
+  "version": "0.1.0",
+  "publisher": "Lianues",
+  "author": {
+    "name": "Limerence",
+    "url": "https://github.com/Lianues"
+  },
+  "license": "AGPL-3.0-only",
+  "icon": "media/icon.png",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Lianues/PureTavern.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Lianues/PureTavern/issues"
+  },
+  "homepage": "https://github.com/Lianues/PureTavern#readme",
+  "type": "module",
+  "engines": {
+    "vscode": "^1.95.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "keywords": [
+    "AI Chat",
+    "PureTavern",
+    "SillyTavern",
+    "AI",
+    "Chat"
+  ],
+  "main": "./dist/extension.cjs",
+  "activationEvents": [
+    "onView:pureTavern.launcher",
+    "onCommand:pureTavern.open"
+  ],
+  "contributes": {
+    "commands": [
+      {
+        "command": "pureTavern.open",
+        "title": "Open PureTavern",
+        "category": "PureTavern"
+      }
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "pureTavern",
+          "title": "PureTavern",
+          "icon": "media/pt.svg"
+        }
+      ]
+    },
+    "views": {
+      "pureTavern": [
+        {
+          "id": "pureTavern.launcher",
+          "name": "PureTavern"
+        }
+      ]
+    },
+    "menus": {
+      "view/title": [
+        {
+          "command": "pureTavern.open",
+          "when": "view == pureTavern.launcher",
+          "group": "navigation"
+        }
+      ]
+    }
+  },
+  "scripts": {
+    "build:extension": "node scripts/build-extension.mjs",
+    "package:vsix": "node scripts/package-vsix.mjs",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@types/node": "^26.1.1",
+    "@types/vscode": "1.95.0",
+    "@vscode/vsce": "3.9.2",
+    "esbuild": "^0.27.0",
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.10"
+  }
+}

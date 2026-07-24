@@ -1,0 +1,42 @@
+name: Build VS Code Extension
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  vsix:
+    name: PureTavern VSIX
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.17.1
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install workspace dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build and package VSIX
+        run: pnpm vscode:package
+
+      - name: Upload VSIX
+        uses: actions/upload-artifact@v4
+        with:
+          name: PureTavern-VSCode-${{ github.run_number }}
+          path: apps/vscode-extension/release/*.vsix
+          if-no-files-found: error
+          retention-days: 30

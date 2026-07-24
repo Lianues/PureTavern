@@ -34,10 +34,20 @@ describe('manual test release workflow', () => {
       'android',
       'desktop',
       'ios',
+      'vscode',
       'publish',
     ]);
-    expect(workflow.jobs.publish.needs).toEqual(['preflight', 'web', 'android', 'desktop', 'ios']);
+    expect(workflow.jobs.publish.needs).toEqual([
+      'preflight',
+      'web',
+      'android',
+      'desktop',
+      'ios',
+      'vscode',
+    ]);
     expect(source).toContain('PureTavern-$RELEASE_VERSION-web.zip');
+    expect(source).toContain('release-vscode');
+    expect(source).toContain('apps/vscode-extension/release/*.vsix');
     expect(source).toContain('TAG="test-v$RELEASE_VERSION"');
     expect(source).toContain('TITLE="$RELEASE_VERSION Test"');
     expect(source).toContain('git push --atomic');

@@ -25,7 +25,9 @@
     "ios:sync": "pnpm build && pnpm --filter @pure-tavern/mobile sync:ios",
     "ios:open": "pnpm build && pnpm --filter @pure-tavern/mobile open:ios",
     "desktop:dev": "pnpm --filter @pure-tavern/desktop dev:desktop",
-    "desktop:build": "pnpm --filter @pure-tavern/desktop build:desktop"
+    "desktop:build": "pnpm --filter @pure-tavern/desktop build:desktop",
+    "vscode:build": "pnpm build && pnpm --dir apps/vscode-extension build:extension",
+    "vscode:package": "pnpm build && pnpm --dir apps/vscode-extension build:extension && pnpm --dir apps/vscode-extension package:vsix"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

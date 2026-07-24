@@ -304,9 +304,52 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
+  vscode:
+    name: VS Code extension test VSIX
+    needs: [preflight, web]
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.17.1
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Download generic web build
+        uses: actions/download-artifact@v4
+        with:
+          name: web-dist
+          path: apps/web/dist
+
+      - name: Apply version and package VSIX
+        run: |
+          node scripts/set-release-version.mjs "$RELEASE_VERSION"
+          pnpm --dir apps/vscode-extension build:extension
+          pnpm --dir apps/vscode-extension package:vsix
+
+      - name: Upload VS Code release package
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-vscode
+          path: apps/vscode-extension/release/*.vsix
+          if-no-files-found: error
+          retention-days: 7
+
   publish:
     name: Commit, tag and publish test release
-    needs: [preflight, web, android, desktop, ios]
+    needs: [preflight, web, android, desktop, ios, vscode]
     runs-on: ubuntu-latest
     env:
       GH_TOKEN: ${{ github.token }}
@@ -359,6 +402,7 @@ jobs:
             apps/mobile/ios/App/App.xcodeproj/project.pbxproj \
             apps/mobile/package.json \
             apps/server/package.json \
+            apps/vscode-extension/package.json \
             apps/web/package.json \
             apps/web/src/features/import-export/application/archive-service.ts \
             apps/web/src/legacy-hook/bootstrap.ts \
