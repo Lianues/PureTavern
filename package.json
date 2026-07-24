@@ -21,7 +21,11 @@
     "legacy:verify": "pnpm --filter @pure-tavern/web legacy:verify",
     "android:sync": "pnpm build && pnpm --filter @pure-tavern/mobile sync:android",
     "android:open": "pnpm build && pnpm --filter @pure-tavern/mobile open:android",
-    "android:debug": "pnpm build && pnpm --filter @pure-tavern/mobile build:android:debug"
+    "android:debug": "pnpm build && pnpm --filter @pure-tavern/mobile build:android:debug",
+    "ios:sync": "pnpm build && pnpm --filter @pure-tavern/mobile sync:ios",
+    "ios:open": "pnpm build && pnpm --filter @pure-tavern/mobile open:ios",
+    "desktop:dev": "pnpm --filter @pure-tavern/desktop dev:desktop",
+    "desktop:build": "pnpm --filter @pure-tavern/desktop build:desktop"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

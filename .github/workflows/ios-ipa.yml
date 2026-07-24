@@ -1,0 +1,63 @@
+name: Build iOS IPA
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  ios-unsigned:
+    name: iOS unsigned IPA
+    runs-on: macos-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.17.1
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install workspace dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build generic web app and sync iOS
+        run: pnpm ios:sync
+
+      - name: Build unsigned iOS application
+        run: |
+          xcodebuild \
+            -project apps/mobile/ios/App/App.xcodeproj \
+            -scheme App \
+            -configuration Release \
+            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath apps/mobile/ios/DerivedData \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            DEVELOPMENT_TEAM='' \
+            build
+
+      - name: Package unsigned IPA
+        run: |
+          mkdir -p apps/mobile/ios/output/Payload
+          cp -R apps/mobile/ios/DerivedData/Build/Products/Release-iphoneos/App.app apps/mobile/ios/output/Payload/
+          cd apps/mobile/ios/output
+          /usr/bin/ditto -c -k --sequesterRsrc --keepParent Payload PureTavern-unsigned.ipa
+
+      - name: Upload unsigned IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: PureTavern-iOS-unsigned-${{ github.run_number }}
+          path: apps/mobile/ios/output/PureTavern-unsigned.ipa
+          if-no-files-found: error
+          retention-days: 30

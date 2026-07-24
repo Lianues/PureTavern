@@ -4,6 +4,9 @@ apps/web/legacy/contracts/**
 apps/web/.generated/**
 apps/web/index.html
 apps/mobile/android/**
+apps/mobile/ios/**
+apps/desktop/src-tauri/target/**
+apps/desktop/src-tauri/gen/schemas/**
 SillyTavern-1.18.0/**
 node_modules/**
 dist/**

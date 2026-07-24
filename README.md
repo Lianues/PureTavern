@@ -90,6 +90,31 @@ apps/mobile/android/app/build/outputs/apk/debug/app-debug.apk
 
 GitHub Actions 不会在提交代码时自动打包。需要 APK 时，在仓库的 **Actions → Build Android APK → Run workflow** 中手动触发，完成后下载 Debug APK artifact。Debug APK 适合测试；正式发布仍需配置私有签名密钥并构建 Release APK/AAB。
 
+### iOS IPA
+
+同一个 `apps/mobile` Capacitor 外壳也包含 iOS Xcode 工程，继续消费 `apps/web/dist`：
+
+```bash
+pnpm ios:sync
+pnpm ios:open # 仅 macOS
+```
+
+GitHub Actions 的 **Build iOS IPA** workflow 仅手动触发，在 macOS runner 生成 unsigned IPA。未签名 IPA 需要用户自行签名；App Store/TestFlight 发布必须配置 Apple Developer 证书和 Provisioning Profile。
+
+### 桌面端
+
+Tauri 2 桌面外壳位于 `apps/desktop`，同样只消费 `apps/web/dist`。一套外壳支持 Windows、macOS 和 Linux，Feature Modules 不感知桌面平台。
+
+```bash
+# 构建 Web 并打开桌面开发窗口
+pnpm desktop:dev
+
+# 构建当前系统的桌面程序和安装包
+pnpm desktop:build
+```
+
+桌面产物位于 `apps/desktop/src-tauri/target/release`。GitHub Actions 的 **Build Desktop Bundles** workflow 仅手动触发，可分别生成 Windows NSIS、macOS DMG、Linux AppImage 和 DEB 测试包。
+
 ## 浏览器限制
 
 纯前端无法绕过目标服务的 CORS、TLS 和 Private Network Access 策略。当前密钥保存在浏览器本地，不应视为安全 Vault。

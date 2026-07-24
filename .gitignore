@@ -4,6 +4,7 @@ dist/
 coverage/
 .vite/
 *.tsbuildinfo
+/apps/desktop/src-tauri/target/
 .wrangler
 
 # Environment and local tooling

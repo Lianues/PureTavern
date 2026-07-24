@@ -5,9 +5,10 @@ from PIL import Image, ImageDraw
 MOBILE_ROOT = Path(__file__).resolve().parents[1]
 PROJECT_ROOT = MOBILE_ROOT.parents[1]
 SOURCE = PROJECT_ROOT / "apps" / "web" / "src" / "branding" / "pure-tavern-icon.png"
-RESOURCES = MOBILE_ROOT / "android" / "app" / "src" / "main" / "res"
+ANDROID_RESOURCES = MOBILE_ROOT / "android" / "app" / "src" / "main" / "res"
+IOS_ASSETS = MOBILE_ROOT / "ios" / "App" / "App" / "Assets.xcassets"
 
-DENSITIES = {
+ANDROID_DENSITIES = {
     "mdpi": (48, 108),
     "hdpi": (72, 162),
     "xhdpi": (96, 216),
@@ -25,13 +26,12 @@ def contain(source: Image.Image, size: int, scale: float) -> Image.Image:
     return canvas
 
 
-def write_launcher_icons(source: Image.Image) -> None:
-    for density, (legacy_size, foreground_size) in DENSITIES.items():
-        directory = RESOURCES / f"mipmap-{density}"
+def write_android_branding(source: Image.Image) -> None:
+    for density, (legacy_size, foreground_size) in ANDROID_DENSITIES.items():
+        directory = ANDROID_RESOURCES / f"mipmap-{density}"
         directory.mkdir(parents=True, exist_ok=True)
 
-        legacy = contain(source, legacy_size, 0.94)
-        legacy.save(directory / "ic_launcher.png", optimize=True)
+        contain(source, legacy_size, 0.94).save(directory / "ic_launcher.png", optimize=True)
 
         round_icon = Image.new("RGBA", (legacy_size, legacy_size), (0, 0, 0, 0))
         draw = ImageDraw.Draw(round_icon)
@@ -48,9 +48,7 @@ def write_launcher_icons(source: Image.Image) -> None:
             optimize=True,
         )
 
-
-def write_splash_images(source: Image.Image) -> None:
-    for path in RESOURCES.glob("drawable*/splash.png"):
+    for path in ANDROID_RESOURCES.glob("drawable*/splash.png"):
         with Image.open(path) as existing:
             size = existing.size
         splash = Image.new("RGBA", size, (255, 255, 255, 255))
@@ -61,12 +59,33 @@ def write_splash_images(source: Image.Image) -> None:
         splash.convert("RGB").save(path, optimize=True)
 
 
+def write_ios_branding(source: Image.Image) -> None:
+    icon_path = IOS_ASSETS / "AppIcon.appiconset" / "AppIcon-512@2x.png"
+    icon_path.parent.mkdir(parents=True, exist_ok=True)
+    icon = Image.new("RGBA", (1024, 1024), (255, 255, 255, 255))
+    logo = source.copy()
+    logo.thumbnail((920, 920), Image.Resampling.LANCZOS)
+    icon.alpha_composite(logo, ((1024 - logo.width) // 2, (1024 - logo.height) // 2))
+    icon.convert("RGB").save(icon_path, optimize=True)
+
+    splash_directory = IOS_ASSETS / "Splash.imageset"
+    splash = Image.new("RGBA", (2732, 2732), (255, 255, 255, 255))
+    splash_logo = source.copy()
+    splash_logo.thumbnail((1256, 1256), Image.Resampling.LANCZOS)
+    splash.alpha_composite(
+        splash_logo,
+        ((2732 - splash_logo.width) // 2, (2732 - splash_logo.height) // 2),
+    )
+    for name in ("splash-2732x2732-2.png", "splash-2732x2732-1.png", "splash-2732x2732.png"):
+        splash.convert("RGB").save(splash_directory / name, optimize=True)
+
+
 def main() -> None:
     with Image.open(SOURCE) as image:
         source = image.convert("RGBA")
-    write_launcher_icons(source)
-    write_splash_images(source)
-    print(f"Generated Android branding from {SOURCE.relative_to(PROJECT_ROOT)}")
+    write_android_branding(source)
+    write_ios_branding(source)
+    print(f"Generated Android and iOS branding from {SOURCE.relative_to(PROJECT_ROOT)}")
 
 
 if __name__ == "__main__":
