@@ -168,7 +168,7 @@ function validateManifest(value: unknown): PureTavernArchiveManifest {
   if (!isRecord(value)) fail('invalid-manifest', 'Archive manifest must be an object.');
   assertNoUnsafeKeys(value);
   if (value.format !== PURE_TAVERN_ARCHIVE_FORMAT) {
-    fail('invalid-format', 'File is not a Pure Tavern archive.');
+    fail('invalid-format', 'File is not a PureTavern archive.');
   }
   if (value.schemaVersion !== PURE_TAVERN_ARCHIVE_SCHEMA_VERSION) {
     fail(

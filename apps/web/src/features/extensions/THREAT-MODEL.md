@@ -2,7 +2,7 @@
 
 ## Trust decision
 
-SillyTavern extensions are page-context plugins, not isolated web applications. The upstream `installExtension()` flow displays `thirdPartyExtensionWarning` before installing a non-official URL and requires affirmative user consent. Pure Tavern preserves that flow unchanged and does not add a second warning.
+SillyTavern extensions are page-context plugins, not isolated web applications. The upstream `installExtension()` flow displays `thirdPartyExtensionWarning` before installing a non-official URL and requires affirmative user consent. PureTavern preserves that flow unchanged and does not add a second warning.
 
 After consent, a third-party extension can potentially:
 
@@ -40,4 +40,4 @@ M11 reduces accidental package/source risk without pretending to isolate runtime
 
 ## Not implemented
 
-Pure Tavern does not emulate Node server plugins, arbitrary Express routes, child processes, filesystem access, package-manager installation, server Git credentials, private-repository proxying, or cryptographic author signatures.
+PureTavern does not emulate Node server plugins, arbitrary Express routes, child processes, filesystem access, package-manager installation, server Git credentials, private-repository proxying, or cryptographic author signatures.

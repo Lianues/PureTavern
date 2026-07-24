@@ -137,7 +137,7 @@ async function saveBlob(blob, fileName) {
     try {
       const handle = await globalThis.showSaveFilePicker({
         suggestedName: fileName,
-        types: [{ description: 'Pure Tavern backup', accept: { 'application/zip': ['.zip'] } }],
+        types: [{ description: 'PureTavern backup', accept: { 'application/zip': ['.zip'] } }],
       });
       const writable = await handle.createWritable();
       await writable.write(blob);
@@ -272,7 +272,7 @@ function createUi() {
   entry.innerHTML = `
     <div class="inline-drawer">
       <div class="inline-drawer-toggle inline-drawer-header">
-        <b>Pure Tavern 数据管理</b>
+        <b>PureTavern 数据管理</b>
         <div class="inline-drawer-icon fa-solid fa-circle-chevron-down down"></div>
       </div>
       <div class="inline-drawer-content">
@@ -284,7 +284,7 @@ function createUi() {
   const dialog = document.createElement('dialog');
   dialog.id = 'pure-tavern-data-management-dialog';
   dialog.innerHTML = `
-    <div class="ptdm-header"><div><h2>Pure Tavern 数据管理</h2><div class="ptdm-muted">本地归档与灾难恢复中心</div></div><button type="button" class="menu_button" id="ptdm-close">关闭</button></div>
+    <div class="ptdm-header"><div><h2>PureTavern 数据管理</h2><div class="ptdm-muted">本地归档与灾难恢复中心</div></div><button type="button" class="menu_button" id="ptdm-close">关闭</button></div>
     <div class="ptdm-body">
       <div id="ptdm-summary" class="ptdm-grid"></div>
       <progress id="ptdm-quota" class="ptdm-progress" max="100" value="0"></progress>

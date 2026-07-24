@@ -1,11 +1,11 @@
 {
-  "display_name": "Pure Tavern Data Management",
+  "display_name": "PureTavern Data Management",
   "loading_order": 20,
   "requires": [],
   "optional": [],
   "js": "index.js",
   "css": "style.css",
-  "author": "Pure Tavern",
+  "author": "PureTavern",
   "version": "1.0.0",
   "homePage": "https://github.com/Lianues/cocktail",
   "auto_update": false,

@@ -17,7 +17,7 @@ The module ports are `GenerationGateway`, `ModelCatalogGateway` and `StreamingGe
 
 This project does not provide a CORS proxy, Vault or private-network bridge. A provider can be implemented correctly and still reject browser requests because of CORS, TLS, Private Network Access or vendor policy. Such failures are reported as `cors-or-network` and are not disguised as successful responses.
 
-Custom and reverse-proxy URLs must use HTTPS, except localhost/127.0.0.1 development URLs. A user-supplied reverse proxy is merely a direct target; it is not a Pure Tavern optional backend.
+Custom and reverse-proxy URLs must use HTTPS, except localhost/127.0.0.1 development URLs. A user-supplied reverse proxy is merely a direct target; it is not a PureTavern optional backend.
 
 Vertex AI service-account auth is not enabled because a browser-only token exchange is not a reliable security or CORS boundary. Vertex Express API-key mode is supported. Advanced provider-specific multimodal, cache, reasoning-signature and beta tool combinations may return an explicit capability error; text Chat Completion, basic tools, non-streaming and SSE are the compatibility baseline.
 

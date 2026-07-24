@@ -172,7 +172,7 @@ export async function loadDataManagementExtensionDefinition() {
   const raw = await readFile(manifestPath);
   const manifest = JSON.parse(raw.toString('utf8'));
   if (!manifest || typeof manifest !== 'object' || manifest.js !== 'index.js') {
-    throw new Error('Pure Tavern data management extension manifest is invalid.');
+    throw new Error('PureTavern data management extension manifest is invalid.');
   }
   await access(path.join(extensionRoot, 'index.js'));
   if (manifest.css) await access(path.join(extensionRoot, manifest.css));

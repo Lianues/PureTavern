@@ -107,7 +107,7 @@ export class OpenAiCompatibleAdapter implements ProviderAdapter {
     }
     if (context.descriptor.source === 'openrouter') {
       headers['HTTP-Referer'] = window.location.origin;
-      headers['X-Title'] = 'Pure Tavern';
+      headers['X-Title'] = 'PureTavern';
     }
     if (context.descriptor.source === 'zai') headers['Accept-Language'] = 'en-US,en';
     if (context.descriptor.source === 'custom') {

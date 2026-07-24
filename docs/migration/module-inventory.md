@@ -517,7 +517,7 @@ features/<module>/
 - **模块覆盖**：Settings/Snapshots、Characters、Chats、Personas、World Books、Presets、Assets、Extensions、Stats 和可选 Secrets 均通过模块作用域参与者接入；stable ID、Blob metadata 与 opaque 字段原样保留。
 - **导入语义**：dry-run 差异/冲突预览，支持 merge、skip、replace-module、replace-all；正式导入和恢复前自动建立恢复点，并用 journal 记录模块级阶段。
 - **浏览器实现**：IndexedDB 本地恢复点默认轮换 5 份；File System Access 可用时直接保存，其他浏览器使用下载和文件选择回退。ZIP 路径、重复、大小、数量、展开体积、压缩比和 hash 均校验。
-- **第一方面板**：原版 Extensions loader 加载 `Pure Tavern Data Management`，来源为独立 `pure-tavern-first-party`；提供容量、模块、导出、导入预览、本地恢复/下载/删除可视化，不修改 upstream。
+- **第一方面板**：原版 Extensions loader 加载 `PureTavern Data Management`，来源为独立 `pure-tavern-first-party`；提供容量、模块、导出、导入预览、本地恢复/下载/删除可视化，不修改 upstream。
 - **Secrets**：默认不导出；显式选择仍是明文 ZIP，必须危险确认。
 - **可选后端预留**：浏览器与未来后端共用 `BackupTransport` 的 list/upload/download/delete 和同一 Archive；后端把归档作为 opaque object 保存，未来增量同步可基于 manifest/module/file hash 协商。
 - **验收**：模块测试覆盖 codec、安全限制、冲突、恢复点、journal、路由和 transport；production Chrome 完成面板打开、默认/含 Secrets 导出、preview、导入、破坏角色/聊天后恢复、下载和删除闭环。

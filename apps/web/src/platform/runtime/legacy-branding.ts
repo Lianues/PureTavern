@@ -36,7 +36,7 @@ export function installLegacyBranding(
       }
       element.alt = `${PRODUCT_NAME} Logo`;
       element.setAttribute('aria-label', `${PRODUCT_NAME} Logo`);
-      element.removeAttribute('data-i18n');
+      element.setAttribute('data-i18n', `[alt]${PRODUCT_NAME} Logo`);
     }
   };
 

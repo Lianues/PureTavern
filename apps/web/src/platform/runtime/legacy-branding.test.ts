@@ -29,7 +29,7 @@ describe('Legacy branding runtime', () => {
     const splash = document.querySelector<HTMLImageElement>('.splash-logo');
     expect(splash?.alt).toBe('PureTavern Logo');
     expect(splash?.getAttribute('aria-label')).toBe('PureTavern Logo');
-    expect(splash?.hasAttribute('data-i18n')).toBe(false);
+    expect(splash?.getAttribute('data-i18n')).toBe('[alt]PureTavern Logo');
 
     const panel = document.createElement('div');
     panel.innerHTML = `
@@ -45,7 +45,7 @@ describe('Legacy branding runtime', () => {
     const logo = panel.querySelector<HTMLImageElement>('.welcomeHeaderLogo');
     expect(new URL(logo?.src ?? '', window.location.href).pathname).toBe('/img/logo.png');
     expect(logo?.alt).toBe('PureTavern Logo');
-    expect(logo?.hasAttribute('data-i18n')).toBe(false);
+    expect(logo?.getAttribute('data-i18n')).toBe('[alt]PureTavern Logo');
     dispose();
   });
 });

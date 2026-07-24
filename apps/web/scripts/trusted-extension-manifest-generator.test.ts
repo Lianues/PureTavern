@@ -25,7 +25,7 @@ describe('generateTrustedExtensionManifest', () => {
         display_name: 'Browser Probe',
         js: 'index.js',
         version: '1.2.3',
-        author: 'Pure Tavern',
+        author: 'PureTavern',
       }),
       'utf8',
     );
@@ -40,7 +40,7 @@ describe('generateTrustedExtensionManifest', () => {
           legacyName: 'browser-probe',
           displayName: 'Browser Probe',
           version: '1.2.3',
-          author: 'Pure Tavern',
+          author: 'PureTavern',
           scriptPath: '/scripts/extensions/browser-probe/index.js',
           sourceHash: expect.stringMatching(/^[a-f0-9]{64}$/u),
         }),

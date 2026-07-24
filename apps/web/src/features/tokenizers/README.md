@@ -1,6 +1,6 @@
 # M15 Tokenizers — unified tokenx estimator
 
-Pure Tavern intentionally uses one lightweight tokenizer estimate for every model alias. The module
+PureTavern intentionally uses one lightweight tokenizer estimate for every model alias. The module
 uses `tokenx@1.3.x`, whose documented result is an approximately 96% accurate heuristic rather than
 a model vocabulary tokenizer.
 

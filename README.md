@@ -1,4 +1,4 @@
-# Pure Tavern
+# PureTavern
 
 一个以浏览器本地能力为默认实现、可选连接后端增强能力的酒馆项目。
 
@@ -13,7 +13,7 @@ pnpm dev
 
 默认地址由 Vite 输出。Web 页面不需要运行 `SillyTavern-1.18.0/server.js`。生产部署以 Build ID 管理静态运行时缓存：首次加载后，后续同版本页面直接从 CacheStorage 读取 JS/CSS/字体/配置，不再逐文件发起 ETag 校验；仅首页与版本探针保持动态检查。
 
-- `/`：原版 UI + 原版交互 + Pure Tavern Hook。
+- `/`：原版 UI + 原版交互 + PureTavern Hook。
 - `/modern.html`：Vue 3 现代模块/诊断入口。
 
 ## 当前浏览器能力
@@ -27,7 +27,7 @@ pnpm dev
 - Presets：11 类提示词预设、主题、Moving UI 与快捷回复由独立 M09 模块管理，默认内容通过构建清单增量初始化，不再由 Settings 存储拥有。
 - Assets：附件、用户图片、背景、persona 头像、sprites 与扩展资产使用通用 Blob/索引模块；共享 Service Worker 为原版 URL 提供本地资源响应；原版“从外部 URL 导入”可直接导入允许 CORS 的 PNG 角色卡。
 - Personas：原版 Persona UI 继续使用 Settings 与头像接口；M08 负责 stable identity、默认/当前选择、角色绑定、opaque descriptor 和删除降级。
-- Extensions：原版风险警告、管理 UI、manifest loader 和 same-context 插件模型保持不变；14 个 upstream 内置扩展、1 个 Pure Tavern 第一方数据管理扩展以及 GitHub/GitLab/direct ZIP 等支持浏览器 CORS 的第三方扩展均可运行，第三方代码能读取同源数据与密钥。
+- Extensions：原版风险警告、管理 UI、manifest loader 和 same-context 插件模型保持不变；14 个 upstream 内置扩展、1 个 PureTavern 第一方数据管理扩展以及 GitHub/GitLab/direct ZIP 等支持浏览器 CORS 的第三方扩展均可运行，第三方代码能读取同源数据与密钥。
 - Prompt Pipeline：原版 `openai.js`、PromptManager、宏、作者注和世界书注入作为唯一权威实现长期保留；不维护功能重复的 TypeScript 副本，生成后的 `generate_data` 直接交给 M12。
 - Tokenizers：原版同步/异步 tokenizer 路径统一桥接到 Web Worker/主线程 `tokenx` 近似计数；所有模型故意采用同一估算器，响应明确标记 `approximate`，pseudo token IDs 只用于 UI 兼容。
 - Secrets：原版密钥管理器的多值保存、查看、查找、轮换、重命名和删除已桥接到 IndexedDB，并通过 CredentialResolver 为 M12 预留入口；密钥按产品决策明文保存，不是安全 Vault。

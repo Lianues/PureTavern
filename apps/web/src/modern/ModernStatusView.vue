@@ -10,7 +10,7 @@ const databaseStatus = computed(() => bootstrapState?.database.status ?? 'unavai
 <template>
   <main class="modern-status">
     <section class="modern-status__card">
-      <p class="modern-status__eyebrow">Pure Tavern</p>
+      <p class="modern-status__eyebrow">PureTavern</p>
       <h1>现代模块诊断入口</h1>
       <p>
         当前产品首页由原版 SillyTavern DOM、CSS 和交互脚本负责。此页面仅承载后续 Vue

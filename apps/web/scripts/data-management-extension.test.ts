@@ -2,7 +2,7 @@ import { readFile } from 'node:fs/promises';
 
 import { describe, expect, it } from 'vitest';
 
-describe('Pure Tavern data management first-party extension', () => {
+describe('PureTavern data management first-party extension', () => {
   it('is declared as a separate first-party trusted Legacy extension with runtime assets', async () => {
     const [assets, manifestText, script, prepareScript] = await Promise.all([
       readFile('src/features/import-export/runtime-assets.json', 'utf8'),
@@ -13,7 +13,7 @@ describe('Pure Tavern data management first-party extension', () => {
     const manifest = JSON.parse(manifestText) as Record<string, unknown>;
 
     expect(manifest).toMatchObject({
-      display_name: 'Pure Tavern Data Management',
+      display_name: 'PureTavern Data Management',
       js: 'index.js',
       css: 'style.css',
     });

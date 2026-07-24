@@ -10,10 +10,10 @@ const RUNTIME_MARKER = 'data-pure-tavern-runtime="build-marker"';
 
 export function generateHookedIndex(upstreamIndex, buildId) {
   if (!BUILD_ID_PATTERN.test(buildId)) {
-    throw new TypeError('Pure Tavern build ID must be a safe 8-128 character identifier.');
+    throw new TypeError('PureTavern build ID must be a safe 8-128 character identifier.');
   }
   if (upstreamIndex.includes(HOOK_MARKER)) {
-    throw new Error('Upstream index unexpectedly already contains the Pure Tavern hook marker.');
+    throw new Error('Upstream index unexpectedly already contains the PureTavern hook marker.');
   }
   const anchorMatches = upstreamIndex.match(SCRIPT_ANCHOR_PATTERN) ?? [];
   if (anchorMatches.length !== 1) {

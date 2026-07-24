@@ -8,7 +8,7 @@
 浏览器访问 /
 └─ 生成的原版 index.html
    ├─ 原版 HTML / CSS / 静态资源
-   ├─ Pure Tavern Hook（唯一注入点）
+   ├─ PureTavern Hook（唯一注入点）
    ├─ 原版 jQuery / lib.js / script.js / scripts/**
    └─ Hook 提供的最小启动兼容响应
 
@@ -61,7 +61,7 @@ apps/web/
 3. `index.html` 和 `.generated/**` 都是派生物，任何手工修改都会在下次启动时丢失。
 4. 上游快照不参加 ESLint/Prettier；哈希清单负责检查误改。
 5. 不在原版文件里散落 patch，避免升级时人工合并数百个文件。
-6. 允许改动的优先级是：上游公开函数/导出/事件 → Pure Tavern Hook → 独立 CSS 或版本化 patch；禁止直接修改 `legacy/upstream/**`。
+6. 允许改动的优先级是：上游公开函数/导出/事件 → PureTavern Hook → 独立 CSS 或版本化 patch；禁止直接修改 `legacy/upstream/**`。
 7. Vue 只能挂载到隔离页面或明确移交所有权的功能岛，不能接管仍由原版 jQuery/ESM 控制的 DOM 子树。
 
 ## 3. 运行时生成过程

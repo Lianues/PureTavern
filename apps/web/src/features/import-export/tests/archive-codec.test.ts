@@ -46,7 +46,7 @@ async function encoded() {
   );
 }
 
-describe('Pure Tavern archive codec', () => {
+describe('PureTavern archive codec', () => {
   it('round-trips a versioned manifest and verifies every payload hash', async () => {
     const output = await encoded();
     const decoded = await decodeArchive(output.blob);

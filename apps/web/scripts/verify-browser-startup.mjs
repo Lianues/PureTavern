@@ -169,7 +169,7 @@ function createMockLegacyExtensionArchive(version) {
     dependencies: [],
     js: 'dist/index.js',
     css: 'dist/index.css',
-    author: 'Pure Tavern Browser Gate',
+    author: 'PureTavern Browser Gate',
     version,
     minimum_client_version: '1.12.13',
     hooks: {
@@ -510,7 +510,7 @@ try {
               height: logo.naturalHeight,
               alt: logo.alt,
               ariaLabel: logo.getAttribute('aria-label'),
-              hasI18n: logo.hasAttribute('data-i18n'),
+              i18n: logo.getAttribute('data-i18n'),
             }
           : null,
         systemAvatar,
@@ -1020,7 +1020,7 @@ try {
         originalRuntimeCount,
         manifestLoaded: manifest?.display_name === 'Regex',
         dataManagementManifestLoaded:
-          dataManagementManifest?.display_name === 'Pure Tavern Data Management',
+          dataManagementManifest?.display_name === 'PureTavern Data Management',
         dataManagementScriptLoaded,
         dataManagementStyleLoaded,
         dataManagementRuntimeInstalled:
@@ -3202,7 +3202,7 @@ try {
       brandingWorkflow?.logo?.height === 330 &&
       brandingWorkflow?.logo?.alt === 'PureTavern Logo' &&
       brandingWorkflow?.logo?.ariaLabel === 'PureTavern Logo' &&
-      brandingWorkflow?.logo?.hasI18n === false &&
+      brandingWorkflow?.logo?.i18n === '[alt]PureTavern Logo' &&
       brandingWorkflow?.systemAvatar?.ok === true &&
       brandingWorkflow?.systemAvatar?.width === 400 &&
       brandingWorkflow?.systemAvatar?.height === 600 &&

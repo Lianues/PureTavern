@@ -18,7 +18,7 @@ export class BrowserArchiveFileTransfer {
     if (preferFileSystem && picker) {
       const handle = await picker({
         suggestedName: exported.fileName,
-        types: [{ description: 'Pure Tavern backup', accept: { 'application/zip': ['.zip'] } }],
+        types: [{ description: 'PureTavern backup', accept: { 'application/zip': ['.zip'] } }],
       });
       const writable = await handle.createWritable();
       await writable.write(exported.blob);

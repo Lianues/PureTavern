@@ -104,7 +104,7 @@ export class ExtensionService {
           description:
             definition.description ??
             (definition.sourceKind === 'pure-tavern-first-party'
-              ? 'First-party extension shipped with Pure Tavern.'
+              ? 'First-party extension shipped with PureTavern.'
               : 'Trusted extension shipped in the audited upstream snapshot.'),
         },
         source: {

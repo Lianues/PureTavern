@@ -6,10 +6,10 @@
 
 ## 1. 架构决策
 
-Pure Tavern 将 SillyTavern 原版 UI/交互作为长期保留的上游兼容层，而不是把 Vue 重写设为默认终点：
+PureTavern 将 SillyTavern 原版 UI/交互作为长期保留的上游兼容层，而不是把 Vue 重写设为默认终点：
 
 - `/` 继续运行生成后的原版 `index.html`、原版 DOM、原版 CSS、jQuery 插件、`lib.js`、`script.js` 和 `scripts/**` 模块。
-- Pure Tavern 只通过唯一 Hook 注入点提供启动兼容、诊断和未来可迁移的数据能力桥接。
+- PureTavern 只通过唯一 Hook 注入点提供启动兼容、诊断和未来可迁移的数据能力桥接。
 - Vue 只用于 `/modern.html`、隔离的新页面或经过所有权切换的独立功能岛。
 - 同一个 DOM 子树不得同时由 Vue 和原版 jQuery/ESM 事件处理器管理。
 
