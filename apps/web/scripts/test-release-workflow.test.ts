@@ -16,7 +16,10 @@ interface TestReleaseWorkflow {
 
 describe('manual test release workflow', () => {
   it('builds every package before committing and publishing the marked test release', async () => {
-    const source = await readFile('../../.github/workflows/test-release.yml', 'utf8');
+    const [source, desktopSource] = await Promise.all([
+      readFile('../../.github/workflows/test-release.yml', 'utf8'),
+      readFile('../../.github/workflows/desktop-bundles.yml', 'utf8'),
+    ]);
     const workflow = parse(source) as TestReleaseWorkflow;
 
     expect(workflow.name).toBe('Build Test Release');
@@ -55,5 +58,13 @@ describe('manual test release workflow', () => {
     expect(source).not.toContain('is already committed');
     expect(source).toContain('--prerelease');
     expect(source).toContain('--notes-file release-notes.txt');
+    for (const workflowSource of [source, desktopSource]) {
+      expect(workflowSource).toContain('bundle/nsis/*.exe');
+      expect(workflowSource).toContain('bundle/dmg/*.dmg');
+      expect(workflowSource).toContain('bundle/appimage/*.AppImage');
+      expect(workflowSource).toContain('bundle/deb/*.deb');
+      expect(workflowSource).toContain('compression-level: 0');
+      expect(workflowSource).not.toContain('bundle/**/*');
+    }
   });
 });
