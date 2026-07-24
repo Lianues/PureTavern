@@ -1,0 +1,96 @@
+{
+  "module": "characters",
+  "legacyRequests": [
+    {
+      "method": "POST",
+      "pathname": "/api/characters/all",
+      "category": "browser-data-capability",
+      "responseKind": "indexeddb-character-list-json",
+      "migrationStatus": "browser-ready-characters"
+    },
+    {
+      "method": "POST",
+      "pathname": "/api/characters/get",
+      "category": "browser-data-capability",
+      "responseKind": "indexeddb-character-detail-json",
+      "migrationStatus": "browser-ready-characters"
+    },
+    {
+      "method": "POST",
+      "pathname": "/api/characters/create",
+      "category": "browser-data-capability",
+      "responseKind": "indexeddb-character-create-avatar-text",
+      "migrationStatus": "browser-ready-characters"
+    },
+    {
+      "method": "POST",
+      "pathname": "/api/characters/rename",
+      "category": "browser-data-capability",
+      "responseKind": "indexeddb-character-rename-json",
+      "migrationStatus": "browser-ready-characters"
+    },
+    {
+      "method": "POST",
+      "pathname": "/api/characters/edit",
+      "category": "browser-data-capability",
+      "responseKind": "indexeddb-character-edit-ok",
+      "migrationStatus": "browser-ready-characters"
+    },
+    {
+      "method": "POST",
+      "pathname": "/api/characters/edit-avatar",
+      "category": "browser-data-capability",
+      "responseKind": "indexeddb-character-avatar-edit-ok",
+      "migrationStatus": "browser-ready-characters"
+    },
+    {
+      "method": "POST",
+      "pathname": "/api/characters/edit-attribute",
+      "category": "browser-data-capability",
+      "responseKind": "indexeddb-character-attribute-edit-ok",
+      "migrationStatus": "browser-ready-characters"
+    },
+    {
+      "method": "POST",
+      "pathname": "/api/characters/merge-attributes",
+      "category": "browser-data-capability",
+      "responseKind": "indexeddb-character-attribute-merge-ok-or-summary-json",
+      "migrationStatus": "browser-ready-characters"
+    },
+    {
+      "method": "POST",
+      "pathname": "/api/characters/delete",
+      "category": "browser-data-capability",
+      "responseKind": "indexeddb-character-delete-ok",
+      "migrationStatus": "browser-ready-characters"
+    },
+    {
+      "method": "POST",
+      "pathname": "/api/characters/chats",
+      "category": "data-capability-pending-migration",
+      "responseKind": "empty-chat-list-json",
+      "migrationStatus": "m05-pending-empty-compatibility"
+    },
+    {
+      "method": "POST",
+      "pathname": "/api/characters/import",
+      "category": "browser-data-capability",
+      "responseKind": "json-png-character-import-json",
+      "migrationStatus": "browser-ready-characters"
+    },
+    {
+      "method": "POST",
+      "pathname": "/api/characters/duplicate",
+      "category": "browser-data-capability",
+      "responseKind": "indexeddb-character-duplicate-json",
+      "migrationStatus": "browser-ready-characters"
+    },
+    {
+      "method": "POST",
+      "pathname": "/api/characters/export",
+      "category": "browser-data-capability",
+      "responseKind": "json-png-character-export-blob",
+      "migrationStatus": "browser-ready-characters"
+    }
+  ]
+}

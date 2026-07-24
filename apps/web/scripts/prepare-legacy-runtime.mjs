@@ -19,6 +19,7 @@ const upstreamDefaultSettings = path.join(upstreamDefaultContentRoot, 'settings.
 const upstreamMetadataPath = path.join(packageRoot, 'legacy', 'upstream.json');
 const generatedPublicRoot = path.join(packageRoot, '.generated', 'public');
 const generatedIndexPath = path.join(packageRoot, 'index.html');
+const featuresRoot = path.join(packageRoot, 'src', 'features');
 
 const RUNTIME_EXCLUDES = new Set(['index.html', 'UPSTREAM_LICENSE', 'UPSTREAM_SOURCE.md']);
 
@@ -61,6 +62,7 @@ export async function prepareLegacyRuntime() {
     path.join(generatedPublicRoot, 'backgrounds'),
     { recursive: true, force: true },
   );
+  await copyFeatureRuntimeAssets();
 
   await build({
     entryPoints: [path.join(upstreamPublicRoot, 'lib.js')],
@@ -90,6 +92,58 @@ export async function prepareLegacyRuntime() {
   await writeFile(path.join(generatedPublicRoot, 'index.html'), generatedIndex, 'utf8');
   console.log(
     `Prepared Legacy runtime: ${path.relative(packageRoot, generatedIndexPath)} + ${path.relative(packageRoot, generatedPublicRoot)}`,
+  );
+}
+
+async function copyFeatureRuntimeAssets() {
+  let entries;
+  try {
+    entries = await readdir(featuresRoot, { withFileTypes: true });
+  } catch {
+    return;
+  }
+
+  for (const entry of entries.filter((item) => item.isDirectory())) {
+    const manifestPath = path.join(featuresRoot, entry.name, 'runtime-assets.json');
+    let manifest;
+    try {
+      manifest = JSON.parse(await readFile(manifestPath, 'utf8'));
+    } catch (error) {
+      if (error && error.code === 'ENOENT') continue;
+      throw error;
+    }
+
+    if (!Array.isArray(manifest.assets)) {
+      throw new Error(`Invalid runtime asset manifest: ${manifestPath}`);
+    }
+
+    for (const asset of manifest.assets) {
+      if (!asset || typeof asset.source !== 'string' || typeof asset.publicPath !== 'string') {
+        throw new Error(`Invalid runtime asset entry in ${manifestPath}`);
+      }
+      if (path.isAbsolute(asset.source) || path.isAbsolute(asset.publicPath)) {
+        throw new Error(`Runtime asset paths must be relative: ${manifestPath}`);
+      }
+
+      const sourcePath = path.resolve(featuresRoot, entry.name, asset.source);
+      const targetPath = path.resolve(generatedPublicRoot, asset.publicPath);
+      const featureRoot = path.resolve(featuresRoot, entry.name);
+      const generatedRoot = path.resolve(generatedPublicRoot);
+
+      if (!isPathInside(sourcePath, featureRoot) || !isPathInside(targetPath, generatedRoot)) {
+        throw new Error(`Runtime asset path escapes its allowed root: ${manifestPath}`);
+      }
+
+      await mkdir(path.dirname(targetPath), { recursive: true });
+      await cp(sourcePath, targetPath, { recursive: true, force: true });
+    }
+  }
+}
+
+function isPathInside(candidate, root) {
+  const relative = path.relative(root, candidate);
+  return (
+    relative === '' || (!!relative && !relative.startsWith('..') && !path.isAbsolute(relative))
   );
 }
 

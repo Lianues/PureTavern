@@ -585,6 +585,255 @@ try {
     settingsSnapshotWorkflow.restoredValue = snapshot?.fastUiMode ?? null;
   }
 
+  const characterCreateEditEvaluation = await client.send('Runtime.evaluate', {
+    expression: `(async () => {
+      const scriptModule = await import('/script.js');
+      const jsonHeaders = scriptModule.getRequestHeaders();
+      const formHeaders = scriptModule.getRequestHeaders({ omitContentType: true });
+      const routeHandled = (pathname) =>
+        globalThis.__PURE_TAVERN__?.diagnostics.requests.some(
+          (request) => request.pathname === pathname && request.handled,
+        ) ?? false;
+
+      const form = new FormData();
+      form.append('ch_name', 'Browser Alice');
+      form.append('description', 'Created in the browser verification flow.');
+      form.append('first_mes', 'Hello from Browser Alice.');
+      form.append('creator_notes', 'Pure frontend test card.');
+      form.append('talkativeness', '0.5');
+      form.append('fav', 'false');
+      form.append('json_data', '{}');
+      const createResponse = await fetch('/api/characters/create', {
+        method: 'POST',
+        headers: formHeaders,
+        body: form,
+        cache: 'no-cache',
+      });
+      const createdAvatar = createResponse.ok ? await createResponse.text() : '';
+
+      const listAfterCreateResponse = await fetch('/api/characters/all', {
+        method: 'POST',
+        headers: jsonHeaders,
+        body: JSON.stringify({}),
+      });
+      const listAfterCreate = listAfterCreateResponse.ok ? await listAfterCreateResponse.json() : [];
+      await scriptModule.getCharacters();
+      await new Promise((resolve) => setTimeout(resolve, 250));
+      const listCard = [...document.querySelectorAll('#rm_print_characters_block .character_select')]
+        .find((element) => element.querySelector('img')?.getAttribute('alt') === 'Browser Alice');
+      const listCardImage = listCard?.querySelector('img') ?? null;
+      const thumbnailResponse = createdAvatar
+        ? await fetch('/thumbnail?type=avatar&file=' + encodeURIComponent(createdAvatar) + '&t=' + Date.now(), { cache: 'reload' })
+        : null;
+      const directAvatarResponse = createdAvatar
+        ? await fetch('/characters/' + encodeURIComponent(createdAvatar), { cache: 'reload' })
+        : null;
+
+      const editForm = new FormData();
+      editForm.append('avatar_url', createdAvatar);
+      editForm.append('ch_name', 'Browser Alice');
+      editForm.append('description', 'Edited in the browser verification flow.');
+      editForm.append('first_mes', 'Edited first message.');
+      editForm.append('chat', 'Browser Alice - verification');
+      editForm.append('create_date', '2026-01-01T00:00:00.000Z');
+      editForm.append('talkativeness', '0.65');
+      editForm.append('fav', 'false');
+      editForm.append('json_data', '{}');
+      const editResponse = await fetch('/api/characters/edit', {
+        method: 'POST',
+        headers: formHeaders,
+        body: editForm,
+        cache: 'no-cache',
+      });
+
+      const getAfterEditResponse = await fetch('/api/characters/get', {
+        method: 'POST',
+        headers: jsonHeaders,
+        body: JSON.stringify({ avatar_url: createdAvatar }),
+      });
+      const getAfterEdit = getAfterEditResponse.ok ? await getAfterEditResponse.json() : null;
+
+      return {
+        createdAvatar,
+        createOk: createResponse.ok,
+        listAfterCreateHasCard: listAfterCreate.some((character) => character.avatar === createdAvatar),
+        legacyListDomHasCard: Boolean(listCard),
+        legacyListImageUsesThumbnail: listCardImage?.getAttribute('src')?.startsWith('/thumbnail?type=avatar&file=') ?? false,
+        thumbnailOk: thumbnailResponse?.ok ?? false,
+        thumbnailAssetSource: thumbnailResponse?.headers.get('X-Pure-Tavern-Asset') ?? null,
+        directAvatarOk: directAvatarResponse?.ok ?? false,
+        directAvatarAssetSource: directAvatarResponse?.headers.get('X-Pure-Tavern-Asset') ?? null,
+        editOk: editResponse.ok,
+        editedDescription: getAfterEdit?.description ?? null,
+        editedChat: getAfterEdit?.chat ?? null,
+        routesHandled: {
+          create: routeHandled('/api/characters/create'),
+          all: routeHandled('/api/characters/all'),
+          get: routeHandled('/api/characters/get'),
+          edit: routeHandled('/api/characters/edit'),
+        },
+        serviceWorkerController: Boolean(navigator.serviceWorker?.controller),
+        storage: globalThis.__PURE_TAVERN__?.features?.characters?.storage
+          ? { ...globalThis.__PURE_TAVERN__.features.characters.storage }
+          : null,
+        assets: globalThis.__PURE_TAVERN__?.features?.characters?.assets
+          ? { ...globalThis.__PURE_TAVERN__.features.characters.assets }
+          : null,
+        service: globalThis.__PURE_TAVERN__?.features?.characters?.service
+          ? { ...globalThis.__PURE_TAVERN__.features.characters.service }
+          : null,
+      };
+    })()`,
+    awaitPromise: true,
+    returnByValue: true,
+  });
+  const characterCreateEdit = characterCreateEditEvaluation.result?.value;
+
+  await client.send('Page.navigate', { url: appUrl });
+  snapshot = await waitForApplicationSnapshot();
+
+  const characterPostReloadEvaluation = await client.send('Runtime.evaluate', {
+    expression: `(async () => {
+      const createdAvatar = ${JSON.stringify(characterCreateEdit?.createdAvatar ?? '')};
+      const scriptModule = await import('/script.js');
+      const jsonHeaders = scriptModule.getRequestHeaders();
+      const formHeaders = scriptModule.getRequestHeaders({ omitContentType: true });
+      const routeHandled = (pathname) =>
+        globalThis.__PURE_TAVERN__?.diagnostics.requests.some(
+          (request) => request.pathname === pathname && request.handled,
+        ) ?? false;
+      const postJson = (pathname, body) => fetch(pathname, {
+        method: 'POST',
+        headers: jsonHeaders,
+        body: JSON.stringify(body),
+        cache: 'no-cache',
+      });
+
+      const getAfterReloadResponse = createdAvatar
+        ? await postJson('/api/characters/get', { avatar_url: createdAvatar })
+        : null;
+      const getAfterReload = getAfterReloadResponse?.ok ? await getAfterReloadResponse.json() : null;
+
+      const duplicateResponse = createdAvatar
+        ? await postJson('/api/characters/duplicate', { avatar_url: createdAvatar })
+        : null;
+      const duplicateData = duplicateResponse?.ok ? await duplicateResponse.json() : null;
+      const duplicateAvatar = duplicateData?.path ?? '';
+
+      const renameResponse = duplicateAvatar
+        ? await postJson('/api/characters/rename', {
+            avatar_url: duplicateAvatar,
+            new_name: 'Browser Alice Renamed',
+          })
+        : null;
+      const renameData = renameResponse?.ok ? await renameResponse.json() : null;
+      const renamedAvatar = renameData?.avatar ?? '';
+
+      const exportJsonResponse = createdAvatar
+        ? await postJson('/api/characters/export', { avatar_url: createdAvatar, format: 'json' })
+        : null;
+      const exportJsonText = exportJsonResponse?.ok ? await exportJsonResponse.text() : '';
+      let exportJsonName = null;
+      let exportJsonHasNoChat = false;
+      try {
+        const exported = JSON.parse(exportJsonText || '{}');
+        exportJsonName = exported?.data?.name ?? exported?.name ?? null;
+        exportJsonHasNoChat = !Object.prototype.hasOwnProperty.call(exported, 'chat');
+      } catch {
+        exportJsonName = null;
+      }
+
+      const exportPngResponse = createdAvatar
+        ? await postJson('/api/characters/export', { avatar_url: createdAvatar, format: 'png' })
+        : null;
+      const exportPngBlob = exportPngResponse?.ok ? await exportPngResponse.blob() : null;
+      const exportPngHeader = exportPngBlob
+        ? Array.from(new Uint8Array(await exportPngBlob.slice(0, 8).arrayBuffer()))
+        : [];
+
+      const importJsonForm = new FormData();
+      importJsonForm.append('avatar', new File([exportJsonText], 'browser-alice.json', { type: 'application/json' }));
+      importJsonForm.append('file_type', 'json');
+      const importJsonResponse = exportJsonText
+        ? await fetch('/api/characters/import', {
+            method: 'POST',
+            headers: formHeaders,
+            body: importJsonForm,
+            cache: 'no-cache',
+          })
+        : null;
+      const importJsonData = importJsonResponse?.ok ? await importJsonResponse.json() : null;
+
+      const importPngForm = new FormData();
+      if (exportPngBlob) {
+        importPngForm.append('avatar', new File([exportPngBlob], 'browser-alice.png', { type: 'image/png' }));
+        importPngForm.append('file_type', 'png');
+      }
+      const importPngResponse = exportPngBlob
+        ? await fetch('/api/characters/import', {
+            method: 'POST',
+            headers: formHeaders,
+            body: importPngForm,
+            cache: 'no-cache',
+          })
+        : null;
+      const importPngData = importPngResponse?.ok ? await importPngResponse.json() : null;
+
+      const avatarsToDelete = [
+        createdAvatar,
+        renamedAvatar,
+        importJsonData?.file_name ? importJsonData.file_name + '.png' : '',
+        importPngData?.file_name ? importPngData.file_name + '.png' : '',
+      ].filter(Boolean);
+      const deleteResults = [];
+      for (const avatar of avatarsToDelete) {
+        const response = await postJson('/api/characters/delete', { avatar_url: avatar, delete_chats: true });
+        deleteResults.push({ avatar, ok: response.ok });
+      }
+      const listAfterDeleteResponse = await postJson('/api/characters/all', {});
+      const listAfterDelete = listAfterDeleteResponse.ok ? await listAfterDeleteResponse.json() : [];
+
+      return {
+        getAfterReloadOk: getAfterReloadResponse?.ok ?? false,
+        reloadedDescription: getAfterReload?.description ?? null,
+        reloadedChat: getAfterReload?.chat ?? null,
+        duplicateOk: duplicateResponse?.ok ?? false,
+        duplicateAvatar,
+        renameOk: renameResponse?.ok ?? false,
+        renamedAvatar,
+        exportJsonOk: exportJsonResponse?.ok ?? false,
+        exportJsonName,
+        exportJsonHasNoChat,
+        exportPngOk: exportPngResponse?.ok ?? false,
+        exportPngIsPng: JSON.stringify(exportPngHeader) === '[137,80,78,71,13,10,26,10]',
+        importJsonOk: importJsonResponse?.ok ?? false,
+        importJsonFileName: importJsonData?.file_name ?? null,
+        importPngOk: importPngResponse?.ok ?? false,
+        importPngFileName: importPngData?.file_name ?? null,
+        deleteResults,
+        listAfterDeleteEmpty: listAfterDelete.length === 0,
+        routesHandled: {
+          duplicate: routeHandled('/api/characters/duplicate'),
+          rename: routeHandled('/api/characters/rename'),
+          export: routeHandled('/api/characters/export'),
+          import: routeHandled('/api/characters/import'),
+          delete: routeHandled('/api/characters/delete'),
+        },
+      };
+    })()`,
+    awaitPromise: true,
+    returnByValue: true,
+  });
+  const characterPostReload = characterPostReloadEvaluation.result?.value;
+  const characterWorkflow = {
+    ...(characterCreateEdit ?? {}),
+    ...(characterPostReload ?? {}),
+    routesHandled: {
+      ...(characterCreateEdit?.routesHandled ?? {}),
+      ...(characterPostReload?.routesHandled ?? {}),
+    },
+  };
+
   // Allow animations, nested CSS imports, fonts, and images to finish so late failures are included.
   await new Promise((resolve) => setTimeout(resolve, 750));
 
@@ -631,6 +880,37 @@ try {
       settingsSnapshotWorkflow?.valueAfterSnapshot === settingsPersistence?.initialValue &&
       settingsSnapshotWorkflow?.restoreRequested === true &&
       settingsSnapshotWorkflow?.restoredValue === settingsPersistence?.targetValue,
+    charactersStorageReady:
+      characterWorkflow?.storage?.status === 'ready' &&
+      characterWorkflow?.storage?.backend === 'indexeddb' &&
+      characterWorkflow?.assets?.status === 'ready' &&
+      characterWorkflow?.assets?.backend === 'indexeddb',
+    characterBrowserCrudWorkflow:
+      characterWorkflow?.createOk === true &&
+      characterWorkflow?.listAfterCreateHasCard === true &&
+      characterWorkflow?.legacyListDomHasCard === true &&
+      characterWorkflow?.legacyListImageUsesThumbnail === true &&
+      characterWorkflow?.thumbnailOk === true &&
+      characterWorkflow?.thumbnailAssetSource === 'characters/avatar' &&
+      characterWorkflow?.directAvatarOk === true &&
+      characterWorkflow?.directAvatarAssetSource === 'characters/avatar' &&
+      characterWorkflow?.editOk === true &&
+      characterWorkflow?.editedDescription === 'Edited in the browser verification flow.' &&
+      characterWorkflow?.getAfterReloadOk === true &&
+      characterWorkflow?.reloadedDescription === 'Edited in the browser verification flow.' &&
+      characterWorkflow?.duplicateOk === true &&
+      characterWorkflow?.renameOk === true &&
+      characterWorkflow?.exportJsonOk === true &&
+      characterWorkflow?.exportJsonName === 'Browser Alice' &&
+      characterWorkflow?.exportJsonHasNoChat === true &&
+      characterWorkflow?.exportPngOk === true &&
+      characterWorkflow?.exportPngIsPng === true &&
+      characterWorkflow?.importJsonOk === true &&
+      characterWorkflow?.importPngOk === true &&
+      characterWorkflow?.deleteResults?.length >= 4 &&
+      characterWorkflow.deleteResults.every((result) => result.ok) &&
+      characterWorkflow?.listAfterDeleteEmpty === true &&
+      Object.values(characterWorkflow?.routesHandled ?? {}).every(Boolean),
     upstreamMetadataLoaded:
       typeof snapshot?.upstreamVersion === 'string' && snapshot.upstreamVersion !== 'loading',
     documentComplete: snapshot?.documentReadyState === 'complete',
@@ -674,6 +954,7 @@ try {
     moduleContracts,
     settingsPersistence,
     settingsSnapshotWorkflow,
+    characterWorkflow,
     requestCount: requests.length,
     localScriptRequestCount: localScriptRequests.length,
     compatibilityNetworkRequests,

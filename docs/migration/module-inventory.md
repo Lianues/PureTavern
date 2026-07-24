@@ -164,7 +164,7 @@ features/<module>/
 ## M04 — Characters / 角色与角色卡
 
 - **优先级**：P1
-- **初始状态**：`inventory`
+- **当前状态**：`completed`（纯前端范围：角色卡 CRUD、头像、导入导出与原版 UI 闭环）
 - **原始前端**：
   - `public/script.js`
   - `public/scripts/char-data.js`
@@ -175,12 +175,17 @@ features/<module>/
   - `src/validator/TavernCardValidator.js`
 - **原始接口**：`create`、`rename`、`edit`、`edit-avatar`、`edit-attribute`、`merge-attributes`、`delete`、`all`、`get`、`chats`、`import`、`duplicate`、`export`。
 - **目标 Port**：`CharacterRepository`、`CharacterCardCodec`、`CharacterAssetRepository`。
+- **已实现 Port/模块**：`apps/web/src/features/characters/**`，中央仅在 `features/registry.ts` 注册 `charactersFeature`。
 - **浏览器实现**：
-  - 元数据 IndexedDB；
-  - 头像/原始卡片 OPFS 或 Blob；
-  - PNG `chara`/`ccv3` chunk 使用 `Uint8Array` 解析；
-  - JSON/V2/V3 导入导出。
-- **可选后端**：角色同步、大文件存储、共享角色库。
+  - 元数据使用通用 `records`：`characters / cards / <stable-id>`；头像与原始导入文件使用通用 `blobs`：`characters / avatars / <avatar-file>`、`characters / raw-cards / <id>`；
+  - `CharacterCardCodec` 支持 Legacy JSON、Character Card V2/V3，PNG `chara`/`ccv3` tEXt chunk 使用 `Uint8Array` 边界检查解析，导出 PNG 时写回 `chara` 与可生成的 `ccv3`；
+  - Legacy routes 覆盖 `all/get/create/edit/rename/edit-avatar/edit-attribute/merge-attributes/delete/import/duplicate/export`，同时支持原版 multipart FormData 与 JSON create；
+  - 角色文件名与显示名解耦：重命名生成新的唯一 avatar key 并迁移 Blob，不依赖显示名找头像；
+  - 模块声明 `runtime-assets.json`，构建脚本自动复制 `characters-service-worker.js`；Service Worker 只处理 `/thumbnail?type=avatar&file=...` 与 `/characters/<file>`，其它请求继续走网络；
+  - `/api/characters/chats` 保持空列表兼容，真实聊天迁移归 M05。
+- **验收**：Vitest 覆盖 Repository、Blob、V2/V3、PNG chunk、CRUD、重复、导入导出和错误响应；真实 Chrome 门禁通过原版 UI/接口流创建、列表 DOM、头像加载、编辑后刷新保留、复制、重命名、JSON/PNG 导入导出和删除，并保持零 404、零异常、零意外兼容网络请求。
+- **Service Worker 生命周期/清站点数据**：首次安装后由 `navigator.serviceWorker.ready` 等待可用；清站点数据会同时清除 IndexedDB 与 Service Worker，下一次启动重新安装并从空角色库开始。
+- **可选后端**：未来可通过相同 Port 添加角色同步、大文件存储或共享角色库；本阶段不启动 Node 服务端。
 - **依赖**：M02、M13。
 - **删除影响**：核心单人聊天依赖角色；匿名聊天模式可作为降级方案。
 
@@ -322,7 +327,7 @@ features/<module>/
 ## M13 — Assets / 文件、图片、背景与附件
 
 - **优先级**：P1
-- **初始状态**：`inventory`
+- **当前状态**：`browser-ready-foundation`（通用 Blob/模块 runtime-assets 解析基础已完成；背景、附件、sprites 等具体资产仍属各后续模块）
 - **原始前端**：
   - `public/scripts/backgrounds.js`
   - `public/scripts/chats.js` 的附件逻辑
@@ -335,7 +340,11 @@ features/<module>/
   - `src/endpoints/avatars.js`
   - `src/endpoints/sprites.js`
 - **目标 Port**：`BlobRepository`、`AssetIndex`、`ImageProcessor`。
-- **浏览器实现**：OPFS 优先、IndexedDB Blob 回退、Object URL 生命周期管理。
+- **浏览器实现**：
+  - 固定通用 `blobs` Object Store 已在 M02 完成，模块使用命名空间 collection 存放二进制与 JSON metadata，不新增 IndexedDB Object Store 或数据库版本；
+  - `prepare-legacy-runtime.mjs` 自动扫描 `features/*/runtime-assets.json` 并复制模块 runtime assets，避免为每个功能修改中央构建脚本；
+  - Characters 已使用该基础提供头像 Service Worker 与 PNG/JSON Blob 往返验证。
+- **未迁移范围**：背景、聊天附件、用户图片、sprites、通用文件管理与图片处理仍在各自模块中后续完成。
 - **可选后端**：远程 Blob/S3/WebDAV Adapter。
 - **依赖**：M02。
 - **删除影响**：媒体子模块可删；文本聊天仍应工作。
