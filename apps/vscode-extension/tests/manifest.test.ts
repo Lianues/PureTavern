@@ -36,6 +36,9 @@ describe('PureTavern VS Code extension manifest', () => {
     expect(source).toContain('this.#panel.reveal');
     expect(source).toContain("'media', 'pt-tab-light.svg'");
     expect(source).toContain("'media', 'pt-tab-dark.svg'");
-    expect(source).toContain('portMapping');
+    expect(source).toContain('vscode.env.asExternalUri');
+    expect(source).toContain('Loading PureTavern…');
+    expect(source).not.toContain('portMapping');
+    expect(source).not.toContain('workbench.action.closeSidebar');
   });
 });
