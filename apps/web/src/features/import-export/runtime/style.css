@@ -14,7 +14,8 @@
 
 #pure-tavern-data-management-entry button,
 #pure-tavern-data-management-dialog button,
-#pure-tavern-data-management-dialog .ptdm-file-picker {
+#pure-tavern-data-management-dialog .ptdm-file-picker,
+.ptdm-confirm-dialog button {
   width: auto !important;
   min-width: max-content;
   flex: 0 0 auto;
@@ -119,6 +120,32 @@
   overflow: auto;
   padding: 0.75rem;
   background: rgb(0 0 0 / 20%);
+}
+
+.ptdm-confirm-dialog {
+  width: min(440px, 90vw);
+  color: var(--SmartThemeBodyColor);
+  background: var(--SmartThemeBlurTintColor);
+  border: 1px solid var(--SmartThemeBorderColor);
+  border-radius: 10px;
+  padding: 0;
+}
+
+.ptdm-confirm-dialog::backdrop {
+  background: rgb(0 0 0 / 70%);
+}
+
+.ptdm-confirm-body {
+  padding: 1rem;
+}
+
+.ptdm-confirm-body h3 {
+  margin-top: 0;
+}
+
+.ptdm-confirm-actions {
+  justify-content: flex-end;
+  margin-top: 1rem;
 }
 
 .ptdm-hidden {

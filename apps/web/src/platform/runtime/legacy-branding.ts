@@ -6,6 +6,16 @@ const VERSION_SELECTORS = [
   '#version_display_welcome',
 ].join(',');
 const LOGO_SELECTORS = ['.welcomeHeaderLogo', '.splash-logo'].join(',');
+const UPSTREAM_REPOSITORY_SELECTORS = [
+  'a[href="https://github.com/SillyTavern/SillyTavern"]',
+  'a[href="https://github.com/SillyTavern/SillyTavern/"]',
+].join(',');
+const UPSTREAM_DISCORD_SELECTORS = [
+  'a[href="https://discord.gg/sillytavern"]',
+  'a[href="https://discord.gg/sillytavern/"]',
+].join(',');
+const PRODUCT_REPOSITORY_URL = 'https://github.com/Lianues/PureTavern';
+const PRODUCT_DISCORD_URL = 'https://discord.gg/w5kB9ahuFA';
 
 export interface LegacyBrandingMetadata {
   version: string;
@@ -37,6 +47,12 @@ export function installLegacyBranding(
       element.alt = `${PRODUCT_NAME} Logo`;
       element.setAttribute('aria-label', `${PRODUCT_NAME} Logo`);
       element.setAttribute('data-i18n', `[alt]${PRODUCT_NAME} Logo`);
+    }
+    for (const element of selectElements(root, UPSTREAM_REPOSITORY_SELECTORS)) {
+      if (element instanceof HTMLAnchorElement) element.href = PRODUCT_REPOSITORY_URL;
+    }
+    for (const element of selectElements(root, UPSTREAM_DISCORD_SELECTORS)) {
+      if (element instanceof HTMLAnchorElement) element.href = PRODUCT_DISCORD_URL;
     }
   };
 

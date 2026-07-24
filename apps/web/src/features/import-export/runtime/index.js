@@ -1,4 +1,4 @@
-/* global fetch, document, console, URL, setTimeout, confirm, location, FormData */
+/* global fetch, document, console, URL, setTimeout, location, FormData */
 
 const API = '/api/backups/archive';
 const state = { inspection: null, selectedFile: null, preview: null };
@@ -47,6 +47,43 @@ function includeSecrets() {
 
 function notify(type, message) {
   globalThis.toastr?.[type]?.(message);
+}
+
+function confirmAction(message, options = {}) {
+  const { confirmLabel = '确定', danger = false } = options;
+  return new Promise((resolve) => {
+    const dialog = document.createElement('dialog');
+    dialog.className = 'ptdm-confirm-dialog';
+    dialog.innerHTML = `
+      <div class="ptdm-confirm-body">
+        <h3>请确认</h3>
+        <p></p>
+        <div class="ptdm-toolbar ptdm-confirm-actions">
+          <button type="button" class="menu_button" data-action="cancel">取消</button>
+          <button type="button" class="menu_button${danger ? ' ptdm-danger' : ''}" data-action="confirm"></button>
+        </div>
+      </div>`;
+    dialog.querySelector('p').textContent = message;
+    dialog.querySelector('[data-action="confirm"]').textContent = confirmLabel;
+    document.body.appendChild(dialog);
+
+    let settled = false;
+    const finish = (confirmed) => {
+      if (settled) return;
+      settled = true;
+      if (dialog.open) dialog.close();
+      dialog.remove();
+      resolve(confirmed);
+    };
+    dialog.querySelector('[data-action="cancel"]').addEventListener('click', () => finish(false));
+    dialog.querySelector('[data-action="confirm"]').addEventListener('click', () => finish(true));
+    dialog.addEventListener('cancel', (event) => {
+      event.preventDefault();
+      finish(false);
+    });
+    dialog.addEventListener('close', () => finish(false));
+    dialog.showModal();
+  });
 }
 
 async function refresh() {
@@ -304,7 +341,8 @@ async function downloadBackup(id) {
 }
 
 async function deleteBackup(id) {
-  if (!confirm('确定删除这个本地恢复点吗？')) return;
+  if (!(await confirmAction('确定删除这个本地恢复点吗？', { confirmLabel: '删除', danger: true })))
+    return;
   try {
     await postJson(`${API}/local/delete`, { id });
     await refresh();
@@ -314,7 +352,7 @@ async function deleteBackup(id) {
 }
 
 async function restoreBackup(id) {
-  if (!confirm('恢复会修改当前数据，并自动创建恢复前快照。是否继续？')) return;
+  if (!(await confirmAction('恢复会修改当前数据，并自动创建恢复前快照。是否继续？'))) return;
   try {
     const report = await postJson(`${API}/local/restore`, {
       id,
@@ -356,7 +394,7 @@ async function previewImport(file) {
 
 async function importArchive() {
   if (!state.selectedFile) return;
-  if (!confirm('导入前会自动创建恢复点。确定继续吗？')) return;
+  if (!(await confirmAction('导入前会自动创建恢复点。确定继续吗？'))) return;
   const form = new FormData();
   form.set('file', state.selectedFile);
   form.set('includeSecrets', String(includeSecrets()));
@@ -440,10 +478,13 @@ function createUi() {
       notify('error', error.message);
     }
   });
-  dialog.querySelector('#ptdm-include-secrets').addEventListener('change', (event) => {
+  dialog.querySelector('#ptdm-include-secrets').addEventListener('change', async (event) => {
     if (
       event.target.checked &&
-      !confirm('Secrets 会以明文写入 ZIP。任何取得文件的人都能读取。确定吗？')
+      !(await confirmAction('Secrets 会以明文写入 ZIP。任何取得文件的人都能读取。确定吗？', {
+        confirmLabel: '仍然包含',
+        danger: true,
+      }))
     ) {
       event.target.checked = false;
     }

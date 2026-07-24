@@ -32,6 +32,9 @@ describe('PureTavern data management first-party extension', () => {
     expect(script).toContain('Web 页面无法确认文件是否写入');
     expect(script).toContain("notifySavedFile('数据归档已导出', saved)");
     expect(script).toContain("notifySavedFile('恢复点已导出', saved)");
+    expect(script).toContain('function confirmAction');
+    expect(script).toContain('ptdm-confirm-dialog');
+    expect(script).not.toContain('confirm(');
     expect(prepareScript).toContain("extensionId: 'pure-tavern.data-management'");
     expect(prepareScript).toContain("sourceKind: 'pure-tavern-first-party'");
   });
