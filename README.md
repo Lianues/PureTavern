@@ -22,11 +22,12 @@ pnpm dev
 - Characters：角色 CRUD、头像、重命名、复制以及 JSON/PNG Character Card V2/V3 导入导出已接入原版 UI。
 - Chats：单角色聊天、消息、搜索、recent、重命名、删除和 JSONL/多格式导入导出已本地持久化；群聊仍属 M06。
 - Stats：原版用户/角色统计 UI 继续运行，完整统计文档由 IndexedDB 保存；增量 update 不阻塞聊天，recreate 可从 M05 消息重建词数、消息、swipe、时间和体积指标。
+- Import / Export / Backup：第一方数据管理扩展提供全模块容量、版本化 ZIP 导出、hash/冲突预览、四种导入策略和本地恢复点；Secrets 默认排除。共享 Archive Contract 与 `BackupTransport` 可直接接未来可选后端。
 - World Books：原版编辑器、导入、角色卡嵌入 lore 和原版匹配算法继续运行，文档由 M07 IndexedDB 模块提供。
 - Presets：11 类提示词预设、主题、Moving UI 与快捷回复由独立 M09 模块管理，默认内容通过构建清单增量初始化，不再由 Settings 存储拥有。
 - Assets：附件、用户图片、背景、persona 头像、sprites 与扩展资产使用通用 Blob/索引模块；共享 Service Worker 为原版 URL 提供本地资源响应。
 - Personas：原版 Persona UI 继续使用 Settings 与头像接口；M08 负责 stable identity、默认/当前选择、角色绑定、opaque descriptor 和删除降级。
-- Extensions：原版风险警告、管理 UI、manifest loader 和 same-context 插件模型保持不变；14 个内置扩展以及 GitHub/GitLab/direct ZIP 等支持浏览器 CORS 的第三方扩展均可安装、更新、切换分支、启停和删除，第三方代码能读取同源数据与密钥。
+- Extensions：原版风险警告、管理 UI、manifest loader 和 same-context 插件模型保持不变；14 个 upstream 内置扩展、1 个 Pure Tavern 第一方数据管理扩展以及 GitHub/GitLab/direct ZIP 等支持浏览器 CORS 的第三方扩展均可运行，第三方代码能读取同源数据与密钥。
 - Prompt Pipeline：原版 `openai.js`、PromptManager、宏、作者注和世界书注入作为唯一权威实现长期保留；不维护功能重复的 TypeScript 副本，生成后的 `generate_data` 直接交给 M12。
 - Tokenizers：原版同步/异步 tokenizer 路径统一桥接到 Web Worker/主线程 `tokenx` 近似计数；所有模型故意采用同一估算器，响应明确标记 `approximate`，pseudo token IDs 只用于 UI 兼容。
 - Secrets：原版密钥管理器的多值保存、查看、查找、轮换、重命名和删除已桥接到 IndexedDB，并通过 CredentialResolver 为 M12 预留入口；密钥按产品决策明文保存，不是安全 Vault。

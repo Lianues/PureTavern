@@ -1,4 +1,5 @@
 import type { FeatureModule } from '@/platform/features/feature-module';
+import { registerArchiveModule } from '@/platform/features/register-archive-module';
 
 import { SettingsSnapshotService } from './application/settings-snapshot-service';
 import { SettingsService } from './application/settings-service';
@@ -11,7 +12,9 @@ import { registerSettingsLegacyRoutes } from './legacy/register-routes';
 
 export const settingsFeature: FeatureModule = {
   id: 'settings',
-  install({ router, nativeFetch, records, capabilities }) {
+  install(context) {
+    const { router, nativeFetch, records, capabilities } = context;
+    registerArchiveModule(context, { moduleId: 'settings', displayName: 'Settings & Snapshots' });
     const repository = new ResilientSettingsRepository(new IndexedDbSettingsRepository(records));
     const service = new SettingsService(repository, async () => {
       const response = await nativeFetch('/__pure_tavern/default-settings.json');

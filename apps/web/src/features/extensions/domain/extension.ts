@@ -11,7 +11,7 @@ export interface LegacyExtensionManifest extends Record<string, unknown> {
 }
 
 export interface TrustedBuiltInSource {
-  kind: 'upstream-snapshot';
+  kind: 'upstream-snapshot' | 'pure-tavern-first-party';
   snapshotPath: string;
 }
 
@@ -61,6 +61,7 @@ export interface TrustedLegacyBuiltInDefinition {
   author: string;
   scriptPath: string;
   description?: string;
+  sourceKind?: TrustedBuiltInSource['kind'];
 }
 
 export function assertExtensionId(value: string): void {

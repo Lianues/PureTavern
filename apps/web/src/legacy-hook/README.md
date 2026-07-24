@@ -13,6 +13,7 @@
 模块诊断统一位于：
 
 ```js
+globalThis.__PURE_TAVERN__.features['import-export'];
 globalThis.__PURE_TAVERN__.features.settings;
 globalThis.__PURE_TAVERN__.features.secrets;
 globalThis.__PURE_TAVERN__.features.generation;

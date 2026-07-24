@@ -1,4 +1,5 @@
-import { cp, mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises';
+import { createHash } from 'node:crypto';
+import { access, cp, mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
@@ -59,6 +60,10 @@ export async function prepareLegacyRuntime() {
     generateDefaultAssetManifest(upstreamDefaultContentRoot),
     generateTrustedExtensionManifest(upstreamPublicRoot),
   ]);
+  trustedExtensionManifest.extensions.push(await loadDataManagementExtensionDefinition());
+  trustedExtensionManifest.extensions.sort((left, right) =>
+    left.legacyName.localeCompare(right.legacyName, 'en'),
+  );
   await Promise.all([
     writeFile(
       path.join(compatibilityAssetsRoot, 'default-presets.json'),
@@ -118,6 +123,29 @@ export async function prepareLegacyRuntime() {
   console.log(
     `Prepared Legacy runtime: ${path.relative(packageRoot, generatedIndexPath)} + ${path.relative(packageRoot, generatedPublicRoot)}`,
   );
+}
+
+export async function loadDataManagementExtensionDefinition() {
+  const extensionRoot = path.join(featuresRoot, 'import-export', 'runtime');
+  const manifestPath = path.join(extensionRoot, 'manifest.json');
+  const raw = await readFile(manifestPath);
+  const manifest = JSON.parse(raw.toString('utf8'));
+  if (!manifest || typeof manifest !== 'object' || manifest.js !== 'index.js') {
+    throw new Error('Pure Tavern data management extension manifest is invalid.');
+  }
+  await access(path.join(extensionRoot, 'index.js'));
+  if (manifest.css) await access(path.join(extensionRoot, manifest.css));
+  return {
+    extensionId: 'pure-tavern.data-management',
+    legacyName: 'pure-tavern-data-management',
+    displayName: manifest.display_name,
+    version: manifest.version,
+    author: manifest.author,
+    scriptPath: '/scripts/extensions/pure-tavern-data-management/index.js',
+    description: manifest.description,
+    sourceKind: 'pure-tavern-first-party',
+    sourceHash: createHash('sha256').update(raw).digest('hex'),
+  };
 }
 
 async function copyFeatureRuntimeAssets() {

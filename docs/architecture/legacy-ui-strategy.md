@@ -95,14 +95,14 @@ Hook 必须在原版主模块执行前安装。当前职责仅有：
 
 - 初始化固定的 records/blobs IndexedDB 存储平台；
 - 包装同源 `fetch`；
-- 通过 Feature Registry 安装 Settings、Secrets、Generation、Characters、Chats、Stats、Personas、World Books、Presets、Assets、Extensions 与 Tokenizers，并将对应 Legacy 路径或 capability 桥接到浏览器 Use Case；Prompt Pipeline 直接保留原版实现，不注册重复 Feature；
+- 通过 Feature Registry 安装 Import/Export/Backup、Settings、Secrets、Generation、Characters、Chats、Stats、Personas、World Books、Presets、Assets、Extensions 与 Tokenizers，并将对应 Legacy 路径或 capability 桥接到浏览器 Use Case；Prompt Pipeline 直接保留原版实现，不注册重复 Feature；
 - 通过类型化 Capability Registry 连接模块间的可选能力，而不是互相 import Repository；
 - 对尚未迁移但启动阶段必需的路径返回固定空数据或安全默认值；
 - 记录已处理请求和未处理路径；
 - 暴露 `globalThis.__PURE_TAVERN__` 诊断信息；
 - 读取同步工具生成的上游版本元数据。
 
-当前浏览器模块已经接管 Settings/Snapshots、明文 Secrets、Chat Completion Generation、Characters、单角色 Chats、Stats、Personas、World Books、Presets、本地 Assets、trusted built-ins、支持 CORS 的原版第三方 Extensions 与统一近似 Tokenizers。Prompt Pipeline 本身已是纯前端实现，因此直接保留 upstream 原版所有权，不维护第二套实现。模块只使用固定 `records` / `blobs` Object Store；新增 feature 或 collection 不递增数据库业务版本。IndexedDB 不可用时各 Repository 可降级为页面会话内存，并在模块 diagnostics 中明确报告。
+当前浏览器模块已经接管 Import/Export/Backup、Settings/Snapshots、明文 Secrets、Chat Completion Generation、Characters、单角色 Chats、Stats、Personas、World Books、Presets、本地 Assets、trusted built-ins、支持 CORS 的原版第三方 Extensions 与统一近似 Tokenizers。Prompt Pipeline 本身已是纯前端实现，因此直接保留 upstream 原版所有权，不维护第二套实现。模块只使用固定 `records` / `blobs` Object Store；新增 feature 或 collection 不递增数据库业务版本。IndexedDB 不可用时各 Repository 可降级为页面会话内存，并在模块 diagnostics 中明确报告。
 
 空群组、离线 Horde、非 CORS/私有 Git 和 Node plugins 等仍属于 **Bootstrap Compatibility Contract** 或显式浏览器限制，不代表相应业务已经迁移：
 
@@ -112,6 +112,7 @@ Hook 必须在原版主模块执行前安装。当前职责仅有：
 - M14 密钥按产品决策以 IndexedDB 明文保存；同源脚本、DevTools、浏览器 Profile、XSS 和请求拦截均可读取，不能描述为安全 Vault；
 - M12 是浏览器直连，不能绕过 Provider CORS、TLS、Private Network Access 或网络策略；支持 source 不等于每个环境都能连接；
 - M23 统计只在本地聚合；增量更新与聊天事务解耦，极端崩溃窗口通过 recreate 从 M05 持久化消息修复；
+- M21 手动归档是核心数据安全能力；Secrets 默认排除，hash 只证明完整性而非加密/签名。未来后端通过 BackupTransport 保存同一 opaque archive；
 - 不把旧 `/api` 当成新架构的内部正式接口；
 - 不让新 Vue 代码依赖这些兼容 HTTP 路径。
 

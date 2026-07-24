@@ -8,11 +8,19 @@ export interface ModuleRecord<T = unknown> {
   updatedAt: string;
 }
 
+export interface ModuleRecordSnapshot<T = unknown> extends ModuleRecord<T> {
+  collection: string;
+}
+
 export interface ModuleBlobRecord {
   id: string;
   data: Blob;
   metadata: Record<string, unknown>;
   updatedAt: string;
+}
+
+export interface ModuleBlobSnapshot extends ModuleBlobRecord {
+  collection: string;
 }
 
 function assertKeyPart(label: string, value: string) {
@@ -79,6 +87,25 @@ export class ModuleRecordStore {
   async delete(collection: string, id: string): Promise<void> {
     await this.#database.records.delete(makeKey(this.#moduleId, collection, id));
   }
+
+  async listAll<T = unknown>(): Promise<ModuleRecordSnapshot<T>[]> {
+    const records = await this.#database.records
+      .filter((record) => record.module === this.#moduleId)
+      .toArray();
+    return records.map((record) => ({
+      collection: record.collection,
+      id: record.id,
+      value: cloneJsonValue(record.value) as T,
+      updatedAt: record.updatedAt,
+    }));
+  }
+
+  async clearAll(): Promise<void> {
+    const keys = await this.#database.records
+      .filter((record) => record.module === this.#moduleId)
+      .primaryKeys();
+    await this.#database.records.bulkDelete(keys);
+  }
 }
 
 export class ModuleBlobStore {
@@ -122,6 +149,26 @@ export class ModuleBlobStore {
 
   async delete(collection: string, id: string): Promise<void> {
     await this.#database.blobs.delete(makeKey(this.#moduleId, collection, id));
+  }
+
+  async listAll(): Promise<ModuleBlobSnapshot[]> {
+    const records = await this.#database.blobs
+      .filter((record) => record.module === this.#moduleId)
+      .toArray();
+    return records.map((record) => ({
+      collection: record.collection,
+      id: record.id,
+      data: record.data,
+      metadata: cloneJsonValue(record.metadata),
+      updatedAt: record.updatedAt,
+    }));
+  }
+
+  async clearAll(): Promise<void> {
+    const keys = await this.#database.blobs
+      .filter((record) => record.module === this.#moduleId)
+      .primaryKeys();
+    await this.#database.blobs.bulkDelete(keys);
   }
 }
 

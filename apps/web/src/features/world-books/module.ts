@@ -1,4 +1,5 @@
 import type { FeatureModule } from '@/platform/features/feature-module';
+import { registerArchiveModule } from '@/platform/features/register-archive-module';
 import { worldNamesCapability } from '@/platform/features/standard-capabilities';
 
 import { WorldBookService } from './application/world-book-service';
@@ -9,7 +10,9 @@ import { LEGACY_WORLD_INFO_MATCHER } from './ports/world-info-matcher';
 
 export const worldBooksFeature: FeatureModule = {
   id: 'world-books',
-  install({ router, records, capabilities }) {
+  install(context) {
+    const { router, records, capabilities } = context;
+    registerArchiveModule(context, { moduleId: 'world-books', displayName: 'World Books' });
     const repository = new ResilientWorldBookRepository(new IndexedDbWorldBookRepository(records));
     const service = new WorldBookService(repository);
     capabilities.register(worldNamesCapability, {

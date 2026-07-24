@@ -1,4 +1,5 @@
 import type { FeatureModule } from '@/platform/features/feature-module';
+import { registerArchiveModule } from '@/platform/features/register-archive-module';
 import {
   characterIdentityCapability,
   chatOwnerLifecycleCapability,
@@ -20,7 +21,9 @@ import { registerChatsLegacyRoutes } from './legacy/register-routes';
 
 export const chatsFeature: FeatureModule = {
   id: 'chats',
-  install({ router, records, capabilities }) {
+  install(context) {
+    const { router, records, capabilities } = context;
+    registerArchiveModule(context, { moduleId: 'chats', displayName: 'Chats & Messages' });
     const sessions = new ResilientChatRepository(new IndexedDbChatRepository(records));
     const messages = new ResilientMessageRepository(new IndexedDbMessageRepository(records));
     const aliases = new ResilientOwnerAliasRepository(new IndexedDbOwnerAliasRepository(records));

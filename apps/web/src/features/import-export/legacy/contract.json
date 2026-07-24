@@ -1,0 +1,80 @@
+{
+  "module": "import-export",
+  "legacyRequests": [
+    {
+      "method": "POST",
+      "pathname": "/api/backups/archive/inspect",
+      "category": "browser-data-capability",
+      "responseKind": "indexeddb-module-storage-inspection-json",
+      "migrationStatus": "completed-browser-archive-backup"
+    },
+    {
+      "method": "POST",
+      "pathname": "/api/backups/archive/export",
+      "category": "browser-data-capability",
+      "responseKind": "versioned-hashed-archive-zip",
+      "migrationStatus": "completed-browser-archive-backup"
+    },
+    {
+      "method": "POST",
+      "pathname": "/api/backups/archive/import/preview",
+      "category": "browser-data-capability",
+      "responseKind": "validated-archive-conflict-preview-json",
+      "migrationStatus": "completed-browser-archive-backup"
+    },
+    {
+      "method": "POST",
+      "pathname": "/api/backups/archive/import",
+      "category": "browser-data-capability",
+      "responseKind": "recoverable-module-import-report-json",
+      "migrationStatus": "completed-browser-archive-backup"
+    },
+    {
+      "method": "POST",
+      "pathname": "/api/backups/archive/local/create",
+      "category": "browser-data-capability",
+      "responseKind": "indexeddb-local-backup-descriptor-json",
+      "migrationStatus": "completed-browser-archive-backup"
+    },
+    {
+      "method": "POST",
+      "pathname": "/api/backups/archive/local/list",
+      "category": "browser-data-capability",
+      "responseKind": "indexeddb-local-backup-list-json",
+      "migrationStatus": "completed-browser-archive-backup"
+    },
+    {
+      "method": "POST",
+      "pathname": "/api/backups/archive/local/download",
+      "category": "browser-data-capability",
+      "responseKind": "indexeddb-local-backup-zip",
+      "migrationStatus": "completed-browser-archive-backup"
+    },
+    {
+      "method": "POST",
+      "pathname": "/api/backups/archive/local/restore",
+      "category": "browser-data-capability",
+      "responseKind": "recoverable-local-backup-restore-report-json",
+      "migrationStatus": "completed-browser-archive-backup"
+    },
+    {
+      "method": "POST",
+      "pathname": "/api/backups/archive/local/delete",
+      "category": "browser-data-capability",
+      "responseKind": "indexeddb-local-backup-delete-empty-200",
+      "migrationStatus": "completed-browser-archive-backup"
+    },
+    {
+      "method": "POST",
+      "pathname": "/api/backups/chat/get",
+      "category": "ui-required-compatibility-boundary",
+      "responseKind": "empty-automatic-chat-backup-list-json",
+      "migrationStatus": "automatic-chat-backups-removed-manual-archive-replacement"
+    }
+  ],
+  "notes": [
+    "Manual full archive export/import is the core data-safety capability; automatic per-chat JSONL backups are intentionally removable.",
+    "The shared archive manifest and BackupTransport are also the stable future optional-backend boundary.",
+    "Secrets are excluded by default and remain plaintext when explicitly included."
+  ]
+}

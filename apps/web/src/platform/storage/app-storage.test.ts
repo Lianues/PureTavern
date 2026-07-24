@@ -52,6 +52,32 @@ describe('AppStorage', () => {
     await expect(characters.list('snapshots')).resolves.toEqual([]);
   });
 
+  it('exports and clears only the current scoped module for data portability', async () => {
+    const storage = createStorage();
+    await initializeStorage(storage);
+    const settingsRecords = storage.records.forModule('settings');
+    const settingsBlobs = storage.blobs.forModule('settings');
+    const characterRecords = storage.records.forModule('characters');
+
+    await settingsRecords.put('documents', 'current', { theme: 'dark' });
+    await settingsBlobs.put('files', 'one', new Blob(['one']), { opaque: true });
+    await characterRecords.put('documents', 'current', { name: 'Alice' });
+
+    await expect(settingsRecords.listAll()).resolves.toMatchObject([
+      { collection: 'documents', id: 'current', value: { theme: 'dark' } },
+    ]);
+    await expect(settingsBlobs.listAll()).resolves.toMatchObject([
+      { collection: 'files', id: 'one', metadata: { opaque: true } },
+    ]);
+
+    await Promise.all([settingsRecords.clearAll(), settingsBlobs.clearAll()]);
+    await expect(settingsRecords.listAll()).resolves.toEqual([]);
+    await expect(settingsBlobs.listAll()).resolves.toEqual([]);
+    await expect(characterRecords.get('documents', 'current')).resolves.toMatchObject({
+      value: { name: 'Alice' },
+    });
+  });
+
   it('provides a namespaced Blob container for future assets', async () => {
     const storage = createStorage();
     await initializeStorage(storage);

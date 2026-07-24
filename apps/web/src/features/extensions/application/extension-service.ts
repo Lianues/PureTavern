@@ -102,10 +102,13 @@ export class ExtensionService {
           author: definition.author,
           js: 'index.js',
           description:
-            definition.description ?? 'Trusted extension shipped in the audited upstream snapshot.',
+            definition.description ??
+            (definition.sourceKind === 'pure-tavern-first-party'
+              ? 'First-party extension shipped with Pure Tavern.'
+              : 'Trusted extension shipped in the audited upstream snapshot.'),
         },
         source: {
-          kind: 'upstream-snapshot',
+          kind: definition.sourceKind ?? 'upstream-snapshot',
           snapshotPath: `/scripts/extensions/${definition.legacyName}/`,
         },
         installedAt: now,
@@ -209,7 +212,7 @@ export class ExtensionService {
   ): Promise<LegacyExtensionVersionDto> {
     const record = await this.findByLegacyReference(reference);
     if (!record) throw new ExtensionNotFoundError(reference);
-    if (record.source.kind === 'upstream-snapshot') {
+    if (record.source.kind !== 'remote') {
       return {
         currentBranchName: '',
         currentCommitHash: '',

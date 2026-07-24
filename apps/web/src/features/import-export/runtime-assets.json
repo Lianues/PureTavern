@@ -1,0 +1,16 @@
+{
+  "assets": [
+    {
+      "source": "runtime/manifest.json",
+      "publicPath": "scripts/extensions/pure-tavern-data-management/manifest.json"
+    },
+    {
+      "source": "runtime/index.js",
+      "publicPath": "scripts/extensions/pure-tavern-data-management/index.js"
+    },
+    {
+      "source": "runtime/style.css",
+      "publicPath": "scripts/extensions/pure-tavern-data-management/style.css"
+    }
+  ]
+}

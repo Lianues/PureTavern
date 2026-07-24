@@ -1,4 +1,5 @@
 import type { FeatureInstallContext, FeatureModule } from '@/platform/features/feature-module';
+import { registerArchiveModule } from '@/platform/features/register-archive-module';
 import {
   legacyPersonaStateCapability,
   personaAvatarAssetsCapability,
@@ -29,6 +30,7 @@ export function createPersonasFeature(options: PersonasFeatureOptions = {}): Fea
   return {
     id: 'personas',
     install(context) {
+      registerArchiveModule(context, { moduleId: 'personas', displayName: 'Personas' });
       const repository = new ResilientPersonaRepository(
         new IndexedDbPersonaRepository(context.records),
       );

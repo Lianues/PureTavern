@@ -1,3 +1,4 @@
+import type { ModuleBlobStore, ModuleRecordStore } from '../storage/app-storage';
 import { defineCapability } from './capability-registry';
 
 export interface CharacterIdentity {
@@ -103,6 +104,21 @@ export interface GenerationProviderCapability {
   generate(request: Record<string, unknown>, signal?: AbortSignal): Promise<Response>;
 }
 
+export interface ArchiveModuleRegistration {
+  moduleId: string;
+  displayName: string;
+  dataVersion: number;
+  sensitive: boolean;
+  defaultSelected: boolean;
+  records: ModuleRecordStore;
+  blobs: ModuleBlobStore;
+}
+
+export interface ArchiveParticipantRegistryCapability {
+  registerModule(registration: ArchiveModuleRegistration): void;
+  hasModule(moduleId: string): boolean;
+}
+
 export const characterIdentityCapability =
   defineCapability<CharacterIdentityCapability>('characters.identity.v1');
 
@@ -149,3 +165,6 @@ export const credentialResolverCapability = defineCapability<CredentialResolverC
 export const generationProviderCapability = defineCapability<GenerationProviderCapability>(
   'generation.chat-completion.v1',
 );
+
+export const archiveParticipantRegistryCapability =
+  defineCapability<ArchiveParticipantRegistryCapability>('import-export.participants.v1');

@@ -1,4 +1,5 @@
 import type { FeatureModule } from '@/platform/features/feature-module';
+import { registerArchiveModule } from '@/platform/features/register-archive-module';
 import {
   credentialResolverCapability,
   type CredentialResolverCapability,
@@ -11,7 +12,14 @@ import { registerSecretsLegacyRoutes } from './legacy/register-routes';
 
 export const secretsFeature: FeatureModule = {
   id: 'secrets',
-  install({ router, records, capabilities }) {
+  install(context) {
+    const { router, records, capabilities } = context;
+    registerArchiveModule(context, {
+      moduleId: 'secrets',
+      displayName: 'Secrets (plaintext)',
+      sensitive: true,
+      defaultSelected: false,
+    });
     const store = new ResilientSecretStore(new IndexedDbSecretStore(records));
     const service = new SecretService(store);
     const resolver: CredentialResolverCapability = {

@@ -1,4 +1,5 @@
 import type { FeatureModule } from '@/platform/features/feature-module';
+import { registerArchiveModule } from '@/platform/features/register-archive-module';
 import {
   assetServiceWorkerCapability,
   characterIdentityCapability,
@@ -14,7 +15,9 @@ import { registerCharactersLegacyRoutes } from './legacy/register-routes';
 
 export const charactersFeature: FeatureModule = {
   id: 'characters',
-  install({ router, nativeFetch, records, blobs, capabilities }) {
+  install(context) {
+    const { router, nativeFetch, records, blobs, capabilities } = context;
+    registerArchiveModule(context, { moduleId: 'characters', displayName: 'Characters' });
     const repository = new ResilientCharacterRepository(new IndexedDbCharacterRepository(records));
     const assets = new ResilientCharacterAssetRepository(
       new IndexedDbCharacterAssetRepository(blobs),

@@ -87,7 +87,7 @@ IndexedDB 标准仍要求首次创建时有一个物理格式编号；平台内�
 
 `platform/legacy/register-core-routes.ts` 提供尚未迁移能力的启动默认响应。Feature 在 core 之后安装，因此注册同一个 method/path 时会自动覆盖默认 handler；契约聚合也由 feature manifest 覆盖同 key 的 core 声明，不产生重复项。
 
-当前跨模块示例：Settings 动态读取 World Names、Preset Bootstrap、Persona state 与 Extension enable-state capability；Characters 与 Chats 通过 stable identity / owner lifecycle capability 协作；Stats 只通过 Chats 的只读统计快照 capability 重建派生数据，不进入聊天写事务；Characters 复用 Assets 的共享 Service Worker；Personas 和本地 extension packages 分别复用 Assets 的 avatar/package capability。M12 Generation 只通过 CredentialResolver Capability 获取 M14 凭据，不直接读取 SecretStore，并向未来现代页面提供窄 Generation Provider Capability。原版 Prompt Pipeline 不包装成 Feature，而是把最终 `generate_data` 交给 M12 Legacy adapter。Capability 必须可选查询，并在 provider 缺失时提供明确降级。
+当前跨模块示例：M21 先注册 ArchiveParticipantRegistry，各数据模块只提交自身作用域 records/blobs 与 dataVersion，归档核心不 import 业务 Repository；浏览器本地和未来可选后端统一消费共享 manifest 与 BackupTransport。Settings 动态读取 World Names、Preset Bootstrap、Persona state 与 Extension enable-state capability；Characters 与 Chats 通过 stable identity / owner lifecycle capability 协作；Stats 只通过 Chats 的只读统计快照 capability 重建派生数据，不进入聊天写事务；Characters 复用 Assets 的共享 Service Worker；Personas 和本地 extension packages 分别复用 Assets 的 avatar/package capability。M12 Generation 只通过 CredentialResolver Capability 获取 M14 凭据，不直接读取 SecretStore，并向未来现代页面提供窄 Generation Provider Capability。原版 Prompt Pipeline 不包装成 Feature，而是把最终 `generate_data` 交给 M12 Legacy adapter。Capability 必须可选查询，并在 provider 缺失时提供明确降级。
 
 某项能力开始迁移时只需：
 

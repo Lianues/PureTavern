@@ -1,4 +1,5 @@
 import type { FeatureModule } from '@/platform/features/feature-module';
+import { registerArchiveModule } from '@/platform/features/register-archive-module';
 import {
   chatStatsSourceCapability,
   type ChatStatsSourceCapability,
@@ -17,7 +18,9 @@ const emptyChatSource: ChatStatsSourceCapability = {
 
 export const statsFeature: FeatureModule = {
   id: 'stats',
-  install({ router, records, capabilities }) {
+  install(context) {
+    const { router, records, capabilities } = context;
+    registerArchiveModule(context, { moduleId: 'stats', displayName: 'Usage Stats' });
     const repository = new ResilientStatsRepository(new IndexedDbStatsRepository(records));
     const chatSource = capabilities.get(chatStatsSourceCapability);
     const service = new StatsService(repository, chatSource ?? emptyChatSource);

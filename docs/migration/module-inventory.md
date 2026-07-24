@@ -509,13 +509,19 @@ features/<module>/
 ## M21 — Import / Export / Backup
 
 - **优先级**：P2
-- **初始状态**：`inventory`
-- **原始服务端**：`src/endpoints/backups.js`、各 characters/chats/settings 导入导出接口。
-- **目标 Port**：`ArchiveExporter`、`ArchiveImporter`、`BackupRepository`。
-- **浏览器实现**：生成 ZIP/JSON/JSONL/PNG；File System Access API 可作为增强，下载回退必须可用。
-- **可选后端**：定时远程备份、跨设备恢复。
+- **当前状态**：`completed-browser-archive-backup`
+- **原始服务端**：`src/endpoints/backups.js` 的自动 chat JSONL 备份作为可删能力返回安全空列表；完整手动数据安全能力由 M21 版本化归档替代。各角色卡、聊天、世界书和预设原格式导入导出继续保留。
+- **已实现 Port**：`ArchiveExporter`、`ArchiveImporter`、`BackupRepository`、`BackupTransport`、`ArchiveParticipantRegistry`。
+- **归档格式**：`@pure-tavern/contracts` 定义 `pure-tavern-archive` schema v1；manifest 包含 app/upstream/data version、模块摘要、逻辑 collection/id、大小与每个 payload 的 SHA-256。ZIP 不暴露 IndexedDB 物理 key。
+- **模块覆盖**：Settings/Snapshots、Characters、Chats、Personas、World Books、Presets、Assets、Extensions、Stats 和可选 Secrets 均通过模块作用域参与者接入；stable ID、Blob metadata 与 opaque 字段原样保留。
+- **导入语义**：dry-run 差异/冲突预览，支持 merge、skip、replace-module、replace-all；正式导入和恢复前自动建立恢复点，并用 journal 记录模块级阶段。
+- **浏览器实现**：IndexedDB 本地恢复点默认轮换 5 份；File System Access 可用时直接保存，其他浏览器使用下载和文件选择回退。ZIP 路径、重复、大小、数量、展开体积、压缩比和 hash 均校验。
+- **第一方面板**：原版 Extensions loader 加载 `Pure Tavern Data Management`，来源为独立 `pure-tavern-first-party`；提供容量、模块、导出、导入预览、本地恢复/下载/删除可视化，不修改 upstream。
+- **Secrets**：默认不导出；显式选择仍是明文 ZIP，必须危险确认。
+- **可选后端预留**：浏览器与未来后端共用 `BackupTransport` 的 list/upload/download/delete 和同一 Archive；后端把归档作为 opaque object 保存，未来增量同步可基于 manifest/module/file hash 协商。
+- **验收**：模块测试覆盖 codec、安全限制、冲突、恢复点、journal、路由和 transport；production Chrome 完成面板打开、默认/含 Secrets 导出、preview、导入、破坏角色/聊天后恢复、下载和删除闭环。
 - **依赖**：M02、M04、M05、M07、M09、M13。
-- **删除影响**：自动备份可删；基础手动导出应视为核心数据安全能力。
+- **删除影响**：自动 chat JSONL 备份可删；M21 手动全量导出/导入属于核心数据安全能力。
 
 ## M22 — Users / 本地身份、多用户与同步
 

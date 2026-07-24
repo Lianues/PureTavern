@@ -1,4 +1,5 @@
 import type { FeatureModule } from '@/platform/features/feature-module';
+import { registerArchiveModule } from '@/platform/features/register-archive-module';
 import { legacyPresetBootstrapCapability } from '@/platform/features/standard-capabilities';
 
 import { PresetSeedService } from './application/preset-seed-service';
@@ -11,7 +12,9 @@ import { registerPresetsLegacyRoutes } from './legacy/register-routes';
 
 export const presetsFeature: FeatureModule = {
   id: 'presets',
-  install({ router, records, nativeFetch, capabilities }) {
+  install(context) {
+    const { router, records, nativeFetch, capabilities } = context;
+    registerArchiveModule(context, { moduleId: 'presets', displayName: 'Presets & Themes' });
     const repository = new ResilientPresetRepository(new IndexedDbPresetRepository(records));
     const seedLoader = new FetchPresetSeedLoader(nativeFetch);
     const seeds = new PresetSeedService(repository, seedLoader);

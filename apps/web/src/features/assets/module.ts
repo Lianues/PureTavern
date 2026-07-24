@@ -1,4 +1,5 @@
 import type { FeatureModule } from '@/platform/features/feature-module';
+import { registerArchiveModule } from '@/platform/features/register-archive-module';
 import {
   assetServiceWorkerCapability,
   characterIdentityCapability,
@@ -41,7 +42,9 @@ export interface AssetsFeatureOptions {
 export function createAssetsFeature(options: AssetsFeatureOptions = {}): FeatureModule {
   return {
     id: 'assets',
-    install({ router, nativeFetch, records, blobs, capabilities }) {
+    install(context) {
+      const { router, nativeFetch, records, blobs, capabilities } = context;
+      registerArchiveModule(context, { moduleId: 'assets', displayName: 'Assets & Attachments' });
       const blobRepository = new ResilientBlobRepository(
         new IndexedDbAssetBlobRepository(blobs, records),
       );

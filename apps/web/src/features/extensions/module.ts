@@ -1,5 +1,6 @@
 import { defineCapability } from '@/platform/features/capability-registry';
 import type { FeatureInstallContext, FeatureModule } from '@/platform/features/feature-module';
+import { registerArchiveModule } from '@/platform/features/register-archive-module';
 import {
   extensionPackageAssetsCapability,
   legacyExtensionSettingsCapability,
@@ -48,6 +49,10 @@ export function createExtensionsFeature(options: ExtensionsFeatureOptions = {}):
     id: 'extensions',
     install(context) {
       const { router, records, capabilities } = context;
+      registerArchiveModule(context, {
+        moduleId: 'extensions',
+        displayName: 'Extensions & Plugin Data',
+      });
       const registry = new ResilientExtensionRegistry(new RecordExtensionRegistry(records));
       const packageAssets =
         options.createPackageAssets?.(context) ??

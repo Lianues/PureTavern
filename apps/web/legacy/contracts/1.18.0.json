@@ -2,7 +2,7 @@
   "schemaVersion": 2,
   "project": "SillyTavern",
   "version": "1.18.0",
-  "generatedAt": "2026-07-24T11:44:26.045Z",
+  "generatedAt": "2026-07-24T14:10:47.533Z",
   "source": {
     "publicRoot": "legacy/upstream/public",
     "repositoryRoot": "legacy/upstream"
@@ -4957,6 +4957,76 @@
           "category": "browser-data-capability",
           "responseKind": "explicit-token-id-bias-map-json",
           "migrationStatus": "browser-ready-chat-completion-direct"
+        },
+        {
+          "method": "POST",
+          "pathname": "/api/backups/archive/inspect",
+          "category": "browser-data-capability",
+          "responseKind": "indexeddb-module-storage-inspection-json",
+          "migrationStatus": "completed-browser-archive-backup"
+        },
+        {
+          "method": "POST",
+          "pathname": "/api/backups/archive/export",
+          "category": "browser-data-capability",
+          "responseKind": "versioned-hashed-archive-zip",
+          "migrationStatus": "completed-browser-archive-backup"
+        },
+        {
+          "method": "POST",
+          "pathname": "/api/backups/archive/import/preview",
+          "category": "browser-data-capability",
+          "responseKind": "validated-archive-conflict-preview-json",
+          "migrationStatus": "completed-browser-archive-backup"
+        },
+        {
+          "method": "POST",
+          "pathname": "/api/backups/archive/import",
+          "category": "browser-data-capability",
+          "responseKind": "recoverable-module-import-report-json",
+          "migrationStatus": "completed-browser-archive-backup"
+        },
+        {
+          "method": "POST",
+          "pathname": "/api/backups/archive/local/create",
+          "category": "browser-data-capability",
+          "responseKind": "indexeddb-local-backup-descriptor-json",
+          "migrationStatus": "completed-browser-archive-backup"
+        },
+        {
+          "method": "POST",
+          "pathname": "/api/backups/archive/local/list",
+          "category": "browser-data-capability",
+          "responseKind": "indexeddb-local-backup-list-json",
+          "migrationStatus": "completed-browser-archive-backup"
+        },
+        {
+          "method": "POST",
+          "pathname": "/api/backups/archive/local/download",
+          "category": "browser-data-capability",
+          "responseKind": "indexeddb-local-backup-zip",
+          "migrationStatus": "completed-browser-archive-backup"
+        },
+        {
+          "method": "POST",
+          "pathname": "/api/backups/archive/local/restore",
+          "category": "browser-data-capability",
+          "responseKind": "recoverable-local-backup-restore-report-json",
+          "migrationStatus": "completed-browser-archive-backup"
+        },
+        {
+          "method": "POST",
+          "pathname": "/api/backups/archive/local/delete",
+          "category": "browser-data-capability",
+          "responseKind": "indexeddb-local-backup-delete-empty-200",
+          "migrationStatus": "completed-browser-archive-backup"
+        },
+        {
+          "method": "POST",
+          "pathname": "/api/backups/chat/get",
+          "category": "ui-required-compatibility-boundary",
+          "responseKind": "empty-automatic-chat-backup-list-json",
+          "migrationStatus": "automatic-chat-backups-removed-manual-archive-replacement"
         },
         {
           "method": "POST",

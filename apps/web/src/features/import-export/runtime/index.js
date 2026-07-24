@@ -1,0 +1,335 @@
+/* global fetch, document, console, URL, setTimeout, confirm, location, FormData */
+
+const API = '/api/backups/archive';
+const state = { inspection: null, selectedFile: null, preview: null };
+
+function headers() {
+  return { 'Content-Type': 'application/json' };
+}
+
+async function postJson(path, body = {}) {
+  const response = await fetch(path, {
+    method: 'POST',
+    headers: headers(),
+    body: JSON.stringify(body),
+    cache: 'no-cache',
+  });
+  const text = await response.text();
+  const payload = text ? JSON.parse(text) : { ok: true };
+  if (!response.ok) {
+    throw new Error(payload.error || `Request failed: HTTP ${response.status}`);
+  }
+  return payload;
+}
+
+function formatBytes(value) {
+  const bytes = Number(value) || 0;
+  if (bytes < 1024) return `${bytes} B`;
+  const units = ['KB', 'MB', 'GB'];
+  let amount = bytes / 1024;
+  let index = 0;
+  while (amount >= 1024 && index < units.length - 1) {
+    amount /= 1024;
+    index += 1;
+  }
+  return `${amount.toFixed(amount >= 10 ? 1 : 2)} ${units[index]}`;
+}
+
+function selectedModules() {
+  return [...document.querySelectorAll('#ptdm-modules input[data-module]:checked')].map(
+    (input) => input.dataset.module,
+  );
+}
+
+function includeSecrets() {
+  return document.querySelector('#ptdm-include-secrets')?.checked === true;
+}
+
+function notify(type, message) {
+  globalThis.toastr?.[type]?.(message);
+}
+
+async function refresh() {
+  state.inspection = await postJson(`${API}/inspect`);
+  renderInspection();
+  renderBackups();
+}
+
+function renderInspection() {
+  const inspection = state.inspection;
+  if (!inspection) return;
+  const usage = inspection.quota?.usage ?? 0;
+  const quota = inspection.quota?.quota ?? 0;
+  const percent = quota ? Math.min(100, (usage / quota) * 100) : 0;
+  document.querySelector('#ptdm-summary').innerHTML = `
+    <div class="ptdm-card"><strong>${inspection.modules.length}</strong><div>数据模块</div></div>
+    <div class="ptdm-card"><strong>${formatBytes(usage)}</strong><div>浏览器用量</div></div>
+    <div class="ptdm-card"><strong>${formatBytes(quota)}</strong><div>浏览器配额</div></div>
+    <div class="ptdm-card"><strong>${inspection.backups.length}</strong><div>本地恢复点</div></div>`;
+  const progress = document.querySelector('#ptdm-quota');
+  progress.value = percent;
+  progress.title = `${percent.toFixed(1)}%`;
+
+  const modules = document.querySelector('#ptdm-modules');
+  modules.replaceChildren();
+  for (const module of inspection.modules) {
+    const row = document.createElement('label');
+    row.className = 'ptdm-module-row';
+    const checked = !module.sensitive;
+    row.innerHTML = `
+      <span><input type="checkbox" data-module="${module.moduleId}" ${checked ? 'checked' : ''}>
+        <strong></strong>${module.sensitive ? ' ⚠️' : ''}</span>
+      <span class="ptdm-module-meta">${module.recordCount} records · ${module.blobCount} blobs · ${formatBytes(module.totalBytes)}</span>`;
+    row.querySelector('strong').textContent = module.displayName;
+    modules.appendChild(row);
+  }
+}
+
+function renderBackups() {
+  const list = document.querySelector('#ptdm-backups');
+  list.replaceChildren();
+  for (const backup of state.inspection?.backups ?? []) {
+    const row = document.createElement('div');
+    row.className = 'ptdm-backup-row';
+    const info = document.createElement('div');
+    const title = document.createElement('strong');
+    title.textContent = backup.label;
+    const meta = document.createElement('div');
+    meta.className = 'ptdm-module-meta';
+    meta.textContent = `${new Date(backup.createdAt).toLocaleString()} · ${formatBytes(backup.size)} · ${backup.moduleIds.length} modules`;
+    info.append(title, meta);
+    const actions = document.createElement('div');
+    actions.className = 'ptdm-toolbar';
+    actions.append(
+      actionButton('下载', () => downloadBackup(backup.id)),
+      actionButton('恢复', () => restoreBackup(backup.id), 'menu_button'),
+      actionButton('删除', () => deleteBackup(backup.id), 'menu_button ptdm-danger'),
+    );
+    row.append(info, actions);
+    list.appendChild(row);
+  }
+  if (!list.children.length) list.textContent = '暂无本地恢复点。';
+}
+
+function actionButton(label, handler, className = 'menu_button') {
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.className = className;
+  button.textContent = label;
+  button.addEventListener('click', () => void handler());
+  return button;
+}
+
+async function fetchArchive(path, body) {
+  const response = await fetch(path, {
+    method: 'POST',
+    headers: headers(),
+    body: JSON.stringify(body),
+  });
+  if (!response.ok) throw new Error(`Archive request failed: HTTP ${response.status}`);
+  const disposition = response.headers.get('Content-Disposition') || '';
+  const fileName = disposition.match(/filename="([^"]+)"/i)?.[1] || 'pure-tavern-backup.zip';
+  return { blob: await response.blob(), fileName };
+}
+
+async function saveBlob(blob, fileName) {
+  if (globalThis.showSaveFilePicker) {
+    try {
+      const handle = await globalThis.showSaveFilePicker({
+        suggestedName: fileName,
+        types: [{ description: 'Pure Tavern backup', accept: { 'application/zip': ['.zip'] } }],
+      });
+      const writable = await handle.createWritable();
+      await writable.write(blob);
+      await writable.close();
+      return;
+    } catch (error) {
+      if (error?.name !== 'AbortError') console.warn(error);
+      if (error?.name === 'AbortError') return;
+    }
+  }
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = fileName;
+  anchor.click();
+  setTimeout(() => URL.revokeObjectURL(url), 0);
+}
+
+async function exportArchive() {
+  try {
+    const result = await fetchArchive(`${API}/export`, {
+      moduleIds: selectedModules(),
+      includeSecrets: includeSecrets(),
+    });
+    await saveBlob(result.blob, result.fileName);
+    notify('success', '数据归档已导出。');
+  } catch (error) {
+    notify('error', error.message);
+  }
+}
+
+async function createBackup() {
+  try {
+    const descriptor = await postJson(`${API}/local/create`, {
+      label: `Manual backup ${new Date().toLocaleString()}`,
+      moduleIds: selectedModules(),
+      includeSecrets: includeSecrets(),
+    });
+    notify('success', `恢复点已创建：${descriptor.label}`);
+    await refresh();
+  } catch (error) {
+    notify('error', error.message);
+  }
+}
+
+async function downloadBackup(id) {
+  try {
+    const result = await fetchArchive(`${API}/local/download`, { id });
+    await saveBlob(result.blob, result.fileName);
+  } catch (error) {
+    notify('error', error.message);
+  }
+}
+
+async function deleteBackup(id) {
+  if (!confirm('确定删除这个本地恢复点吗？')) return;
+  try {
+    await postJson(`${API}/local/delete`, { id });
+    await refresh();
+  } catch (error) {
+    notify('error', error.message);
+  }
+}
+
+async function restoreBackup(id) {
+  if (!confirm('恢复会修改当前数据，并自动创建恢复前快照。是否继续？')) return;
+  try {
+    const report = await postJson(`${API}/local/restore`, {
+      id,
+      strategy: document.querySelector('#ptdm-strategy').value,
+      includeSecrets: includeSecrets(),
+    });
+    showReport(report);
+    notify('success', '恢复完成，页面即将刷新。');
+    setTimeout(() => location.reload(), 500);
+  } catch (error) {
+    notify('error', error.message);
+  }
+}
+
+async function previewImport(file) {
+  state.selectedFile = file;
+  const form = new FormData();
+  form.set('file', file);
+  form.set('includeSecrets', String(includeSecrets()));
+  form.set('strategy', document.querySelector('#ptdm-strategy').value);
+  const response = await fetch(`${API}/import/preview`, { method: 'POST', body: form });
+  const payload = await response.json();
+  if (!response.ok) throw new Error(payload.error || `Preview failed: HTTP ${response.status}`);
+  state.preview = payload;
+  const target = document.querySelector('#ptdm-preview');
+  target.classList.remove('ptdm-hidden');
+  target.textContent = [
+    `Archive: ${payload.manifest.archiveId}`,
+    `Created: ${payload.manifest.createdAt}`,
+    `Modules: ${payload.modules.length}`,
+    `Payload: ${formatBytes(payload.totalBytes)}`,
+    ...payload.modules.map(
+      (module) =>
+        `${module.selected ? '✓' : '–'} ${module.displayName}: ${module.incomingRecords} records, ${module.incomingBlobs} blobs, ${module.conflicts} conflicts${module.warnings.length ? ` (${module.warnings.join('; ')})` : ''}`,
+    ),
+  ].join('\n');
+  document.querySelector('#ptdm-import-confirm').disabled = false;
+}
+
+async function importArchive() {
+  if (!state.selectedFile) return;
+  if (!confirm('导入前会自动创建恢复点。确定继续吗？')) return;
+  const form = new FormData();
+  form.set('file', state.selectedFile);
+  form.set('includeSecrets', String(includeSecrets()));
+  form.set('strategy', document.querySelector('#ptdm-strategy').value);
+  form.set('createRecoveryPoint', 'true');
+  const response = await fetch(`${API}/import`, { method: 'POST', body: form });
+  const payload = await response.json();
+  if (!response.ok) throw new Error(payload.error || `Import failed: HTTP ${response.status}`);
+  showReport(payload);
+  notify('success', '数据导入完成，页面即将刷新。');
+  setTimeout(() => location.reload(), 500);
+}
+
+function showReport(report) {
+  const target = document.querySelector('#ptdm-report');
+  target.classList.remove('ptdm-hidden');
+  target.textContent = JSON.stringify(report, null, 2);
+}
+
+function createUi() {
+  if (document.querySelector('#pure-tavern-data-management-entry')) return;
+  const entry = document.createElement('section');
+  entry.id = 'pure-tavern-data-management-entry';
+  entry.innerHTML =
+    '<strong>Pure Tavern 数据管理</strong><p class="ptdm-muted">统一导出、导入、本地恢复点与容量检查。</p><button type="button" class="menu_button">打开数据管理</button>';
+  (document.querySelector('#extensions_settings2') || document.body).prepend(entry);
+
+  const dialog = document.createElement('dialog');
+  dialog.id = 'pure-tavern-data-management-dialog';
+  dialog.innerHTML = `
+    <div class="ptdm-header"><div><h2>Pure Tavern 数据管理</h2><div class="ptdm-muted">本地归档与灾难恢复中心</div></div><button type="button" class="menu_button" id="ptdm-close">关闭</button></div>
+    <div class="ptdm-body">
+      <div id="ptdm-summary" class="ptdm-grid"></div>
+      <progress id="ptdm-quota" class="ptdm-progress" max="100" value="0"></progress>
+      <section class="ptdm-section"><h3>模块</h3><div id="ptdm-modules"></div><label class="ptdm-danger"><input id="ptdm-include-secrets" type="checkbox"> 包含明文 Secrets（危险，不加密）</label></section>
+      <section class="ptdm-section"><h3>手动导出</h3><div class="ptdm-toolbar"><button id="ptdm-export" class="menu_button">导出 ZIP</button><button id="ptdm-create-backup" class="menu_button">创建本地恢复点</button></div></section>
+      <section class="ptdm-section"><h3>导入与恢复</h3><div class="ptdm-toolbar"><input id="ptdm-import-file" type="file" accept=".zip,application/zip"><select id="ptdm-strategy"><option value="merge">合并并覆盖冲突</option><option value="skip">跳过冲突</option><option value="replace-module">替换选中模块</option><option value="replace-all">替换归档模块</option></select><button id="ptdm-import-confirm" class="menu_button" disabled>执行导入</button></div><pre id="ptdm-preview" class="ptdm-report ptdm-hidden"></pre><pre id="ptdm-report" class="ptdm-report ptdm-hidden"></pre></section>
+      <section class="ptdm-section"><h3>本地恢复点</h3><div id="ptdm-backups"></div></section>
+    </div>`;
+  document.body.appendChild(dialog);
+
+  entry.querySelector('button').addEventListener('click', async () => {
+    dialog.showModal();
+    try {
+      await refresh();
+    } catch (error) {
+      notify('error', error.message);
+    }
+  });
+  dialog.querySelector('#ptdm-close').addEventListener('click', () => dialog.close());
+  dialog.querySelector('#ptdm-export').addEventListener('click', () => void exportArchive());
+  dialog.querySelector('#ptdm-create-backup').addEventListener('click', () => void createBackup());
+  dialog.querySelector('#ptdm-import-file').addEventListener('change', async (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    try {
+      await previewImport(file);
+    } catch (error) {
+      notify('error', error.message);
+    }
+  });
+  dialog.querySelector('#ptdm-import-confirm').addEventListener('click', async () => {
+    try {
+      await importArchive();
+    } catch (error) {
+      notify('error', error.message);
+    }
+  });
+  dialog.querySelector('#ptdm-include-secrets').addEventListener('change', (event) => {
+    if (
+      event.target.checked &&
+      !confirm('Secrets 会以明文写入 ZIP。任何取得文件的人都能读取。确定吗？')
+    ) {
+      event.target.checked = false;
+    }
+  });
+
+  globalThis.__PURE_TAVERN_DATA_MANAGEMENT__ = {
+    installed: true,
+    open: () => entry.querySelector('button').click(),
+    refresh,
+  };
+}
+
+if (document.readyState === 'loading')
+  document.addEventListener('DOMContentLoaded', createUi, { once: true });
+else createUi();

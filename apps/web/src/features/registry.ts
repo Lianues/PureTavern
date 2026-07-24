@@ -5,6 +5,7 @@ import { charactersFeature } from './characters/module';
 import { chatsFeature } from './chats/module';
 import { extensionsFeature } from './extensions/module';
 import { generationFeature } from './generation/module';
+import { importExportFeature } from './import-export/module';
 import { personasFeature } from './personas/module';
 import { presetsFeature } from './presets/module';
 import { secretsFeature } from './secrets/module';
@@ -14,6 +15,7 @@ import { tokenizersFeature } from './tokenizers/module';
 import { worldBooksFeature } from './world-books/module';
 
 export const featureModules: readonly FeatureModule[] = [
+  importExportFeature,
   settingsFeature,
   secretsFeature,
   generationFeature,

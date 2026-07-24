@@ -763,7 +763,7 @@ try {
         }
         return null;
       };
-      await waitFor(() => extensionModule.extensionNames.length >= 14);
+      await waitFor(() => extensionModule.extensionNames.length >= 15);
 
       const discoverResponse = await fetch('/api/extensions/discover', { headers });
       const discovered = discoverResponse.ok ? await discoverResponse.json() : [];
@@ -774,6 +774,15 @@ try {
       });
       const builtInVersion = builtInVersionResponse.ok ? await builtInVersionResponse.json() : null;
       const manifest = extensionModule.getExtensionManifest('regex');
+      const dataManagementManifest = extensionModule.getExtensionManifest(
+        'pure-tavern-data-management',
+      );
+      const dataManagementScriptLoaded = [...document.scripts].some((script) =>
+        script.src.endsWith('/scripts/extensions/pure-tavern-data-management/index.js'),
+      );
+      const dataManagementStyleLoaded = [...document.styleSheets].some((sheet) =>
+        sheet.href?.endsWith('/scripts/extensions/pure-tavern-data-management/style.css'),
+      );
       const regexScriptLoaded = [...document.scripts].some((script) =>
         script.src.endsWith('/scripts/extensions/regex/index.js'),
       );
@@ -908,6 +917,12 @@ try {
         discoveredNames: discovered.map((extension) => extension.name),
         originalRuntimeCount,
         manifestLoaded: manifest?.display_name === 'Regex',
+        dataManagementManifestLoaded:
+          dataManagementManifest?.display_name === 'Pure Tavern Data Management',
+        dataManagementScriptLoaded,
+        dataManagementStyleLoaded,
+        dataManagementRuntimeInstalled:
+          globalThis.__PURE_TAVERN_DATA_MANAGEMENT__?.installed === true,
         regexScriptLoaded,
         regexStyleLoaded,
         versionOk:
@@ -2441,6 +2456,163 @@ try {
   });
   const statsWorkflow = statsWorkflowEvaluation.result?.value;
 
+  const dataManagementPreEvaluation = await client.send('Runtime.evaluate', {
+    expression: `(async () => {
+      const delay = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
+      const waitFor = async (read, timeout = 10_000) => {
+        const deadline = Date.now() + timeout;
+        while (Date.now() < deadline) {
+          const value = read();
+          if (value) return value;
+          await delay(50);
+        }
+        return null;
+      };
+      const headers = { 'Content-Type': 'application/json' };
+      const post = (pathname, body = {}) => fetch(pathname, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(body),
+        cache: 'no-cache',
+      });
+      const routeHandled = (pathname) =>
+        globalThis.__PURE_TAVERN__?.diagnostics.requests.some(
+          (request) => request.pathname === pathname && request.handled,
+        ) ?? false;
+
+      const dataManagementRuntime = await waitFor(
+        () => globalThis.__PURE_TAVERN_DATA_MANAGEMENT__,
+      );
+      dataManagementRuntime?.open();
+      await waitFor(() => document.querySelectorAll('#ptdm-modules input[data-module]').length >= 10);
+      const panel = document.querySelector('#pure-tavern-data-management-dialog');
+      const panelOpen = panel?.open === true;
+      const panelModuleRows = document.querySelectorAll('#ptdm-modules input[data-module]').length;
+
+      const inspectResponse = await post('/api/backups/archive/inspect');
+      const inspection = inspectResponse.ok ? await inspectResponse.json() : null;
+      const exportResponse = await post('/api/backups/archive/export');
+      const exportBlob = exportResponse.ok ? await exportResponse.blob() : null;
+      const previewForm = new FormData();
+      if (exportBlob) {
+        previewForm.set('file', new File([exportBlob], 'browser-full-backup.zip', {
+          type: 'application/zip',
+        }));
+        previewForm.set('strategy', 'merge');
+        previewForm.set('includeSecrets', 'false');
+      }
+      const previewResponse = exportBlob
+        ? await fetch('/api/backups/archive/import/preview', {
+            method: 'POST',
+            body: previewForm,
+          })
+        : null;
+      const preview = previewResponse?.ok ? await previewResponse.json() : null;
+      const importForm = new FormData();
+      if (exportBlob) {
+        importForm.set('file', new File([exportBlob], 'browser-full-backup.zip', {
+          type: 'application/zip',
+        }));
+        importForm.set('strategy', 'skip');
+        importForm.set('includeSecrets', 'false');
+        importForm.set('createRecoveryPoint', 'false');
+      }
+      const importResponse = exportBlob
+        ? await fetch('/api/backups/archive/import', { method: 'POST', body: importForm })
+        : null;
+      const importReport = importResponse?.ok ? await importResponse.json() : null;
+
+      const secretsExportResponse = await post('/api/backups/archive/export', {
+        includeSecrets: true,
+      });
+      const secretsExportBlob = secretsExportResponse.ok
+        ? await secretsExportResponse.blob()
+        : null;
+      const secretsPreviewForm = new FormData();
+      if (secretsExportBlob) {
+        secretsPreviewForm.set(
+          'file',
+          new File([secretsExportBlob], 'browser-secrets-backup.zip', {
+            type: 'application/zip',
+          }),
+        );
+        secretsPreviewForm.set('strategy', 'merge');
+        secretsPreviewForm.set('includeSecrets', 'true');
+      }
+      const secretsPreviewResponse = secretsExportBlob
+        ? await fetch('/api/backups/archive/import/preview', {
+            method: 'POST',
+            body: secretsPreviewForm,
+          })
+        : null;
+      const secretsPreview = secretsPreviewResponse?.ok
+        ? await secretsPreviewResponse.json()
+        : null;
+
+      const createResponse = await post('/api/backups/archive/local/create', {
+        label: 'Browser full recovery point',
+      });
+      const createdBackup = createResponse.ok ? await createResponse.json() : null;
+      const listResponse = await post('/api/backups/archive/local/list');
+      const backups = listResponse.ok ? await listResponse.json() : [];
+      const downloadResponse = createdBackup?.id
+        ? await post('/api/backups/archive/local/download', { id: createdBackup.id })
+        : null;
+      const downloadedBlob = downloadResponse?.ok ? await downloadResponse.blob() : null;
+      panel?.close();
+
+      const feature = globalThis.__PURE_TAVERN__?.features?.['import-export'];
+      return {
+        available: true,
+        panelOpen,
+        panelModuleRows,
+        inspectionModuleCount: inspection?.modules?.length ?? 0,
+        inspectionHasSensitiveSecrets:
+          inspection?.modules?.some(
+            (module) => module.moduleId === 'secrets' && module.sensitive === true,
+          ) === true,
+        participantCount: feature?.participants?.count ?? 0,
+        participantModuleIds: feature?.participants?.moduleIds ?? [],
+        storage: feature?.storage ? { ...feature.storage } : null,
+        transport: feature?.backupTransport ? { ...feature.backupTransport } : null,
+        optionalBackend: feature?.optionalBackend ? { ...feature.optionalBackend } : null,
+        exportOk: exportResponse.ok,
+        exportBytes: exportBlob?.size ?? 0,
+        defaultSecretsExcluded:
+          preview?.manifest?.includeSecrets === false &&
+          !preview?.manifest?.modules?.some((module) => module.moduleId === 'secrets'),
+        hashCount: preview?.manifest?.files?.filter(
+          (file) => /^[a-f0-9]{64}$/i.test(file.sha256),
+        ).length ?? 0,
+        fileCount: preview?.manifest?.files?.length ?? 0,
+        previewModuleCount: preview?.modules?.length ?? 0,
+        dryImportOk:
+          importResponse?.ok === true &&
+          importReport?.strategy === 'skip' &&
+          importReport?.modules?.every((module) => module.errors.length === 0),
+        explicitSecretsIncluded:
+          secretsPreview?.manifest?.includeSecrets === true &&
+          secretsPreview?.manifest?.modules?.some((module) => module.moduleId === 'secrets'),
+        backupId: createdBackup?.id ?? null,
+        backupListed: backups.some((backup) => backup.id === createdBackup?.id),
+        backupDownloaded:
+          downloadedBlob?.size === createdBackup?.size && downloadedBlob?.size > 0,
+        routesHandled: {
+          inspect: routeHandled('/api/backups/archive/inspect'),
+          export: routeHandled('/api/backups/archive/export'),
+          preview: routeHandled('/api/backups/archive/import/preview'),
+          import: routeHandled('/api/backups/archive/import'),
+          create: routeHandled('/api/backups/archive/local/create'),
+          list: routeHandled('/api/backups/archive/local/list'),
+          download: routeHandled('/api/backups/archive/local/download'),
+        },
+      };
+    })()`,
+    awaitPromise: true,
+    returnByValue: true,
+  });
+  const dataManagementPre = dataManagementPreEvaluation.result?.value;
+
   const characterPostReloadEvaluation = await client.send('Runtime.evaluate', {
     expression: `(async () => {
       const createdAvatar = ${JSON.stringify(chatPostReload?.renamedAvatar ?? characterCreateEdit?.createdAvatar ?? '')};
@@ -2672,6 +2844,138 @@ try {
   });
   Object.assign(secretWorkflow, secretReloadEvaluation.result?.value ?? {});
 
+  const dataManagementRestoreEvaluation = await client.send('Runtime.evaluate', {
+    expression: `(async () => {
+      const backupId = ${JSON.stringify(dataManagementPre?.backupId ?? '')};
+      const expectedAvatar = ${JSON.stringify(chatPostReload?.renamedAvatar ?? '')};
+      const headers = { 'Content-Type': 'application/json' };
+      const post = (pathname, body = {}) => fetch(pathname, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(body),
+        cache: 'no-cache',
+      });
+      const beforeResponse = await post('/api/characters/all');
+      const beforeCharacters = beforeResponse.ok ? await beforeResponse.json() : [];
+      const restoreResponse = backupId
+        ? await post('/api/backups/archive/local/restore', {
+            id: backupId,
+            strategy: 'replace-all',
+            includeSecrets: false,
+            createRecoveryPoint: true,
+          })
+        : null;
+      const report = restoreResponse?.ok ? await restoreResponse.json() : null;
+      return {
+        beforeRestoreEmpty: beforeCharacters.length === 0,
+        restoreOk:
+          restoreResponse?.ok === true &&
+          report?.modules?.every((module) => module.errors.length === 0),
+        recoveryBackupCreated: typeof report?.recoveryBackupId === 'string',
+        restoredModuleCount: report?.modules?.length ?? 0,
+        expectedAvatar,
+        restoreRouteHandled:
+          globalThis.__PURE_TAVERN__?.diagnostics.requests.some(
+            (request) =>
+              request.pathname === '/api/backups/archive/local/restore' && request.handled,
+          ) ?? false,
+      };
+    })()`,
+    awaitPromise: true,
+    returnByValue: true,
+  });
+  const dataManagementRestore = dataManagementRestoreEvaluation.result?.value;
+
+  await client.send('Page.navigate', { url: appUrl });
+  snapshot = await waitForApplicationSnapshot();
+
+  const dataManagementVerifyEvaluation = await client.send('Runtime.evaluate', {
+    expression: `(async () => {
+      const backupId = ${JSON.stringify(dataManagementPre?.backupId ?? '')};
+      const expectedAvatar = ${JSON.stringify(chatPostReload?.renamedAvatar ?? '')};
+      const expectedChatName = ${JSON.stringify(chatWorkflow?.mainChatName ?? '')};
+      const personaAlias = ${JSON.stringify(personaWorkflow?.personaAlias ?? '')};
+      const headers = { 'Content-Type': 'application/json' };
+      const post = (pathname, body = {}) => fetch(pathname, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(body),
+        cache: 'no-cache',
+      });
+      const charactersResponse = await post('/api/characters/all');
+      const characters = charactersResponse.ok ? await charactersResponse.json() : [];
+      const chatsResponse = await post('/api/characters/chats', {
+        avatar_url: expectedAvatar,
+        simple: true,
+      });
+      const chats = chatsResponse.ok ? await chatsResponse.json() : [];
+      const chatResponse = await post('/api/chats/get', {
+        ch_name: 'Browser Alice Chat Renamed',
+        file_name: expectedChatName,
+        avatar_url: expectedAvatar,
+      });
+      const chat = chatResponse.ok ? await chatResponse.json() : [];
+      const statsResponse = await post('/api/stats/get');
+      const stats = statsResponse.ok ? await statsResponse.json() : null;
+      const secretsResponse = await post('/api/secrets/read');
+      const secrets = secretsResponse.ok ? await secretsResponse.json() : null;
+      const personaModule = await import('/scripts/personas.js');
+      const avatars = await personaModule.getUserAvatars(false);
+      const inspectResponse = await post('/api/backups/archive/inspect');
+      const inspection = inspectResponse.ok ? await inspectResponse.json() : null;
+      const backupsResponse = await post('/api/backups/archive/local/list');
+      const backups = backupsResponse.ok ? await backupsResponse.json() : [];
+      const deleteResponse = backupId
+        ? await post('/api/backups/archive/local/delete', { id: backupId })
+        : null;
+      const afterDeleteResponse = await post('/api/backups/archive/local/list');
+      const afterDelete = afterDeleteResponse.ok ? await afterDeleteResponse.json() : [];
+      return {
+        characterRestored: characters.some((character) => character.avatar === expectedAvatar),
+        chatListed: chats.some((item) => item.file_name === expectedChatName + '.jsonl'),
+        chatRestored: chat.some(
+          (message) => message.is_user && message.mes === 'Browser local user message',
+        ),
+        personaRestored: avatars.includes(personaAlias),
+        statsRestored:
+          stats?.[expectedAvatar]?.user_msg_count > 0 &&
+          stats?.[expectedAvatar]?.non_user_msg_count > 0,
+        secretsStayedExcluded: secrets?.api_key_openai === null,
+        panelRestored: globalThis.__PURE_TAVERN_DATA_MANAGEMENT__?.installed === true,
+        participantCountAfterReload:
+          globalThis.__PURE_TAVERN__?.features?.['import-export']?.participants?.count ?? 0,
+        backupCountAfterRestore: backups.length,
+        recoveryBackupVisible: backups.some((backup) => backup.reason === 'pre-restore'),
+        backupDeleteOk:
+          deleteResponse?.ok === true && !afterDelete.some((backup) => backup.id === backupId),
+        inspectionModuleCount: inspection?.modules?.length ?? 0,
+        routesHandled: {
+          inspect: globalThis.__PURE_TAVERN__?.diagnostics.requests.some(
+            (request) => request.pathname === '/api/backups/archive/inspect' && request.handled,
+          ) ?? false,
+          list: globalThis.__PURE_TAVERN__?.diagnostics.requests.some(
+            (request) => request.pathname === '/api/backups/archive/local/list' && request.handled,
+          ) ?? false,
+          delete: globalThis.__PURE_TAVERN__?.diagnostics.requests.some(
+            (request) => request.pathname === '/api/backups/archive/local/delete' && request.handled,
+          ) ?? false,
+        },
+      };
+    })()`,
+    awaitPromise: true,
+    returnByValue: true,
+  });
+  const dataManagementWorkflow = {
+    ...(dataManagementPre ?? {}),
+    ...(dataManagementRestore ?? {}),
+    ...(dataManagementVerifyEvaluation.result?.value ?? {}),
+    routesHandled: {
+      ...(dataManagementPre?.routesHandled ?? {}),
+      ...(dataManagementVerifyEvaluation.result?.value?.routesHandled ?? {}),
+      restore: dataManagementRestore?.restoreRouteHandled === true,
+    },
+  };
+
   // Allow animations, nested CSS imports, fonts, and images to finish so late failures are included.
   await new Promise((resolve) => setTimeout(resolve, 750));
 
@@ -2754,25 +3058,29 @@ try {
       extensionWorkflow?.registry?.backend === 'records' &&
       extensionWorkflow?.trustedBuiltIns?.status === 'ready' &&
       extensionWorkflow?.trustedBuiltIns?.source === 'generated-manifest' &&
-      extensionWorkflow?.trustedBuiltIns?.count === 14 &&
+      extensionWorkflow?.trustedBuiltIns?.count === 15 &&
       extensionWorkflow?.localPackageAssetsInjected === true &&
       extensionWorkflow?.executionModel === 'legacy-same-context-user-approved' &&
       extensionWorkflow?.originalRiskWarningOwnedByLegacyUi === true,
     trustedExtensionsBrowserWorkflow:
       extensionWorkflow?.available === true &&
-      extensionWorkflow?.discoveredCount === 14 &&
-      extensionWorkflow?.originalRuntimeCount === 14 &&
+      extensionWorkflow?.discoveredCount === 15 &&
+      extensionWorkflow?.originalRuntimeCount === 15 &&
       extensionWorkflow?.discoveredNames?.includes('regex') === true &&
       extensionWorkflow?.manifestLoaded === true &&
       extensionWorkflow?.regexScriptLoaded === true &&
       extensionWorkflow?.regexStyleLoaded === true &&
+      extensionWorkflow?.dataManagementManifestLoaded === true &&
+      extensionWorkflow?.dataManagementScriptLoaded === true &&
+      extensionWorkflow?.dataManagementStyleLoaded === true &&
+      extensionWorkflow?.dataManagementRuntimeInstalled === true &&
       extensionWorkflow?.versionOk === true &&
       extensionWorkflow?.disabledPersisted === true &&
       extensionWorkflow?.enabledPersisted === true,
     thirdPartyExtensionsBrowserWorkflow:
       extensionWorkflow?.warningShown === true &&
       extensionWorkflow?.installOk === true &&
-      extensionWorkflow?.runtimeCountAfterInstall >= 15 &&
+      extensionWorkflow?.runtimeCountAfterInstall >= 16 &&
       extensionWorkflow?.thirdPartyManifestLoaded === true &&
       extensionWorkflow?.manifestAssetServed === true &&
       extensionWorkflow?.scriptAssetServed === true &&
@@ -2910,6 +3218,46 @@ try {
       Object.values(assetsWorkflow?.sprite ?? {}).every(Boolean) &&
       Object.values(assetsWorkflow?.library ?? {}).every(Boolean) &&
       Object.values(assetsWorkflow?.routesHandled ?? {}).every(Boolean),
+    importExportStorageReady:
+      dataManagementWorkflow?.storage?.status === 'ready' &&
+      dataManagementWorkflow?.storage?.backend === 'indexeddb' &&
+      dataManagementWorkflow?.participantCount === 10 &&
+      dataManagementWorkflow?.participantCountAfterReload === 10 &&
+      dataManagementWorkflow?.inspectionModuleCount === 10 &&
+      dataManagementWorkflow?.transport?.kind === 'browser-local' &&
+      dataManagementWorkflow?.transport?.opaqueArchiveStorage === true &&
+      dataManagementWorkflow?.optionalBackend?.implemented === false &&
+      dataManagementWorkflow?.optionalBackend?.contract === 'BackupTransport',
+    importExportBrowserWorkflow:
+      dataManagementWorkflow?.available === true &&
+      dataManagementWorkflow?.panelOpen === true &&
+      dataManagementWorkflow?.panelModuleRows === 10 &&
+      dataManagementWorkflow?.inspectionHasSensitiveSecrets === true &&
+      dataManagementWorkflow?.exportOk === true &&
+      dataManagementWorkflow?.exportBytes > 0 &&
+      dataManagementWorkflow?.fileCount > 0 &&
+      dataManagementWorkflow?.hashCount === dataManagementWorkflow?.fileCount &&
+      dataManagementWorkflow?.previewModuleCount === 9 &&
+      dataManagementWorkflow?.defaultSecretsExcluded === true &&
+      dataManagementWorkflow?.explicitSecretsIncluded === true &&
+      dataManagementWorkflow?.dryImportOk === true &&
+      dataManagementWorkflow?.backupListed === true &&
+      dataManagementWorkflow?.backupDownloaded === true &&
+      dataManagementWorkflow?.beforeRestoreEmpty === true &&
+      dataManagementWorkflow?.restoreOk === true &&
+      dataManagementWorkflow?.recoveryBackupCreated === true &&
+      dataManagementWorkflow?.restoredModuleCount === 9 &&
+      dataManagementWorkflow?.characterRestored === true &&
+      dataManagementWorkflow?.chatListed === true &&
+      dataManagementWorkflow?.chatRestored === true &&
+      dataManagementWorkflow?.personaRestored === true &&
+      dataManagementWorkflow?.statsRestored === true &&
+      dataManagementWorkflow?.secretsStayedExcluded === true &&
+      dataManagementWorkflow?.panelRestored === true &&
+      dataManagementWorkflow?.backupCountAfterRestore >= 2 &&
+      dataManagementWorkflow?.recoveryBackupVisible === true &&
+      dataManagementWorkflow?.backupDeleteOk === true &&
+      Object.values(dataManagementWorkflow?.routesHandled ?? {}).every(Boolean),
     chatsStorageReady:
       chatWorkflow?.storage?.status === 'ready' &&
       chatWorkflow?.storage?.backend === 'indexeddb' &&
@@ -3049,6 +3397,7 @@ try {
     characterWorkflow,
     chatWorkflow,
     statsWorkflow,
+    dataManagementWorkflow,
     requestCount: requests.length,
     localScriptRequestCount: localScriptRequests.length,
     compatibilityNetworkRequests,
