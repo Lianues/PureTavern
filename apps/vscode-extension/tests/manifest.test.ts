@@ -27,8 +27,9 @@ describe('PureTavern VS Code extension manifest', () => {
       expect.objectContaining({ id: 'pureTavern', icon: 'media/pt.svg' }),
     );
     expect(manifest.contributes.views.pureTavern).toContainEqual(
-      expect.objectContaining({ id: 'pureTavern.launcher' }),
+      expect.objectContaining({ id: 'pureTavern.launcher', type: 'webview' }),
     );
+    expect(manifest.contributes.menus).toBeUndefined();
     expect(svg).toContain('fill="currentColor"');
     expect(tabLightSvg).toContain('fill="#4a4a4a"');
     expect(tabDarkSvg).toContain('fill="#c8c8c8"');
@@ -37,6 +38,7 @@ describe('PureTavern VS Code extension manifest', () => {
     expect(source).toContain("'media', 'pt-tab-light.svg'");
     expect(source).toContain("'media', 'pt-tab-dark.svg'");
     expect(source).toContain('vscode.env.asExternalUri');
+    expect(source).toContain('Open PureTavern</button>');
     expect(source).toContain('Loading PureTavern…');
     expect(source).not.toContain('portMapping');
     expect(source).not.toContain('workbench.action.closeSidebar');

@@ -58,16 +58,8 @@
       "pureTavern": [
         {
           "id": "pureTavern.launcher",
-          "name": "PureTavern"
-        }
-      ]
-    },
-    "menus": {
-      "view/title": [
-        {
-          "command": "pureTavern.open",
-          "when": "view == pureTavern.launcher",
-          "group": "navigation"
+          "name": "PureTavern",
+          "type": "webview"
         }
       ]
     }
