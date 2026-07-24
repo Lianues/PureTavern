@@ -55,6 +55,7 @@ export interface ExtensionPackageAssetFile {
 
 export interface ExtensionPackageAsset {
   extensionId: string;
+  legacyName: string;
   packageHash: string;
   files: readonly ExtensionPackageAssetFile[];
   installedAt: string;

@@ -1,91 +1,94 @@
+import { zipSync } from 'fflate';
 import { describe, expect, it } from 'vitest';
 
 import {
+  DEFAULT_EXTENSION_PACKAGE_LIMITS,
   ExtensionPackageValidationError,
-  validateLocalExtensionPackage,
+  extractExtensionZip,
+  validateLegacyExtensionPackage,
 } from '../application/package-validator';
-import { makeWorkerPackage } from './test-helpers';
+import { makeLegacyPackage } from './test-helpers';
 
-describe('local extension package validation', () => {
-  it('accepts a hashed worker package and returns deterministic metadata', async () => {
-    const files = await makeWorkerPackage('org.example.valid', {
-      capabilities: ['storage:plugin'],
+describe('Legacy extension package validation', () => {
+  it('accepts the original SillyTavern manifest shape and preserves opaque fields', async () => {
+    const result = await validateLegacyExtensionPackage(makeLegacyPackage());
+
+    expect(result.manifest).toMatchObject({
+      display_name: 'Cocktail Test',
+      js: 'index.js',
+      css: 'style.css',
+      dependencies: ['regex'],
+      future_manifest_field: { kept: true },
     });
-
-    const validated = await validateLocalExtensionPackage(files);
-
-    expect(validated).toMatchObject({
-      manifest: {
-        id: 'org.example.valid',
-        entrypoint: { type: 'worker', path: 'worker.js' },
-        requestedCapabilities: ['storage:plugin'],
-      },
-      fileCount: 2,
-    });
-    expect(validated.packageHash).toMatch(/^[a-f0-9]{64}$/);
+    expect(result.packageHash).toMatch(/^[a-f0-9]{64}$/u);
+    expect(result.files).toHaveLength(3);
   });
 
-  it.each(['../worker.js', '/worker.js', 'folder\\worker.js', '%2e%2e/worker.js', 'C:/worker.js'])(
-    'rejects unsafe or traversing path %s',
-    async (path) => {
-      const files = await makeWorkerPackage('org.example.path');
-      files[1] = { ...files[1]!, path };
-
-      await expect(validateLocalExtensionPackage(files)).rejects.toMatchObject({
-        name: 'ExtensionPackageValidationError',
-      });
-    },
-  );
-
-  it('rejects hash mismatch', async () => {
-    const files = await makeWorkerPackage('org.example.hash', {
-      hashOverride: '0'.repeat(64),
+  it('rejects missing entry files and unsafe duplicate paths', async () => {
+    const missing = makeLegacyPackage().filter((file) => file.path !== 'index.js');
+    await expect(validateLegacyExtensionPackage(missing)).rejects.toMatchObject({
+      code: 'missing-entrypoint',
     });
-
-    await expect(validateLocalExtensionPackage(files)).rejects.toMatchObject({
-      code: 'hash-mismatch',
-    });
-  });
-
-  it('rejects package size and file-count limits before persistence', async () => {
-    const files = await makeWorkerPackage('org.example.limits');
 
     await expect(
-      validateLocalExtensionPackage(files, {
-        maxFiles: 1,
-        maxTotalBytes: 1_000_000,
-        maxManifestBytes: 1_000_000,
-        maxPathLength: 240,
-      }),
-    ).rejects.toMatchObject({ code: 'file-count' });
-
-    await expect(
-      validateLocalExtensionPackage(files, {
-        maxFiles: 10,
-        maxTotalBytes: 1,
-        maxManifestBytes: 1_000_000,
-        maxPathLength: 240,
-      }),
-    ).rejects.toMatchObject({ code: 'package-size' });
+      validateLegacyExtensionPackage([
+        ...makeLegacyPackage(),
+        { path: 'INDEX.JS', data: new Blob(['duplicate']) },
+      ]),
+    ).rejects.toMatchObject({ code: 'duplicate-path' });
   });
 
-  it('rejects case/Unicode duplicate conflicts', async () => {
-    const files = await makeWorkerPackage('org.example.duplicate', {
-      extraFiles: [{ path: 'Worker.js', data: new Blob(['duplicate']) }],
+  it('strips one archive root and validates the extracted package', async () => {
+    const zip = zipSync({
+      'cocktail-main/manifest.json': stringBytes(
+        JSON.stringify({
+          display_name: 'Cocktail',
+          version: '1.0.0',
+          author: 'Test',
+          js: 'index.js',
+        }),
+      ),
+      'cocktail-main/index.js': stringBytes('globalThis.__cocktail = true;'),
     });
+    const files = await extractExtensionZip(bytesBlob(zip));
+    const result = await validateLegacyExtensionPackage(files);
 
-    await expect(validateLocalExtensionPackage(files)).rejects.toMatchObject({
-      code: 'duplicate-path',
-    });
+    expect(files.map((file) => file.path)).toEqual(['manifest.json', 'index.js']);
+    expect(result.manifest.display_name).toBe('Cocktail');
   });
 
-  it('reserves same-context entrypoints for trusted built-ins', async () => {
-    const files = await makeWorkerPackage('org.example.same-context', {
-      entryType: 'same-context',
+  it('rejects zip-slip entries before extraction', async () => {
+    const zip = zipSync({
+      'cocktail-main/manifest.json': stringBytes('{}'),
+      'cocktail-main/../evil.js': stringBytes('evil'),
     });
-
-    await expect(validateLocalExtensionPackage(files)).rejects.toEqual(
-      expect.objectContaining<Partial<ExtensionPackageValidationError>>({ code: 'entry-type' }),
+    await expect(extractExtensionZip(bytesBlob(zip))).rejects.toBeInstanceOf(
+      ExtensionPackageValidationError,
     );
   });
+
+  it('rejects declared expansion ratios beyond the configured limit', async () => {
+    const zip = zipSync({
+      'cocktail-main/manifest.json': stringBytes(
+        JSON.stringify({ display_name: 'Cocktail', js: 'index.js' }),
+      ),
+      'cocktail-main/index.js': new Uint8Array(512 * 1024),
+    });
+    await expect(
+      extractExtensionZip(bytesBlob(zip), {
+        ...DEFAULT_EXTENSION_PACKAGE_LIMITS,
+        maxCompressionRatio: 5,
+      }),
+    ).rejects.toMatchObject({ code: 'compression-ratio' });
+  });
 });
+
+function stringBytes(value: string): Uint8Array {
+  return new TextEncoder().encode(value);
+}
+
+function bytesBlob(value: Uint8Array): Blob {
+  const copy = new Uint8Array(value.byteLength);
+  copy.set(value);
+  return new Blob([copy.buffer], { type: 'application/zip' });
+}

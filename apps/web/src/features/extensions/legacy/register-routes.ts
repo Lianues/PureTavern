@@ -3,15 +3,8 @@ import { jsonResponse, textResponse } from '@/platform/legacy/compatibility-rout
 
 import { ExtensionPermissionError, type ExtensionService } from '../application/extension-service';
 import { ExtensionPackageValidationError } from '../application/package-validator';
+import { ExtensionSourceError } from '../infrastructure/cors-extension-source';
 import { ExtensionConflictError, ExtensionNotFoundError } from '../ports/extension-registry';
-
-const REMOTE_OPERATIONS = [
-  ['POST', '/api/extensions/install', 'remote-git-install'],
-  ['POST', '/api/extensions/update', 'remote-git-update'],
-  ['POST', '/api/extensions/branches', 'remote-git-branches'],
-  ['POST', '/api/extensions/switch', 'remote-git-switch'],
-  ['POST', '/api/extensions/move', 'server-filesystem-move'],
-] as const;
 
 export function registerExtensionsLegacyRoutes(
   router: CompatibilityRouter,
@@ -23,24 +16,91 @@ export function registerExtensionsLegacyRoutes(
     return jsonResponse(await extensions.legacyDiscover());
   });
 
-  router.register('POST', '/api/extensions/version', async (request) => {
+  router.register('POST', '/api/extensions/install', async (request) => {
     try {
       await ready;
       const body = await readJsonBody(request);
-      if (body.global === true) return unsupported('server-global-extension-version');
-      return jsonResponse(await extensions.getLegacyVersion(requiredExtensionName(body)));
+      const result = await extensions.installRemote(
+        requiredString(body.url, 'url'),
+        body.global === true ? 'global' : 'local',
+        optionalString(body.branch),
+        request.signal,
+      );
+      return jsonResponse(result);
     } catch (error) {
       return extensionErrorResponse(error);
     }
   });
 
-  router.register('POST', '/api/sd/comfy/workflows', () => jsonResponse([]));
+  router.register('POST', '/api/extensions/version', async (request) => {
+    try {
+      await ready;
+      const body = await readJsonBody(request);
+      return jsonResponse(
+        await extensions.getLegacyVersion(requiredExtensionName(body), request.signal),
+      );
+    } catch (error) {
+      return extensionErrorResponse(error);
+    }
+  });
+
+  router.register('POST', '/api/extensions/update', async (request) => {
+    try {
+      await ready;
+      const body = await readJsonBody(request);
+      return jsonResponse(
+        await extensions.updateByLegacyReference(requiredExtensionName(body), request.signal),
+      );
+    } catch (error) {
+      return extensionErrorResponse(error);
+    }
+  });
+
+  router.register('POST', '/api/extensions/branches', async (request) => {
+    try {
+      await ready;
+      const body = await readJsonBody(request);
+      return jsonResponse(
+        await extensions.listBranches(requiredExtensionName(body), request.signal),
+      );
+    } catch (error) {
+      return extensionErrorResponse(error);
+    }
+  });
+
+  router.register('POST', '/api/extensions/switch', async (request) => {
+    try {
+      await ready;
+      const body = await readJsonBody(request);
+      await extensions.switchBranch(
+        requiredExtensionName(body),
+        requiredString(body.branch, 'branch'),
+        request.signal,
+      );
+      return new Response(null, { status: 204 });
+    } catch (error) {
+      return extensionErrorResponse(error);
+    }
+  });
+
+  router.register('POST', '/api/extensions/move', async (request) => {
+    try {
+      await ready;
+      const body = await readJsonBody(request);
+      await extensions.moveScope(
+        requiredExtensionName(body),
+        requiredString(body.destination, 'destination'),
+      );
+      return new Response(null, { status: 204 });
+    } catch (error) {
+      return extensionErrorResponse(error);
+    }
+  });
 
   router.register('POST', '/api/extensions/delete', async (request) => {
     try {
       await ready;
       const body = await readJsonBody(request);
-      if (body.global === true) return unsupported('server-global-extension-delete');
       const reference = requiredExtensionName(body);
       await extensions.removeByLegacyReference(reference);
       return textResponse(`Extension has been deleted: ${reference}`);
@@ -49,22 +109,7 @@ export function registerExtensionsLegacyRoutes(
     }
   });
 
-  for (const [method, path, operation] of REMOTE_OPERATIONS) {
-    router.register(method, path, () => unsupported(operation));
-  }
-}
-
-function unsupported(operation: string): Response {
-  return jsonResponse(
-    {
-      error: 'unsupported',
-      operation,
-      reason:
-        'This operation requires server-side Git, filesystem, process, or multi-user privileges that a browser-only app does not have.',
-      pureTavern: true,
-    },
-    501,
-  );
+  router.register('POST', '/api/sd/comfy/workflows', () => jsonResponse([]));
 }
 
 async function readJsonBody(request: Request): Promise<Record<string, unknown>> {
@@ -76,10 +121,18 @@ async function readJsonBody(request: Request): Promise<Record<string, unknown>> 
 }
 
 function requiredExtensionName(body: Record<string, unknown>): string {
-  if (typeof body.extensionName !== 'string' || !body.extensionName.trim()) {
-    throw new TypeError('A non-empty extensionName is required.');
+  return requiredString(body.extensionName, 'extensionName');
+}
+
+function requiredString(value: unknown, field: string): string {
+  if (typeof value !== 'string' || !value.trim()) {
+    throw new TypeError(`A non-empty ${field} is required.`);
   }
-  return body.extensionName;
+  return value.trim();
+}
+
+function optionalString(value: unknown): string {
+  return typeof value === 'string' ? value.trim() : '';
 }
 
 function extensionErrorResponse(error: unknown): Response {
@@ -88,14 +141,22 @@ function extensionErrorResponse(error: unknown): Response {
       ? 404
       : error instanceof ExtensionPermissionError
         ? 403
-        : error instanceof ExtensionConflictError ||
-            error instanceof ExtensionPackageValidationError ||
-            error instanceof TypeError
-          ? 400
-          : 500;
+        : error instanceof ExtensionConflictError
+          ? 409
+          : error instanceof ExtensionPackageValidationError || error instanceof TypeError
+            ? 400
+            : error instanceof ExtensionSourceError
+              ? error.code === 'rate-limit'
+                ? 429
+                : 502
+              : 500;
   return jsonResponse(
     {
       error: error instanceof Error ? error.message : String(error),
+      code:
+        error instanceof ExtensionPackageValidationError || error instanceof ExtensionSourceError
+          ? error.code
+          : undefined,
       pureTavern: true,
     },
     status,

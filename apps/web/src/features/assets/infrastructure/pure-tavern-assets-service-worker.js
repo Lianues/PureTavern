@@ -5,7 +5,7 @@ const KEY_SEPARATOR = '\u001f';
 const ASSETS_MODULE = 'assets';
 const CHARACTERS_MODULE = 'characters';
 const ASSET_MARKER_HEADER = 'X-Pure-Tavern-Asset';
-const WORKER_VERSION = '1';
+const WORKER_VERSION = '2';
 
 self.addEventListener('install', (event) => {
   event.waitUntil(self.skipWaiting());
@@ -239,6 +239,7 @@ function isSupportedAssetPath(pathname) {
     '/user/images/',
     '/characters/',
     '/assets/',
+    '/scripts/extensions/third-party/',
   ].some((prefix) => pathname.startsWith(prefix));
 }
 
@@ -273,5 +274,6 @@ function markerForPath(pathname) {
   if (pathname.startsWith('/user/files/')) return 'assets/attachments';
   if (pathname.startsWith('/user/images/')) return 'assets/user-images';
   if (pathname.startsWith('/characters/')) return 'assets/sprites';
+  if (pathname.startsWith('/scripts/extensions/third-party/')) return 'assets/extensions';
   return 'assets/library';
 }

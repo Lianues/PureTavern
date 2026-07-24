@@ -45,21 +45,21 @@ Pure Tavern 将 SillyTavern 原版 UI/交互作为长期保留的上游兼容层
 - `script.js`、`scripts/extensions.js`、`scripts/st-context.js` 等关键模块导出；
 - 上游运行时全局对象，如 `SillyTavern`、`DOMPurify`、`Handlebars`、`Fuse` 和 jQuery 相关对象等。
 
-当前状态必须明确为：扩展 UI 基础与 14 个随 upstream snapshot 分发的 trusted built-ins 已恢复，`discover` 只暴露该构建清单。用户第三方包不进入原页面 loader，必须使用显式权限的 iframe/Worker sandbox；远程 Git 和 Node plugins 仍未迁移。
+当前状态必须明确为：扩展 UI、原版第三方风险警告、14 个随 upstream snapshot 分发的 trusted built-ins 和原版 same-context 第三方 loader 均保留。`discover` 同时暴露构建清单与用户确认安装的 CORS 第三方包；第三方代码拥有同源页面权限，不是沙箱。Node plugins 与非 CORS/私有远程仍未迁移。
 
 ### 数据能力
 
 记录 Hook 当前处理的 Legacy 请求，并明确区分已实现与待迁移能力：
 
 - Settings 文档与快照标记为浏览器就绪，并保持原版完整文档/快照 DTO；
-- Characters、单角色 Chats、World Books、Presets、Assets 与 trusted Extensions 的路径由各模块 manifest 覆盖 core placeholder，标记对应 browser-ready 状态；
+- Characters、单角色 Chats、World Books、Presets、Assets 与 Extensions 的路径由各模块 manifest 覆盖 core placeholder，标记对应 browser-ready/completed 状态；
 - Personas 没有专属 API，通过 Settings provider/composer 和 Assets capability 接入，因此模块 contract 记录 bridge 而非伪造请求；
 - Prompt Pipeline 有意长期保留原版实现，不注册我方重复 Feature；`prepareOpenAIMessages` 生成的 `generate_data` 是 M12 的正式兼容边界；
 - Tokenizers 的 35 条 Legacy 路径由 M15 feature manifest 覆盖，使用统一 `tokenx` 近似计数并明确报告 `approximate`，不等价于模型专用 tokenizer；
 - Secrets 的 8 条 Legacy 路径由 M14 feature manifest 覆盖，使用本地明文 IndexedDB、多值 active 语义和窄 CredentialResolver；该状态不代表加密或 Vault 安全性；
 - Generation 的 status/generate/bias 由 M12 manifest 覆盖，仅声明 Chat Completion 浏览器直连；26 个 source 有 Adapter，但实际可达性仍取决于厂商 CORS/TLS，非聊天主 API未迁移；
 - `/csrf-token`、`/version`、`/api/users/me` 等仍是 UI 启动固定兼容响应；
-- 群组、Horde、远程 Git 扩展操作和丢弃式 stats 等仍是空数据、安全默认或明确降级响应。
+- 群组、Horde、非 CORS/私有 Git、Node plugins 和丢弃式 stats 等仍是空数据、安全默认或明确降级响应。
 
 契约 schema v2 使用 `dataCapabilities` 分类。标记为 `bootstrap-compatibility-only`、`bootstrap-empty-response-not-migrated`、`extension-loading-disabled` 或其他明确降级状态的路径都不是已完成业务能力；是否迁移以 feature manifest 的 `migrationStatus` 为准。
 
@@ -90,7 +90,7 @@ pnpm legacy:contracts:check --source "F:\path\SillyTavern-1.19.0" --version 1.19
 - jQuery 与关键上游全局对象存在；
 - `script.js`、`scripts/events.js`、`scripts/extensions.js` 等模块可动态导入且关键导出存在；
 - `eventSource` 可注册、触发和移除监听器；
-- 扩展上下文入口、扩展设置对象和 14 个 trusted built-ins 由原版 loader 加载；用户第三方扩展不进入 same-context；
+- 扩展上下文入口、设置对象和 14 个 trusted built-ins 由原版 loader 加载；原版风险警告确认后，CORS 第三方扩展也从 M13/共享 Worker 路径进入 same-context；
 - 关键 DOM 锚点存在；
 - 左右抽屉、世界书抽屉可打开并关闭；
 - 原版 `#fast_ui_mode` 触发原版防抖保存，IndexedDB 记录与刷新后的控件状态一致；
@@ -101,7 +101,7 @@ pnpm legacy:contracts:check --source "F:\path\SillyTavern-1.19.0" --version 1.19
 - Presets 完成 11 类默认种子、原版 selector、PresetManager CRUD/恢复以及 theme/Quick Reply/Moving UI；
 - Assets 完成背景、文件夹、附件、用户图片/persona、sprites、library、extension package 与共享 Worker 直接 URL；
 - Personas 完成原版头像上传、创建、选择、默认、角色绑定、刷新恢复、删除和本地身份降级；
-- Extensions 完成 trusted discover/manifest/script/style、version 与原版 disable/enable 的 Settings/registry 同步；
+- Extensions 完成 trusted built-ins，以及原版第三方警告、install/discover、manifest/JS/CSS、hooks、disable/enable、version/update/branches/switch/move/delete 和 Settings/registry/M13 同步；
 - Prompt Pipeline 验证原版 prepare 函数仍为唯一权威，项目内不存在重复实现，并由 M12 完成生成 transport 闭环；
 - Tokenizers 通过原版同步/异步调用验证全部 alias 的统一计数、OpenAI/remote count、Worker backend、pseudo decode 往返，以及原版 M10 对这些 Legacy 路径的消费；
 - Secrets 通过原版 `scripts/secrets.js` 验证多值保存、掩码、find/view、轮换、重命名、跨刷新持久化、删除回退和明文 diagnostics 声明；

@@ -12,8 +12,9 @@ The feature uses the fixed generic stores without changing the IndexedDB schema:
 - records: module `assets`, collections `index`, `path-aliases`, `background-folders`, and seed state.
 
 M08 consumes a narrow Persona avatar capability. M11 consumes a narrow extension-package capability;
-validated iframe/Worker files use `/assets/extensions/<stable-id>/<path>` aliases and remain served by
-the same root Service Worker. Neither consumer receives raw access to the Assets stores.
+validated original extension files use `/scripts/extensions/third-party/<folder>/<path>` aliases and
+remain served by the same root Service Worker. Neither consumer receives raw access to the Assets
+stores.
 
 Legacy URLs are aliases in the index. A rename updates alias/metadata without copying the Blob.
 Application writes compensate index/alias/blob failures, while resilient adapters fall back to

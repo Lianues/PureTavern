@@ -2,7 +2,7 @@
   "schemaVersion": 2,
   "project": "SillyTavern",
   "version": "1.18.0",
-  "generatedAt": "2026-07-24T09:11:24.773Z",
+  "generatedAt": "2026-07-24T10:55:55.167Z",
   "source": {
     "publicRoot": "legacy/upstream/public",
     "repositoryRoot": "legacy/upstream"
@@ -4451,8 +4451,8 @@
           "method": "GET",
           "pathname": "/api/extensions/discover",
           "category": "extension-ecosystem-required",
-          "responseKind": "indexeddb-trusted-builtin-extension-list-json",
-          "migrationStatus": "browser-ready-trusted-builtins"
+          "responseKind": "indexeddb-built-in-and-third-party-extension-list-json",
+          "migrationStatus": "completed-browser-legacy-extensions"
         },
         {
           "method": "POST",
@@ -4897,52 +4897,52 @@
         },
         {
           "method": "POST",
-          "pathname": "/api/extensions/version",
-          "category": "browser-data-capability",
-          "responseKind": "local-extension-version-metadata-json",
-          "migrationStatus": "browser-ready-local-extension-metadata"
-        },
-        {
-          "method": "POST",
-          "pathname": "/api/extensions/delete",
-          "category": "browser-data-capability",
-          "responseKind": "local-extension-delete-or-trusted-denied-text",
-          "migrationStatus": "browser-ready-local-extension-management"
-        },
-        {
-          "method": "POST",
           "pathname": "/api/extensions/install",
           "category": "browser-data-capability",
-          "responseKind": "explicit-unsupported-server-git-json",
-          "migrationStatus": "browser-unsupported-server-git"
+          "responseKind": "cors-source-validated-package-install-json",
+          "migrationStatus": "completed-browser-legacy-extensions"
+        },
+        {
+          "method": "POST",
+          "pathname": "/api/extensions/version",
+          "category": "browser-data-capability",
+          "responseKind": "browser-visible-remote-version-json",
+          "migrationStatus": "completed-browser-legacy-extensions"
         },
         {
           "method": "POST",
           "pathname": "/api/extensions/update",
           "category": "browser-data-capability",
-          "responseKind": "explicit-unsupported-server-git-json",
-          "migrationStatus": "browser-unsupported-server-git"
+          "responseKind": "cors-source-validated-package-update-json",
+          "migrationStatus": "completed-browser-legacy-extensions"
         },
         {
           "method": "POST",
           "pathname": "/api/extensions/branches",
           "category": "browser-data-capability",
-          "responseKind": "explicit-unsupported-server-git-json",
-          "migrationStatus": "browser-unsupported-server-git"
+          "responseKind": "cors-source-branch-tag-list-json",
+          "migrationStatus": "completed-browser-legacy-extensions"
         },
         {
           "method": "POST",
           "pathname": "/api/extensions/switch",
           "category": "browser-data-capability",
-          "responseKind": "explicit-unsupported-server-git-json",
-          "migrationStatus": "browser-unsupported-server-git"
+          "responseKind": "cors-source-validated-ref-switch-empty-204",
+          "migrationStatus": "completed-browser-legacy-extensions"
         },
         {
           "method": "POST",
           "pathname": "/api/extensions/move",
           "category": "browser-data-capability",
-          "responseKind": "explicit-unsupported-server-filesystem-json",
-          "migrationStatus": "browser-unsupported-server-filesystem"
+          "responseKind": "single-profile-scope-metadata-move-empty-204",
+          "migrationStatus": "completed-browser-legacy-extensions"
+        },
+        {
+          "method": "POST",
+          "pathname": "/api/extensions/delete",
+          "category": "browser-data-capability",
+          "responseKind": "indexeddb-package-delete-or-trusted-denied-text",
+          "migrationStatus": "completed-browser-legacy-extensions"
         },
         {
           "method": "POST",

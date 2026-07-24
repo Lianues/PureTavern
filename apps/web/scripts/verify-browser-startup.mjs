@@ -5,6 +5,8 @@ import { createServer as createNetServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
+import { zipSync } from 'fflate';
+
 import {
   CRITICAL_DOM_IDS,
   EXPECTED_RUNTIME_GLOBALS,
@@ -50,6 +52,7 @@ async function getAvailablePort() {
 }
 
 async function startMockChatCompletionProvider() {
+  let extensionVersion = '1.0.0';
   const server = createHttpServer(async (request, response) => {
     response.setHeader('Access-Control-Allow-Origin', '*');
     response.setHeader(
@@ -71,12 +74,25 @@ async function startMockChatCompletionProvider() {
         return {};
       }
     })();
-    const pathname = new URL(request.url ?? '/', 'http://127.0.0.1').pathname;
+    const requestUrl = new URL(request.url ?? '/', 'http://127.0.0.1');
+    const pathname = requestUrl.pathname;
     const sendJson = (value) => {
       response.setHeader('Content-Type', 'application/json');
       response.end(JSON.stringify(value));
     };
 
+    if (pathname === '/browser-extension-control') {
+      extensionVersion = requestUrl.searchParams.get('version') || extensionVersion;
+      sendJson({ version: extensionVersion });
+      return;
+    }
+    if (pathname === '/browser-extension.zip') {
+      const archive = createMockLegacyExtensionArchive(extensionVersion);
+      response.setHeader('Content-Type', 'application/zip');
+      response.setHeader('Content-Length', String(archive.byteLength));
+      response.end(archive);
+      return;
+    }
     if (pathname.endsWith('/models')) {
       if (pathname.startsWith('/google/')) {
         sendJson({ models: [{ name: 'models/browser-google-model' }] });
@@ -126,6 +142,47 @@ async function startMockChatCompletionProvider() {
   const address = server.address();
   if (!address || typeof address === 'string') throw new Error('Could not start mock provider.');
   return { server, baseUrl: `http://127.0.0.1:${address.port}` };
+}
+
+function createMockLegacyExtensionArchive(version) {
+  const manifest = JSON.stringify({
+    display_name: 'Browser CORS Extension',
+    loading_order: 1,
+    requires: [],
+    optional: [],
+    dependencies: [],
+    js: 'index.js',
+    css: 'style.css',
+    author: 'Pure Tavern Browser Gate',
+    version,
+    hooks: {
+      install: 'onInstall',
+      update: 'onUpdate',
+      delete: 'onDelete',
+      enable: 'onEnable',
+      disable: 'onDisable',
+    },
+    future_manifest_field: { kept: true },
+  });
+  const script = `
+const state = globalThis.__PURE_TAVERN_THIRD_PARTY__ ??= { loads: 0, hooks: [], version: null };
+state.loads += 1;
+state.version = ${JSON.stringify(version)};
+export function onInstall() { state.hooks.push('install'); }
+export function onUpdate() { state.hooks.push('update'); }
+export function onDelete() { state.hooks.push('delete'); }
+export function onEnable() { state.hooks.push('enable'); }
+export function onDisable() { state.hooks.push('disable'); }
+`;
+  return Buffer.from(
+    zipSync({
+      'browser-extension/manifest.json': new TextEncoder().encode(manifest),
+      'browser-extension/index.js': new TextEncoder().encode(script),
+      'browser-extension/style.css': new TextEncoder().encode(
+        '.browser-cors-extension-marker { --pure-tavern-extension: ready; }',
+      ),
+    }),
+  );
 }
 
 async function removeBrowserProfile(directory) {
@@ -686,11 +743,18 @@ try {
       const extensionModule = await import('/scripts/extensions.js');
       const scriptModule = await import('/script.js');
       const headers = scriptModule.getRequestHeaders();
+      const mockBase = ${JSON.stringify(mockProvider.baseUrl)};
+      const extensionUrl = mockBase + '/browser-extension.zip';
+      const post = (pathname, body) => fetch(pathname, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(body),
+      });
       const routeHandled = (pathname) =>
         globalThis.__PURE_TAVERN__?.diagnostics.requests.some(
           (request) => request.pathname === pathname && request.handled,
         ) ?? false;
-      const waitFor = async (read, timeout = 10_000) => {
+      const waitFor = async (read, timeout = 15_000) => {
         const deadline = Date.now() + timeout;
         while (Date.now() < deadline) {
           const value = read();
@@ -703,12 +767,12 @@ try {
 
       const discoverResponse = await fetch('/api/extensions/discover', { headers });
       const discovered = discoverResponse.ok ? await discoverResponse.json() : [];
-      const versionResponse = await fetch('/api/extensions/version', {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({ extensionName: 'regex', global: false }),
+      const originalRuntimeCount = extensionModule.extensionNames.length;
+      const builtInVersionResponse = await post('/api/extensions/version', {
+        extensionName: 'regex',
+        global: false,
       });
-      const version = versionResponse.ok ? await versionResponse.json() : null;
+      const builtInVersion = builtInVersionResponse.ok ? await builtInVersionResponse.json() : null;
       const manifest = extensionModule.getExtensionManifest('regex');
       const regexScriptLoaded = [...document.scripts].some((script) =>
         script.src.endsWith('/scripts/extensions/regex/index.js'),
@@ -718,62 +782,183 @@ try {
       );
 
       await extensionModule.disableExtension('regex', false);
-      const disabledResponse = await fetch('/api/settings/get', {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({}),
-      });
+      const disabledResponse = await post('/api/settings/get', {});
       const disabledSettings = disabledResponse.ok
         ? JSON.parse((await disabledResponse.json()).settings)
         : null;
       const disabledPersisted =
         disabledSettings?.extension_settings?.disabledExtensions?.includes('regex') === true;
-
       await extensionModule.enableExtension('regex', false);
-      const enabledResponse = await fetch('/api/settings/get', {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({}),
-      });
+      const enabledResponse = await post('/api/settings/get', {});
       const enabledSettings = enabledResponse.ok
         ? JSON.parse((await enabledResponse.json()).settings)
         : null;
       const enabledPersisted =
         enabledSettings?.extension_settings?.disabledExtensions?.includes('regex') === false;
 
+      const installPromise = extensionModule.installExtension(extensionUrl, false, '');
+      const warningDialog = await waitFor(() =>
+        [...document.querySelectorAll('.popup[open]')].find((dialog) =>
+          dialog.querySelector('.popup-button-ok'),
+        ) ?? null,
+      );
+      const warningShown = Boolean(
+        warningDialog &&
+          /third-party|第三方/i.test(warningDialog.textContent ?? '') &&
+          warningDialog.querySelector('.popup-button-cancel'),
+      );
+      warningDialog?.querySelector('.popup-button-ok')?.click();
+      const installOk = await installPromise;
+      await waitFor(() =>
+        extensionModule.extensionNames.includes('third-party/browser-extension') &&
+        globalThis.__PURE_TAVERN_THIRD_PARTY__?.loads > 0,
+      );
+
+      const thirdPartyName = 'third-party/browser-extension';
+      const thirdPartyManifest = extensionModule.getExtensionManifest(thirdPartyName);
+      const manifestResponse = await fetch(
+        '/scripts/extensions/third-party/browser-extension/manifest.json',
+        { cache: 'no-store' },
+      );
+      const scriptResponse = await fetch(
+        '/scripts/extensions/third-party/browser-extension/index.js',
+        { cache: 'no-store' },
+      );
+      const thirdPartyScriptLoaded = [...document.scripts].some((script) =>
+        script.src.endsWith('/scripts/extensions/third-party/browser-extension/index.js'),
+      );
+      const thirdPartyStyleLoaded = [...document.styleSheets].some((sheet) =>
+        sheet.href?.endsWith('/scripts/extensions/third-party/browser-extension/style.css'),
+      );
+      const installHookCalled =
+        globalThis.__PURE_TAVERN_THIRD_PARTY__?.hooks?.includes('install') === true;
+
+      await extensionModule.disableExtension(thirdPartyName, false);
+      const thirdPartyDisabled =
+        globalThis.__PURE_TAVERN_THIRD_PARTY__?.hooks?.includes('disable') === true;
+      await extensionModule.enableExtension(thirdPartyName, false);
+      const thirdPartyEnabled =
+        globalThis.__PURE_TAVERN_THIRD_PARTY__?.hooks?.includes('enable') === true;
+
+      const versionResponse = await post('/api/extensions/version', {
+        extensionName: '/browser-extension',
+        global: false,
+      });
+      const version = versionResponse.ok ? await versionResponse.json() : null;
+      const branchesResponse = await post('/api/extensions/branches', {
+        extensionName: '/browser-extension',
+        global: false,
+      });
+      const branches = branchesResponse.ok ? await branchesResponse.json() : [];
+
+      await fetch(mockBase + '/browser-extension-control?version=2.0.0');
+      const changedVersionResponse = await post('/api/extensions/version', {
+        extensionName: '/browser-extension',
+        global: false,
+      });
+      const changedVersion = changedVersionResponse.ok ? await changedVersionResponse.json() : null;
+      const updateResponse = await post('/api/extensions/update', {
+        extensionName: '/browser-extension',
+        global: false,
+      });
+      const update = updateResponse.ok ? await updateResponse.json() : null;
+      const updatedManifestResponse = await fetch(
+        '/scripts/extensions/third-party/browser-extension/manifest.json',
+        { cache: 'no-store' },
+      );
+      const updatedManifest = updatedManifestResponse.ok
+        ? await updatedManifestResponse.json()
+        : null;
+      const switchResponse = await post('/api/extensions/switch', {
+        extensionName: '/browser-extension',
+        branch: 'archive',
+        global: false,
+      });
+      const moveResponse = await post('/api/extensions/move', {
+        extensionName: '/browser-extension',
+        source: 'local',
+        destination: 'global',
+      });
+      const movedDiscoverResponse = await fetch('/api/extensions/discover', { headers });
+      const movedDiscover = movedDiscoverResponse.ok ? await movedDiscoverResponse.json() : [];
+      const movedToGlobal = movedDiscover.some(
+        (extension) => extension.name === thirdPartyName && extension.type === 'global',
+      );
+
+      const thirdPartyModule = await import(
+        '/scripts/extensions/third-party/browser-extension/index.js'
+      );
+      await thirdPartyModule.onDelete();
+      const deleteResponse = await post('/api/extensions/delete', {
+        extensionName: '/browser-extension',
+        global: true,
+      });
+      const afterDeleteResponse = await fetch('/api/extensions/discover', { headers });
+      const afterDelete = afterDeleteResponse.ok ? await afterDeleteResponse.json() : [];
+      const deleteHookCalled =
+        globalThis.__PURE_TAVERN_THIRD_PARTY__?.hooks?.includes('delete') === true;
+      const deleteOk =
+        deleteResponse.ok &&
+        !afterDelete.some((extension) => extension.name === thirdPartyName);
+
+      const feature = globalThis.__PURE_TAVERN__?.features?.extensions;
       return {
         available: true,
         discoveredCount: discovered.length,
         discoveredNames: discovered.map((extension) => extension.name),
-        originalRuntimeCount: extensionModule.extensionNames.length,
+        originalRuntimeCount,
         manifestLoaded: manifest?.display_name === 'Regex',
         regexScriptLoaded,
         regexStyleLoaded,
         versionOk:
-          versionResponse.ok &&
-          version?.isUpToDate === true &&
-          version?.currentBranchName === '',
+          builtInVersionResponse.ok &&
+          builtInVersion?.isUpToDate === true &&
+          builtInVersion?.currentBranchName === '',
         disabledPersisted,
         enabledPersisted,
+        warningShown,
+        installOk,
+        runtimeCountAfterInstall: extensionModule.extensionNames.length,
+        thirdPartyManifestLoaded:
+          thirdPartyManifest?.display_name === 'Browser CORS Extension' &&
+          thirdPartyManifest?.future_manifest_field?.kept === true,
+        manifestAssetServed:
+          manifestResponse.ok &&
+          manifestResponse.headers.get('X-Pure-Tavern-Asset') === 'assets/extensions',
+        scriptAssetServed:
+          scriptResponse.ok &&
+          scriptResponse.headers.get('X-Pure-Tavern-Asset') === 'assets/extensions',
+        thirdPartyScriptLoaded,
+        thirdPartyStyleLoaded,
+        installHookCalled,
+        thirdPartyDisabled,
+        thirdPartyEnabled,
+        versionInitiallyCurrent: version?.isUpToDate === true,
+        branchCount: branches.length,
+        updateDetected: changedVersion?.isUpToDate === false,
+        updateOk: updateResponse.ok && update?.isUpToDate === false,
+        updatedManifestVersion: updatedManifest?.version ?? null,
+        switchOk: switchResponse.status === 204,
+        moveOk: moveResponse.status === 204 && movedToGlobal,
+        deleteHookCalled,
+        deleteOk,
         routesHandled: {
           discover: routeHandled('/api/extensions/discover'),
+          install: routeHandled('/api/extensions/install'),
           version: routeHandled('/api/extensions/version'),
+          update: routeHandled('/api/extensions/update'),
+          branches: routeHandled('/api/extensions/branches'),
+          switch: routeHandled('/api/extensions/switch'),
+          move: routeHandled('/api/extensions/move'),
+          delete: routeHandled('/api/extensions/delete'),
           comfyBootstrap: routeHandled('/api/sd/comfy/workflows'),
         },
-        registry: globalThis.__PURE_TAVERN__?.features?.extensions?.registry
-          ? { ...globalThis.__PURE_TAVERN__.features.extensions.registry }
-          : null,
-        pluginStorage: globalThis.__PURE_TAVERN__?.features?.extensions?.pluginStorage
-          ? { ...globalThis.__PURE_TAVERN__.features.extensions.pluginStorage }
-          : null,
-        permissions: globalThis.__PURE_TAVERN__?.features?.extensions?.permissions
-          ? { ...globalThis.__PURE_TAVERN__.features.extensions.permissions }
-          : null,
-        trustedBuiltIns: globalThis.__PURE_TAVERN__?.features?.extensions?.trustedBuiltIns
-          ? { ...globalThis.__PURE_TAVERN__.features.extensions.trustedBuiltIns }
-          : null,
-        localPackageAssetsInjected:
-          globalThis.__PURE_TAVERN__?.features?.extensions?.localPackageAssetsInjected === true,
+        registry: feature?.registry ? { ...feature.registry } : null,
+        trustedBuiltIns: feature?.trustedBuiltIns ? { ...feature.trustedBuiltIns } : null,
+        localPackageAssetsInjected: feature?.localPackageAssetsInjected === true,
+        executionModel: feature?.executionModel ?? null,
+        originalRiskWarningOwnedByLegacyUi:
+          feature?.originalRiskWarningOwnedByLegacyUi === true,
       };
     })()`,
     awaitPromise: true,
@@ -2453,14 +2638,12 @@ try {
     extensionsStorageReady:
       extensionWorkflow?.registry?.status === 'ready' &&
       extensionWorkflow?.registry?.backend === 'records' &&
-      extensionWorkflow?.pluginStorage?.status === 'ready' &&
-      extensionWorkflow?.pluginStorage?.backend === 'records' &&
-      extensionWorkflow?.permissions?.status === 'ready' &&
-      extensionWorkflow?.permissions?.backend === 'records' &&
       extensionWorkflow?.trustedBuiltIns?.status === 'ready' &&
       extensionWorkflow?.trustedBuiltIns?.source === 'generated-manifest' &&
       extensionWorkflow?.trustedBuiltIns?.count === 14 &&
-      extensionWorkflow?.localPackageAssetsInjected === true,
+      extensionWorkflow?.localPackageAssetsInjected === true &&
+      extensionWorkflow?.executionModel === 'legacy-same-context-user-approved' &&
+      extensionWorkflow?.originalRiskWarningOwnedByLegacyUi === true,
     trustedExtensionsBrowserWorkflow:
       extensionWorkflow?.available === true &&
       extensionWorkflow?.discoveredCount === 14 &&
@@ -2471,7 +2654,28 @@ try {
       extensionWorkflow?.regexStyleLoaded === true &&
       extensionWorkflow?.versionOk === true &&
       extensionWorkflow?.disabledPersisted === true &&
-      extensionWorkflow?.enabledPersisted === true &&
+      extensionWorkflow?.enabledPersisted === true,
+    thirdPartyExtensionsBrowserWorkflow:
+      extensionWorkflow?.warningShown === true &&
+      extensionWorkflow?.installOk === true &&
+      extensionWorkflow?.runtimeCountAfterInstall >= 15 &&
+      extensionWorkflow?.thirdPartyManifestLoaded === true &&
+      extensionWorkflow?.manifestAssetServed === true &&
+      extensionWorkflow?.scriptAssetServed === true &&
+      extensionWorkflow?.thirdPartyScriptLoaded === true &&
+      extensionWorkflow?.thirdPartyStyleLoaded === true &&
+      extensionWorkflow?.installHookCalled === true &&
+      extensionWorkflow?.thirdPartyDisabled === true &&
+      extensionWorkflow?.thirdPartyEnabled === true &&
+      extensionWorkflow?.versionInitiallyCurrent === true &&
+      extensionWorkflow?.branchCount >= 1 &&
+      extensionWorkflow?.updateDetected === true &&
+      extensionWorkflow?.updateOk === true &&
+      extensionWorkflow?.updatedManifestVersion === '2.0.0' &&
+      extensionWorkflow?.switchOk === true &&
+      extensionWorkflow?.moveOk === true &&
+      extensionWorkflow?.deleteHookCalled === true &&
+      extensionWorkflow?.deleteOk === true &&
       Object.values(extensionWorkflow?.routesHandled ?? {}).every(Boolean),
     legacyPromptPipelineAuthoritative:
       generationWorkflow?.originalPrepareFunction === true &&

@@ -1,33 +1,13 @@
-export const EXTENSION_ID_PATTERN = /^[a-z0-9](?:[a-z0-9._-]{1,126}[a-z0-9])$/;
+export type ExtensionTrust = 'trusted-builtin' | 'user-approved-legacy';
+export type ExtensionScope = 'system' | 'local' | 'global';
+export type ExtensionSourceProvider = 'github' | 'gitlab' | 'cors-zip';
 
-export const EXTENSION_CAPABILITIES = Object.freeze([
-  'storage:plugin',
-  'network:fetch',
-  'dom:legacy',
-  'secrets:read',
-  'storage:modules',
-  'host:events',
-] as const);
-
-export type ExtensionCapability = (typeof EXTENSION_CAPABILITIES)[number];
-export type ExtensionTrust = 'trusted-builtin' | 'untrusted-user';
-export type ExtensionEntrypointType = 'same-context' | 'iframe' | 'worker';
-
-export interface ExtensionEntrypoint {
-  type: ExtensionEntrypointType;
-  path: string;
-}
-
-/** Normalized manifest used by the modern runtime. It is intentionally not a filesystem path. */
-export interface ExtensionManifest {
-  schemaVersion: 1;
-  id: string;
-  displayName: string;
+export interface LegacyExtensionManifest extends Record<string, unknown> {
+  display_name: string;
   version: string;
   author: string;
-  description: string;
-  entrypoint: ExtensionEntrypoint;
-  requestedCapabilities: ExtensionCapability[];
+  js?: string;
+  css?: string;
 }
 
 export interface TrustedBuiltInSource {
@@ -35,19 +15,28 @@ export interface TrustedBuiltInSource {
   snapshotPath: string;
 }
 
-export interface LocalPackageSource {
-  kind: 'local-package';
+export interface RemoteExtensionSource {
+  kind: 'remote';
+  provider: ExtensionSourceProvider;
+  repositoryUrl: string;
+  requestedRef: string;
+  resolvedRef: string;
+  revision: string;
   packageHash: string;
   fileCount: number;
   totalBytes: number;
 }
 
-export type ExtensionSource = TrustedBuiltInSource | LocalPackageSource;
+export type ExtensionSource = TrustedBuiltInSource | RemoteExtensionSource;
 
-export interface ExtensionInstallation {
+export interface ExtensionRecord {
   extensionId: string;
   legacyName: string;
+  folderName: string;
   trust: ExtensionTrust;
+  scope: ExtensionScope;
+  enabled: boolean;
+  manifest: LegacyExtensionManifest;
   source: ExtensionSource;
   installedAt: string;
   updatedAt: string;
@@ -59,20 +48,9 @@ export interface ExtensionVersionMetadata {
   packageHash: string | null;
   installedAt: string;
   updatedAt: string;
-  remoteUrl: null;
-  branch: null;
-}
-
-export interface ExtensionRecord {
-  extensionId: string;
-  legacyName: string;
-  trust: ExtensionTrust;
-  enabled: boolean;
-  manifest: ExtensionManifest;
-  source: ExtensionSource;
-  installedAt: string;
-  updatedAt: string;
-  version: ExtensionVersionMetadata;
+  remoteUrl: string | null;
+  branch: string | null;
+  revision: string | null;
 }
 
 export interface TrustedLegacyBuiltInDefinition {
@@ -86,35 +64,26 @@ export interface TrustedLegacyBuiltInDefinition {
 }
 
 export function assertExtensionId(value: string): void {
-  if (!EXTENSION_ID_PATTERN.test(value)) {
+  if (!/^[a-z0-9](?:[a-z0-9._-]{1,126}[a-z0-9])$/u.test(value)) {
     throw new TypeError(
       'Extension id must be 3-128 lowercase ASCII letters, numbers, dots, underscores, or hyphens.',
     );
   }
 }
 
-export function isExtensionCapability(value: unknown): value is ExtensionCapability {
-  return typeof value === 'string' && (EXTENSION_CAPABILITIES as readonly string[]).includes(value);
-}
-
 export function cloneExtensionRecord(record: ExtensionRecord): ExtensionRecord {
   return structuredClone(record);
 }
 
-export function createVersionMetadata(record: {
-  extensionId: string;
-  manifestVersion: string;
-  source: ExtensionSource;
-  installedAt: string;
-  updatedAt: string;
-}): ExtensionVersionMetadata {
+export function createVersionMetadata(record: ExtensionRecord): ExtensionVersionMetadata {
   return {
     extensionId: record.extensionId,
-    manifestVersion: record.manifestVersion,
-    packageHash: record.source.kind === 'local-package' ? record.source.packageHash : null,
+    manifestVersion: record.manifest.version,
+    packageHash: record.source.kind === 'remote' ? record.source.packageHash : null,
     installedAt: record.installedAt,
     updatedAt: record.updatedAt,
-    remoteUrl: null,
-    branch: null,
+    remoteUrl: record.source.kind === 'remote' ? record.source.repositoryUrl : null,
+    branch: record.source.kind === 'remote' ? record.source.resolvedRef : null,
+    revision: record.source.kind === 'remote' ? record.source.revision : null,
   };
 }

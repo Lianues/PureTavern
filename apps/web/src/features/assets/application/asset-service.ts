@@ -47,6 +47,7 @@ const SUPPORTED_PATH_PREFIXES = [
   '/User Avatars/',
   '/characters/',
   '/assets/',
+  '/scripts/extensions/third-party/',
 ] as const;
 
 export interface AssetsServiceDiagnostics {
@@ -66,6 +67,7 @@ export type LibraryDownloadResult =
 
 export interface ExtensionPackageAssetInput {
   extensionId: string;
+  legacyName: string;
   packageHash: string;
   files: readonly { path: string; data: Blob; sha256: string }[];
   installedAt: string;
@@ -844,6 +846,7 @@ export class AssetService {
 
   async saveExtensionPackage(input: ExtensionPackageAssetInput): Promise<void> {
     const extensionId = assertSafeExtensionPackageSegment(input.extensionId, 'extensionId');
+    const legacyName = normalizeExtensionLegacyName(input.legacyName);
     const owner = extensionPackageOwner(extensionId);
     const existing = await this.#index.list({ collection: 'library', owner });
     const previousByPath = new Map<string, AssetWithBlob>();
@@ -854,8 +857,8 @@ export class AssetService {
 
     const prepared = input.files.map((file) => {
       const relativePath = normalizeExtensionPackageRelativePath(file.path);
-      const path = normalizeLegacyPath(`/assets/extensions/${extensionId}/${relativePath}`, [
-        '/assets/',
+      const path = normalizeLegacyPath(`/scripts/extensions/${legacyName}/${relativePath}`, [
+        '/scripts/extensions/third-party/',
       ]);
       const filename = relativePath.split('/').at(-1) ?? '';
       return {
@@ -878,7 +881,7 @@ export class AssetService {
           blob: file.blob,
           mimeType: file.mimeType,
           owner,
-          folder: extensionId,
+          folder: legacyName,
           replace: true,
         });
         written.push(file.path);
@@ -926,10 +929,12 @@ export class AssetService {
   ): Promise<string | null> {
     const extensionId = assertSafeExtensionPackageSegment(extensionIdInput, 'extensionId');
     const relativePath = normalizeExtensionPackageRelativePath(relativePathInput);
-    const path = normalizeLegacyPath(`/assets/extensions/${extensionId}/${relativePath}`, [
-      '/assets/',
-    ]);
-    return (await this.#index.getByLegacyPath(path)) ? path : null;
+    const records = await this.#index.list({
+      collection: 'library',
+      owner: extensionPackageOwner(extensionId),
+    });
+    const suffix = `/${relativePath}`;
+    return records.find((record) => record.legacyPath.endsWith(suffix))?.legacyPath ?? null;
   }
 
   async #storeAsset(input: {
@@ -1255,6 +1260,13 @@ function requireString(value: unknown, label: string): string {
 
 function extensionPackageOwner(extensionId: string): string {
   return `extension-package:${extensionId}`;
+}
+
+function normalizeExtensionLegacyName(value: unknown): string {
+  if (typeof value !== 'string' || !/^third-party\/[a-zA-Z0-9][a-zA-Z0-9._-]{0,99}$/u.test(value)) {
+    throw new AssetValidationError('legacyName must be a safe third-party extension path.');
+  }
+  return value;
 }
 
 function assertSafeExtensionPackageSegment(value: unknown, label: string): string {

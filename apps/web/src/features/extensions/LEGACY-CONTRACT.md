@@ -1,43 +1,44 @@
-# Audited Legacy extensions contract
+# M11 Legacy Contract
 
-Sources audited read-only:
+## Upstream ownership
 
-- `apps/web/legacy/upstream/public/scripts/extensions.js`
-- `apps/web/legacy/upstream/public/scripts/extensions/**/manifest.json`
-- reference `SillyTavern-1.18.0/src/endpoints/extensions.js`
-- reference `SillyTavern-1.18.0/src/plugin-loader.js`
-- reference `SillyTavern-1.18.0/plugins.js`
+`public/scripts/extensions.js` remains authoritative for the extension manager UI, `thirdPartyExtensionWarning`, manifest ordering/dependencies, JS/CSS/i18n loading, hooks, enable/disable state, update prompts, and same-context execution.
 
-## Upstream browser flow
+The browser module owns the former server boundary and serves installed files at the exact path expected by upstream:
 
-1. `GET /api/extensions/discover`
-2. Response: `{ name: string, type: "system" | "local" | "global" }[]`
-3. For every name, browser fetches `/scripts/extensions/<name>/manifest.json`.
-4. If enabled/requirements pass, browser injects:
-   - module script `/scripts/extensions/<name>/<manifest.js>`;
-   - stylesheet `/scripts/extensions/<name>/<manifest.css>`;
-   - optional i18n file;
-   - exported manifest hooks (`install`, `update`, `delete`, `clean`, `enable`, `disable`, `activate`).
+```text
+/scripts/extensions/third-party/<folder>/<resource>
+```
 
-That is why untrusted packages are not returned by M11's Legacy discover route.
+## HTTP routes
 
-Observed manifest fields include `display_name`, `loading_order`, `requires`, `optional`, `dependencies`, `minimum_client_version`, `js`, `css`, `i18n`, `author`, `version`, `homePage`, `auto_update`, `generate_interceptor`, and `hooks`.
+| Route                           | Request                              | Browser response                                                                                                      |
+| ------------------------------- | ------------------------------------ | --------------------------------------------------------------------------------------------------------------------- |
+| `GET /api/extensions/discover`  | none                                 | `{name,type}[]` for 14 built-ins and browser-installed third-party packages                                           |
+| `POST /api/extensions/install`  | `{url,global,branch}`                | `{version,author,display_name,extensionPath,folderName}` after CORS fetch, validation, M13 save, and registry install |
+| `POST /api/extensions/version`  | `{extensionName,global}`             | `{currentBranchName,currentCommitHash,isUpToDate,remoteUrl}` from current browser-visible snapshot                    |
+| `POST /api/extensions/update`   | `{extensionName,global}`             | `{shortCommitHash,extensionPath,isUpToDate,remoteUrl}` after validated replacement or no-op                           |
+| `POST /api/extensions/branches` | `{extensionName,global}`             | `{current,commit,name,label}[]`; current-only fallback when a host cannot expose refs                                 |
+| `POST /api/extensions/switch`   | `{extensionName,branch,global}`      | `204` after downloading and replacing the selected ref                                                                |
+| `POST /api/extensions/move`     | `{extensionName,source,destination}` | `204` after changing the browser compatibility scope label                                                            |
+| `POST /api/extensions/delete`   | `{extensionName,global}`             | text success after registry and M13 package removal; built-ins return `403`                                           |
 
-## Reference server routes and DTOs
+`POST /api/sd/comfy/workflows` remains an empty startup compatibility response and does not claim that Stable Diffusion generation is migrated.
 
-Mounted under `/api/extensions`:
+## Source mapping
 
-| Route            | Request                              | Successful response in reference server                                  | Browser-only result                                              |
-| ---------------- | ------------------------------------ | ------------------------------------------------------------------------ | ---------------------------------------------------------------- |
-| `GET /discover`  | none                                 | `{name,type}[]` from system/user/global directories                      | implemented; trusted same-context built-ins only                 |
-| `POST /install`  | `{url,global,branch}`                | `{version,author,display_name,extensionPath,folderName}` after Git clone | `501 unsupported`                                                |
-| `POST /update`   | `{extensionName,global}`             | `{shortCommitHash,extensionPath,isUpToDate,remoteUrl}` after fetch/pull  | `501 unsupported`                                                |
-| `POST /branches` | `{extensionName,global}`             | `{current,commit,name,label}[]`                                          | `501 unsupported`                                                |
-| `POST /switch`   | `{extensionName,branch,global}`      | `204` after Git checkout                                                 | `501 unsupported`                                                |
-| `POST /move`     | `{extensionName,source,destination}` | `204` after filesystem copy/remove                                       | `501 unsupported`                                                |
-| `POST /version`  | `{extensionName,global}`             | `{currentBranchName,currentCommitHash,isUpToDate,remoteUrl}`             | implemented for local metadata; no remote check                  |
-| `POST /delete`   | `{extensionName,global}`             | text after recursive filesystem removal                                  | implemented for removable local records/assets; built-ins denied |
+- GitHub repositories: CORS GitHub metadata/refs when available; jsDelivr CORS listing and files for snapshots.
+- GitLab repositories: CORS project/commit/refs/archive API.
+- Other hosts: direct CORS-enabled `.zip` only.
 
-M11 local-package version DTO uses an empty branch/remote URL, package SHA-256 as `currentCommitHash`, and `isUpToDate: true` because there is no configured remote. A `global: true` request is rejected as unsupported because the browser app has no server-wide multi-user directory.
+The implementation downloads immutable validated snapshots rather than pretending a browser can run `git clone`. `currentCommitHash` is the remote revision when available, otherwise a deterministic browser-visible snapshot/archive hash.
 
-The reference server plugin loader is a separate, disabled-by-default Node authority: it dynamically imports files/npm packages, runs `init(router)`, mounts `/api/plugins/<id>`, runs exit hooks, and optionally performs Git updates. None of those server-plugin semantics are emulated in browser code.
+## Scope semantics
+
+The original server's `local` and `global` directories represent different user scopes. A standalone browser has one Profile, so M11 stores the requested scope as compatibility metadata and exposes it through discover. `move` does not duplicate Blob data or create a multi-user ACL.
+
+## Security compatibility
+
+Original third-party extensions are intentionally returned by discover and loaded in the top-level page after the original warning is accepted. They are not sandboxed and may access local data and credentials. See `THREAT-MODEL.md`.
+
+Node plugins, npm install scripts, arbitrary server routes, private Git credentials, CORS proxying, and non-CORS remotes are not emulated.

@@ -322,26 +322,27 @@ features/<module>/
 ## M11 — Extensions / 扩展系统
 
 - **优先级**：P3
-- **当前状态**：`browser-ready-trusted-builtins`（14 个上游内置扩展已恢复；第三方 sandbox/本地包为可用基础，尚无完整用户安装 UI）
-- **原始前端**：`public/scripts/extensions.js`、`public/scripts/extensions/**`
-- **原始服务端**：`src/endpoints/extensions.js`、`plugins/**`
-- **原始接口**：安装、更新、分支、切换、移动、版本、删除、发现。
-- **已实现 Port/模块**：`apps/web/src/features/extensions/**` 中的 `ExtensionRegistry`、`PluginStorage`、`PluginPermissionBroker`、package validator、sandbox protocol 与 Legacy routes。
-- **信任模型**：
-  - 构建从当前只读 upstream manifest 生成 14 项 SHA-256 trusted 清单；只有这些 built-ins 可通过 `/api/extensions/discover` 进入原页面 same-context；
-  - 用户本地包必须 iframe/Worker sandbox，默认 disabled；iframe 仅 `allow-scripts`，不加 `allow-same-origin`；
-  - permission broker 默认拒绝 secrets/network/DOM/其他模块存储，manifest request 与用户 grant 必须同时满足；plugin KV 绑定 stable extension ID；
-  - 用户包 Blob 通过 M13 `ExtensionPackageAssetsCapability` 保存与 Worker URL 解析，不增加 Object Store 或第二个根 Service Worker。
+- **当前状态**：`completed-browser-legacy-extensions`（原版前端扩展生态与支持浏览器 CORS 的远程生命周期已闭环）
+- **原始且继续保留的前端**：`public/scripts/extensions.js`、`public/scripts/extensions/**`、原版第三方风险警告和扩展管理 UI。
+- **原始服务端**：`src/endpoints/extensions.js`、`plugins/**`。
+- **已实现 Port/模块**：`apps/web/src/features/extensions/**` 中的 `ExtensionRegistry`、`ExtensionSourceGateway`、原版 manifest/package validator、M13 package bridge 与完整 Legacy routes。
+- **架构与信任模型**：
+  - 构建从只读 upstream 生成 14 项 trusted built-in 清单；内置扩展继续从静态快照加载且禁止删除；
+  - 第三方 SillyTavern 扩展保持原版 same-context 模型，不维护不兼容的 iframe/Worker 私有插件生态；
+  - 原版 `installExtension()` 在请求 M11 前展示 `thirdPartyExtensionWarning` 并要求用户确认；确认后的代码可访问 DOM、全局状态、IndexedDB、网络和 M14 明文密钥，不能描述为沙箱或安全插件；
+  - GitHub 使用 CORS API 与 jsDelivr CORS 文件目录/CDN，GitLab 使用 CORS REST/archive，其他主机仅支持直接 CORS `.zip`；不代理、不绕过 CORS；
+  - 包文件通过 M13 映射到 `/scripts/extensions/third-party/<folder>/...`，共享 Service Worker 返回正确 MIME；不增加 Object Store、数据库版本或第二个 Worker。
 - **浏览器接口**：
-  - discover/version/local delete 使用真实本地数据；trusted built-in 禁止删除；
-  - Git install/update/branches/switch 与服务端 filesystem move 返回结构化 501，明确说明纯浏览器不支持，不伪造成功；
-  - Stable Diffusion built-in 启动所需 Comfy workflow 列表返回空兼容响应，明确不代表图片生成 Provider 已迁移；
-  - Settings `disabledExtensions` 与 registry enable 状态双向串行同步。
-- **验收**：生产 Chrome 发现并由原版 loader 加载 14 个 built-ins，Regex manifest/script/style 就绪，原版 disable/enable 跨 Settings/registry 持久化；registry/plugin storage/permissions 均为 IndexedDB records，零未处理端点、零异常。Package/sandbox/权限安全由 23 项模块测试覆盖。
-- **仍未完成**：第三方本地包的正式 UI、iframe/Worker runner 生命周期、object URL 回收、远程 Git/CORS、Node server plugins、代码签名与作者认证。
-- **可选后端**：Git 下载/更新、包审计、远端扩展仓库和 Node plugins 只能由可选后端提供。
-- **依赖**：M01、M02、M03、M13；其他能力只能声明为可选依赖。
-- **删除影响**：可整体删除，不影响核心聊天；对应内置扩展能力消失。
+  - discover/install/version/update/branches/switch/move/delete 全部使用真实 registry、远程 snapshot 与 M13 Blob；
+  - install/update/switch 做路径、文件数、压缩与展开大小、单文件、压缩比、zip-slip、Unicode/大小写冲突和原版 manifest 引用验证；同一扩展操作串行；
+  - stable ID 来自 canonical repository URL；显示名、folder、branch、scope 与 ID 解耦；更新保留安装时间和启停状态；
+  - `local/global` 在单浏览器 Profile 中是兼容 scope 标签，move 不复制 Blob 或伪造多用户 ACL；
+  - Settings `disabledExtensions` 与 registry enable 状态双向串行同步；Comfy workflow 空响应仍不代表图片生成 Provider 已迁移。
+- **验收**：22 项定向测试覆盖原版 manifest、CORS source、ZIP 安全与完整生命周期；真实 `https://github.com/Lianues/cocktail` 下载/校验通过。Production Chrome 验证原版风险警告、第三方 manifest/JS/CSS、install/enable/disable/delete hooks、version/update/branches/switch/move/delete、14 个 built-ins、IndexedDB/M13/Worker 和零未处理端点/异常。
+- **纯前端边界**：Node server plugins、npm scripts、任意服务端路由、私有仓库代理、作者代码签名和不支持 CORS 的 Git 主机仍不可用。
+- **可选后端**：当前不实现；未来只用于私有仓库凭据代理、非 CORS Git 和 Node plugins。
+- **依赖**：M01、M02、M03、M13；扩展运行时可自行调用原版公开前端能力。
+- **删除影响**：删除 M11 后核心聊天仍可工作，但第三方安装管理与内置扩展 discover/状态桥接消失。
 
 ## M12 — Generation Providers / 模型生成
 
@@ -606,11 +607,11 @@ features/<module>/
 
 # 8. 当前阶段不迁移的内容
 
-当前只迁移 UI 外壳、原版交互和工程基础，不实现以下真实业务能力：
+当前已完成模块以各自章节状态为准；仍不实现的主要真实业务能力包括：
 
-- 主题/预设 CRUD（M09）和跨设备设置同步（M22）；
-- 角色、聊天、群组和世界书的 CRUD；
-- 模型生成与 Tokenizer；
-- 扩展安装、用户、远程存储或同步。
+- M06 群组聊天；
+- Text Completion、NovelAI、Horde、KoboldAI 和 WebLLM 生成；
+- 跨设备设置/数据同步与多用户服务端目录；
+- Node server plugins、npm scripts、私有仓库代理和不支持浏览器 CORS 的远程 Git。
 
-Legacy JavaScript 会在根页面正常执行。Settings get/save 已桥接到浏览器 Use Case 和 IndexedDB；其他启动路径仍返回固定空数据或安全默认值，不承诺真实业务语义。未知 `/api/**` 会返回 `501` 并记录在诊断信息中。
+Legacy JavaScript 继续在根页面正常执行。已迁移路径桥接到浏览器 Use Case、IndexedDB 和直连 Provider；尚未迁移路径必须返回明确空数据、安全默认或结构化不支持响应。未知 `/api/**` 会返回 `501` 并记录在诊断信息中。

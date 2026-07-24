@@ -85,7 +85,7 @@ Hook 注入使用稳定的 `lib/polyfill.js` 标签作为锚点，并要求它�
 
 - **UI 必需**：关键 DOM ID、首页脚本/样式入口和原版交互锚点；
 - **扩展生态必需**：扩展面板 DOM、`scripts/extensions.js`、`scripts/extensions/**`、关键模块导出、事件名和运行时全局对象；
-- **数据能力**：各 Feature 的 `legacy/contract.json` 声明浏览器就绪路径；尚未迁移的群组、模型、远程扩展操作、统计等请求继续标记为 Bootstrap Compatibility 或 explicit unsupported。
+- **数据能力**：各 Feature 的 `legacy/contract.json` 声明浏览器就绪路径；尚未迁移的群组、非 Chat Completion 模型、非 CORS/Node 扩展能力、统计等请求继续标记为 Bootstrap Compatibility 或 explicit unsupported。
 
 `pnpm legacy:contracts:generate` 只生成契约 JSON，不写回上游目录。`pnpm legacy:contracts:check --source <新上游> --version <版本>` 会报告 added/removed/changed；关键契约破坏时返回非零状态。
 
@@ -102,12 +102,12 @@ Hook 必须在原版主模块执行前安装。当前职责仅有：
 - 暴露 `globalThis.__PURE_TAVERN__` 诊断信息；
 - 读取同步工具生成的上游版本元数据。
 
-当前浏览器模块已经接管 Settings/Snapshots、明文 Secrets、Chat Completion Generation、Characters、单角色 Chats、Personas、World Books、Presets、本地 Assets、trusted built-in Extensions 与统一近似 Tokenizers。Prompt Pipeline 本身已是纯前端实现，因此直接保留 upstream 原版所有权，不维护第二套实现。模块只使用固定 `records` / `blobs` Object Store；新增 feature 或 collection 不递增数据库业务版本。IndexedDB 不可用时各 Repository 可降级为页面会话内存，并在模块 diagnostics 中明确报告。
+当前浏览器模块已经接管 Settings/Snapshots、明文 Secrets、Chat Completion Generation、Characters、单角色 Chats、Personas、World Books、Presets、本地 Assets、trusted built-ins、支持 CORS 的原版第三方 Extensions 与统一近似 Tokenizers。Prompt Pipeline 本身已是纯前端实现，因此直接保留 upstream 原版所有权，不维护第二套实现。模块只使用固定 `records` / `blobs` Object Store；新增 feature 或 collection 不递增数据库业务版本。IndexedDB 不可用时各 Repository 可降级为页面会话内存，并在模块 diagnostics 中明确报告。
 
-空群组、离线 Horde、远程扩展 Git 操作和丢弃式 stats 等仍属于 **Bootstrap Compatibility Contract** 或显式浏览器限制，不代表相应业务已经迁移：
+空群组、离线 Horde、非 CORS/私有 Git、Node plugins 和丢弃式 stats 等仍属于 **Bootstrap Compatibility Contract** 或显式浏览器限制，不代表相应业务已经迁移：
 
 - 不实现群组聊天；模型请求只实现 `main_api="openai"` 的 Chat Completion，Text Completion、NovelAI、Horde、KoboldAI 和 WebLLM 不在当前范围；
-- trusted built-ins 可由原版 loader 运行，但用户第三方包只能进入 sandbox；不实现浏览器无法保证的 Git/Node plugins；
+- trusted built-ins 与用户确认的 CORS 第三方包均由原版 loader 在 same-context 运行；原版警告是信任边界，第三方代码可读取同源数据与密钥；不实现非 CORS/私有 Git 和 Node plugins；
 - M15 `tokenx` 结果是统一近似值，pseudo token IDs 只服务原版 UI；模型生成和精确上下文预算仍需对应模型的精确 tokenizer adapter；
 - M14 密钥按产品决策以 IndexedDB 明文保存；同源脚本、DevTools、浏览器 Profile、XSS 和请求拦截均可读取，不能描述为安全 Vault；
 - M12 是浏览器直连，不能绕过 Provider CORS、TLS、Private Network Access 或网络策略；支持 source 不等于每个环境都能连接；
@@ -213,7 +213,7 @@ pnpm test:browser
 
 ## 9. 安全与限制
 
-原版 JavaScript 现在会在主页面上下文执行，这是保留原版交互的必要条件，也意味着它能访问页面、浏览器存储和 Hook。当前快照必须视为受信任的固定上游代码；第三方扩展不能在没有权限模型的情况下自动启用。
+原版 JavaScript 现在会在主页面上下文执行，这是保留原版交互的必要条件，也意味着它能访问页面、浏览器存储和 Hook。当前快照必须视为受信任的固定上游代码；第三方扩展仅在原版风险警告获得用户确认后安装，但确认后同样拥有页面上下文权限，无法与本地数据或明文密钥隔离。
 
 Hook 对未知同源 `/api/**` 返回 `501` 并记录诊断，不会静默转发到不存在的 Node 服务。外部请求和普通静态资源仍交给浏览器原生 `fetch`。
 

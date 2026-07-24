@@ -1,58 +1,43 @@
-# Extensions threat model
+# M11 Threat Model
 
-## Trust classes
+## Trust decision
 
-### Trusted Legacy built-ins
+SillyTavern extensions are page-context plugins, not isolated web applications. The upstream `installExtension()` flow displays `thirdPartyExtensionWarning` before installing a non-official URL and requires affirmative user consent. Pure Tavern preserves that flow unchanged and does not add a second warning.
 
-The allowlist in `trusted-builtins.ts` represents code physically shipped in the audited upstream snapshot under `/scripts/extensions/<name>/`. Upstream `extensions.js` injects each discovered script as a module into the page and many built-ins directly use DOM, globals, settings, fetch, and other Legacy modules. Preserving that behavior requires same-page authority.
+After consent, a third-party extension can potentially:
 
-Only records with all three properties are eligible for `same-context`:
+- read or modify the complete DOM and JavaScript globals;
+- read Settings, chats, characters, IndexedDB/Blob data, and M14 plaintext credentials;
+- wrap `fetch`/XHR or send data to arbitrary network origins allowed by the browser;
+- register persistent event handlers and alter prompt/generation behavior;
+- exploit vulnerabilities in the page or another trusted extension.
 
-1. `trust === "trusted-builtin"`;
-2. source is `upstream-snapshot`;
-3. normalized entrypoint type is `same-context`.
-
-The user package parser cannot construct such a record. Built-ins cannot be deleted through the browser route. Changing a built-in allowlist is therefore a release/code-review action, not an install-time user assertion.
-
-Capability grants cannot contain same-context code after it starts; the trust boundary is the reviewed snapshot itself. `dom:legacy` in a built-in manifest documents authority rather than pretending to sandbox it.
-
-### User-imported third-party extensions
-
-User packages are always `untrusted-user`, disabled after install, and limited to `iframe` or `worker` entrypoints. Iframes are planned with `sandbox="allow-scripts"` and no `allow-same-origin`; Workers use their own global. The Legacy `/discover` response intentionally omits user packages because upstream treats every returned folder as trusted page-context code.
-
-Package bytes are stored only through `ExtensionPackageAssets`. The registry stores metadata and hashes, not executable Blob data.
-
-## Protected assets
-
-- application secrets and provider keys;
-- arbitrary network access and authenticated browser requests;
-- top-level DOM and Legacy globals;
-- records owned by Settings, Assets, chats, characters, or any other feature;
-- another extension's KV namespace;
-- extension registry/permission records;
-- origin identity and sandbox response correlation.
+SHA-256/package hashes prove snapshot consistency only. They do not prove author identity, code safety, or absence of malicious behavior.
 
 ## Controls
 
-- stable, validated extension IDs separate from display/path aliases;
-- no remote URL install, Git update, branch, move, process, or filesystem emulation;
-- package file-count/size/manifest/path/hash/entrypoint/conflict validation before persistence;
-- explicit requested capability plus explicit persisted grant;
-- default denial for every absent grant;
-- plugin KV operations bind the extension ID in the host, not in sandbox payload;
-- exact message source and origin checks (no `*` acceptance in the protocol);
-- protocol/session/extension/request correlation and finite request timeout;
-- capability allowlist and host handler allowlist;
-- non-2xx `unsupported` responses for server-only Legacy operations;
-- in-memory degradation for records failures without granting extra authority.
+M11 reduces accidental package/source risk without pretending to isolate runtime code:
 
-## Residual risks and assumptions
+- only HTTPS remote sources, plus localhost HTTP for development;
+- GitHub/GitLab/direct ZIP source allowlist instead of arbitrary URL rewriting;
+- no embedded URL credentials, backend CORS proxy, private token relay, Git process, npm scripts, or Node plugin execution;
+- archive/file-count, compressed/expanded/per-file byte, path-length, and compression-ratio limits;
+- rejection of absolute paths, drives, backslashes, control characters, empty/`.`/`..` segments, zip-slip, case/NFKC conflicts, and missing manifest resources;
+- complete package snapshots stored behind M13 stable blob/index ownership;
+- built-ins seeded from the audited upstream snapshot and protected from deletion;
+- keyed lifecycle serialization and stable identity derived from canonical repository URL;
+- Settings-backed enable/disable state and the original extension hooks.
 
-- A reviewed built-in has full page authority and can exfiltrate data; update the snapshot only through normal release review.
-- Browser sandbox strength depends on the embedding code applying the returned execution plan exactly. Do not add `allow-same-origin` to untrusted iframes.
-- A Blob/object URL must be revoked by the injected Assets implementation when replaced or removed.
-- Hash validation proves package consistency, not author identity or safety. There is no signature trust store in M11.
-- A granted `network:fetch`, `secrets:read`, `dom:legacy`, or `storage:modules` handler is security-critical. M11 supplies none by default.
-- Browser storage can be cleared, quota-limited, or unavailable. Memory fallback is session-only.
-- Same-origin browser code outside a sandbox could call feature APIs if a future UI exposes them carelessly; central integration must keep capability handles out of untrusted globals.
-- CORS still applies. This module does not proxy requests or claim otherwise.
+## Residual risks
+
+- User-approved extensions execute with same-origin page authority. There is no meaningful secrecy from them.
+- Browser CORS, TLS, Private Network Access, CDN propagation, anonymous API rate limits, and remote host availability can block install/update.
+- GitHub's CORS CDN branch view may lag repository updates; version checks compare the snapshot visible to the browser.
+- `local`/`global` are compatibility labels in one Profile, not server-wide ACLs.
+- A repository can publish a benign version and later replace branch contents. Users must review the source and disable automatic updates when trust is uncertain.
+- Dependencies declared by an extension are checked by the unchanged upstream loader; M11 does not download npm/server dependencies.
+- A malicious package that passes structural validation is still malicious code once the user authorizes it.
+
+## Not implemented
+
+Pure Tavern does not emulate Node server plugins, arbitrary Express routes, child processes, filesystem access, package-manager installation, server Git credentials, private-repository proxying, or cryptographic author signatures.

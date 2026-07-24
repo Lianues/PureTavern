@@ -2,7 +2,7 @@
 
 一个以浏览器本地能力为默认实现、可选连接后端增强能力的酒馆项目。
 
-当前阶段采用 **Legacy-first**：根页面长期运行原版 SillyTavern UI、CSS 和交互脚本，我方 Hook 将原版能力桥接到浏览器实现。Settings、角色卡、单角色聊天、用户人格、世界书、预设、本地 Assets、明文 Secrets、浏览器直连 Chat Completion 和 trusted 内置扩展已接入浏览器模块；群聊、Text Completion/Novel/Horde/Kobold 与远程扩展安装等能力仍待迁移。Vue 仅用于隔离的新页面或完成所有权切换的新能力。
+当前阶段采用 **Legacy-first**：根页面长期运行原版 SillyTavern UI、CSS 和交互脚本，我方 Hook 将原版能力桥接到浏览器实现。Settings、角色卡、单角色聊天、用户人格、世界书、预设、本地 Assets、明文 Secrets、浏览器直连 Chat Completion、trusted 内置扩展和支持 CORS 的第三方前端扩展已接入浏览器模块；群聊与 Text Completion/Novel/Horde/Kobold 等能力仍待迁移。Vue 仅用于隔离的新页面或完成所有权切换的新能力。
 
 ## 开发
 
@@ -25,7 +25,7 @@ pnpm dev
 - Presets：11 类提示词预设、主题、Moving UI 与快捷回复由独立 M09 模块管理，默认内容通过构建清单增量初始化，不再由 Settings 存储拥有。
 - Assets：附件、用户图片、背景、persona 头像、sprites 与扩展资产使用通用 Blob/索引模块；共享 Service Worker 为原版 URL 提供本地资源响应。
 - Personas：原版 Persona UI 继续使用 Settings 与头像接口；M08 负责 stable identity、默认/当前选择、角色绑定、opaque descriptor 和删除降级。
-- Extensions：构建从当前 upstream 生成 trusted manifest，原版 loader 可发现和加载 14 个内置扩展；用户包默认使用权限受控的 iframe/Worker sandbox，远程 Git 操作明确需要可选后端。
+- Extensions：原版风险警告、管理 UI、manifest loader 和 same-context 插件模型保持不变；14 个内置扩展以及 GitHub/GitLab/direct ZIP 等支持浏览器 CORS 的第三方扩展均可安装、更新、切换分支、启停和删除，第三方代码能读取同源数据与密钥。
 - Prompt Pipeline：原版 `openai.js`、PromptManager、宏、作者注和世界书注入作为唯一权威实现长期保留；不维护功能重复的 TypeScript 副本，生成后的 `generate_data` 直接交给 M12。
 - Tokenizers：原版同步/异步 tokenizer 路径统一桥接到 Web Worker/主线程 `tokenx` 近似计数；所有模型故意采用同一估算器，响应明确标记 `approximate`，pseudo token IDs 只用于 UI 兼容。
 - Secrets：原版密钥管理器的多值保存、查看、查找、轮换、重命名和删除已桥接到 IndexedDB，并通过 CredentialResolver 为 M12 预留入口；密钥按产品决策明文保存，不是安全 Vault。

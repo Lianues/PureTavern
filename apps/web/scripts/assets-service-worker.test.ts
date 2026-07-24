@@ -30,10 +30,13 @@ describe('shared Assets Service Worker', () => {
       '/user/images/',
       '/characters/',
       '/assets/',
+      '/scripts/extensions/third-party/',
     ]) {
       expect(source).toContain(namespace);
     }
     expect(source).toContain("[CHARACTERS_MODULE, 'avatars', avatarFile]");
     expect(source).toContain("[ASSETS_MODULE, 'path-aliases', legacyPath]");
+    expect(source).toContain("return 'assets/extensions'");
+    expect(source).toContain("const WORKER_VERSION = '2'");
   });
 });

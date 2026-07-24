@@ -20,6 +20,7 @@ export interface ExtensionRegistry {
   get(extensionId: string): Promise<ExtensionRecord | null>;
   findByLegacyName(legacyName: string): Promise<ExtensionRecord | null>;
   install(record: ExtensionRecord): Promise<void>;
+  replace(record: ExtensionRecord): Promise<void>;
   upsertTrusted(record: ExtensionRecord): Promise<void>;
   enable(extensionId: string): Promise<void>;
   disable(extensionId: string): Promise<void>;

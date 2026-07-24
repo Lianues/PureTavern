@@ -1,86 +1,62 @@
 # M11 Extensions
 
-Browser-owned extension registry, isolated plugin storage, explicit permission grants, local package validation, sandbox messaging, and truthful Legacy compatibility responses.
+M11 keeps the unchanged SillyTavern extension manager, warning dialog, manifest loader, hooks, enable/disable UI, and same-context execution model. Browser-owned code replaces only the server Git/filesystem boundary.
 
-## Composition
+## Runtime flow
 
-`createExtensionsFeature(options)` accepts security-sensitive injection points:
-
-- `packageAssets` / `createPackageAssets`: the only allowed persistence/resolution port for local
-  package `Blob`s. The default feature consumes M13 `ExtensionPackageAssetsCapability`; this module
-  never uses `ModuleBlobStore`, creates no IndexedDB store, and changes no database version.
-- `trustedBuiltIns` / `loadTrustedBuiltIns`: audited Legacy extensions shipped in the selected
-  upstream snapshot. `prepare-legacy-runtime.mjs` generates
-  `/__pure_tavern/trusted-extensions.json`; the compiled list is only a startup fallback.
-
-The feature registers `extensionsRuntimeCapability` and `LegacyExtensionSettingsCapability`.
-Settings serializes `disabledExtensions` against registry enable state, while Assets stores validated
-local package files behind stable aliases.
-
-```ts
-const feature = createExtensionsFeature({
-  packageAssets: assetsBridge,
-  trustedBuiltIns: TRUSTED_LEGACY_BUILTINS,
-  createCapabilityHandlers: (extensionId) => ({
-    'host:events': (input) => eventBridge.publish(extensionId, input),
-  }),
-});
+```text
+upstream extensions.js + thirdPartyExtensionWarning
+  -> /api/extensions/* compatibility routes
+  -> ExtensionService + ExtensionRegistry
+  -> CORS Source Gateway
+  -> M13 package assets
+  -> /scripts/extensions/third-party/<folder>/...
+  -> upstream loader imports manifest/js/css in the page context
 ```
 
-No optional runtime asset or second root Service Worker is installed by this module.
+The original warning is shown before a non-official repository is installed. Once accepted, third-party code has the same authority it has in upstream SillyTavern: it can access the DOM, globals, browser storage, network, and credentials available to same-origin scripts. This module does not claim sandbox isolation.
 
-## Storage namespaces
+## Supported remote sources
 
-All JSON records use the existing module-scoped `records` port:
+- Public GitHub repository URLs use GitHub's CORS API when available and jsDelivr's CORS file catalog/CDN for package files. If the unauthenticated GitHub API is rate-limited, installation can still probe `main`/`master`; entering a branch explicitly is the reliable fallback.
+- Public GitLab repository URLs use GitLab's CORS REST/archive endpoints.
+- Direct HTTPS `.zip` URLs are supported when the host permits browser CORS. HTTP is accepted only for localhost development and browser tests.
 
-- `manifests/<stable extension id>`
-- `installations/<stable extension id>`
-- `enabled/<stable extension id>`
-- `permissions/<stable extension id>:<capability>`
-- `plugin-kv:<stable extension id>/<plugin key>`
+No CORS proxy or private-repository credential relay exists. A remote host that blocks CORS, TLS, Private Network Access, or anonymous downloads cannot be installed by this pure frontend.
 
-The stable extension ID is the manifest identity. Display name, Legacy route name, package path, and asset URL are separate fields. User package Legacy aliases are derived from the package hash, not from display names.
+## Original package format
 
-Every records adapter has an in-memory fallback and diagnostics. Blob fallback/persistence is deliberately not invented here; it belongs behind the injected Assets port.
+Packages use SillyTavern's existing root `manifest.json`, including `display_name`, `version`, `author`, `js`, `css`, `i18n`, `requires`, `optional`, `dependencies`, `hooks`, and future opaque fields. M11 validates only structural and resource safety; all extension behavior remains owned by the upstream loader.
 
-## Local package format
+Archives and remote file catalogs are bounded by compressed size, expanded size, per-file size, file count, path length, and compression ratio. Absolute paths, drive paths, backslashes, control characters, `.`/`..`, zip-slip, duplicate Unicode/case paths, missing manifest entries, and unsupported URLs are rejected.
 
-A package is supplied as browser-selected `{ path, data: Blob }[]` entries. ZIP extraction, if used by UI code, must happen before this API and must preserve raw relative paths for validation.
+## Lifecycle
 
-Root `manifest.json` schema:
+The unchanged Legacy UI can now use:
 
-```json
-{
-  "schema_version": 1,
-  "id": "org.example.my-extension",
-  "display_name": "My Extension",
-  "version": "1.0.0",
-  "author": "Example",
-  "description": "Runs in a sandbox",
-  "entry": { "type": "worker", "path": "worker.js" },
-  "permissions": ["storage:plugin"],
-  "hashes": {
-    "worker.js": "64 lowercase or uppercase SHA-256 hex characters"
-  }
-}
-```
+- `GET /api/extensions/discover`
+- `POST /api/extensions/install`
+- `POST /api/extensions/version`
+- `POST /api/extensions/update`
+- `POST /api/extensions/branches`
+- `POST /api/extensions/switch`
+- `POST /api/extensions/move`
+- `POST /api/extensions/delete`
 
-User entry types are only `iframe` (`.html`) or `worker` (`.js`/`.mjs`). `same-context` is not accepted from package JSON. Hashes must cover every file except `manifest.json`, with no extras. Default limits are 256 files, 20 MiB total, 256 KiB manifest, and 240-character paths.
+Install, update, and switch save complete validated snapshots to M13. Stable extension identity is derived from the canonical repository URL; folder/display name and branch are separate. Operations for one extension are serialized. Updates preserve enabled state and installation time.
 
-Rejected inputs include absolute/drive paths, backslashes, percent-encoded paths, URL/query/fragment syntax, control characters, `.`/`..`, empty segments, Unicode/case duplicate conflicts, missing/extra hashes, hash mismatch, duplicate identity, invalid entry type, and missing entry file.
+`local` and `global` are compatibility scope labels inside one browser Profile. `move` changes that label without copying blobs because the pure frontend has no multi-user server directory.
 
-This module does not fetch package URLs and does not claim to bypass CORS or provide Git. Legacy
-remote install/update/branch/switch/move routes return structured HTTP 501 responses instead of
-pretending that browser-only Git/filesystem operations succeeded.
+## Storage
 
-## Permissions and sandbox
+Registry records use the existing module-scoped records store (`registry-v2/<stable id>`). Package files use M13's existing `library` blobs/index and are served by the one shared Assets Service Worker. No Object Store, database version, root Worker, plugin KV store, or second permission system is added.
 
-All permissions default to denied. A grant is accepted only when the installed manifest requested that capability. Sensitive capabilities (`secrets:read`, `network:fetch`, `dom:legacy`, and `storage:modules`) have no default host handler.
+Settings remains the owner of `extension_settings.disabledExtensions`; M11 synchronizes it with registry enabled state. Built-ins come from the generated 14-entry trusted manifest and cannot be deleted.
 
-`SandboxProtocolHost` verifies exact source identity, exact origin, protocol, extension ID, session ID, request ID, and envelope shape. It supports request/response timeouts and a single capability call method. The built-in plugin KV handler always binds to the caller's stable extension ID.
+## Validation
 
-The production Chrome gate verifies all 14 generated trusted built-ins through the unchanged Legacy
-loader, including Regex manifest/script/style and Settings-backed disable/enable persistence. User
-packages remain excluded from Legacy discover, so they cannot bypass the sandbox.
+- Unit/integration tests cover original manifests, CORS source adapters, ZIP security, registry fallback, all lifecycle routes, branch/scope changes, update stability, and M13 resource paths.
+- A live validation run downloaded `https://github.com/Lianues/cocktail` through browser-CORS endpoints and validated its original manifest and resources.
+- Production Chrome verifies the original warning, installation, manifest/JS/CSS loading, install/enable/disable/delete hooks, update detection, branch/switch/move routes, removal, IndexedDB persistence, and zero runtime/console/network compatibility errors.
 
-See [THREAT-MODEL.md](./THREAT-MODEL.md) and [LEGACY-CONTRACT.md](./LEGACY-CONTRACT.md).
+Node server plugins, npm install scripts, arbitrary server routes, private repository proxies, and non-CORS Git hosts remain outside a pure-browser extension system.

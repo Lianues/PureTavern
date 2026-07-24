@@ -1,23 +1,26 @@
-import {
-  assertExtensionId,
-  isExtensionCapability,
-  type ExtensionCapability,
-  type ExtensionManifest,
-} from '../domain/extension';
+import { unzipSync, type UnzipFileInfo } from 'fflate';
+
+import type { LegacyExtensionManifest } from '../domain/extension';
 import type { ValidatedExtensionPackageFile } from '../ports/extension-package-assets';
 
 export const DEFAULT_EXTENSION_PACKAGE_LIMITS = Object.freeze({
-  maxFiles: 256,
-  maxTotalBytes: 20 * 1024 * 1024,
+  maxArchiveBytes: 20 * 1024 * 1024,
+  maxFiles: 2_000,
+  maxTotalBytes: 50 * 1024 * 1024,
+  maxFileBytes: 20 * 1024 * 1024,
   maxManifestBytes: 256 * 1024,
-  maxPathLength: 240,
+  maxPathLength: 300,
+  maxCompressionRatio: 200,
 });
 
 export interface ExtensionPackageLimits {
+  maxArchiveBytes: number;
   maxFiles: number;
   maxTotalBytes: number;
+  maxFileBytes: number;
   maxManifestBytes: number;
   maxPathLength: number;
+  maxCompressionRatio: number;
 }
 
 export interface ExtensionPackageFile {
@@ -25,8 +28,8 @@ export interface ExtensionPackageFile {
   data: Blob;
 }
 
-export interface ValidatedLocalExtensionPackage {
-  manifest: ExtensionManifest;
+export interface ValidatedLegacyExtensionPackage {
+  manifest: LegacyExtensionManifest;
   files: ValidatedExtensionPackageFile[];
   packageHash: string;
   totalBytes: number;
@@ -43,10 +46,64 @@ export class ExtensionPackageValidationError extends Error {
   }
 }
 
-export async function validateLocalExtensionPackage(
+export function extractExtensionZip(
+  archive: Blob,
+  limits: ExtensionPackageLimits = DEFAULT_EXTENSION_PACKAGE_LIMITS,
+): Promise<ExtensionPackageFile[]> {
+  assertPositiveLimits(limits);
+  if (archive.size <= 0 || archive.size > limits.maxArchiveBytes) {
+    fail('archive-size', `Extension archive must be 1-${limits.maxArchiveBytes} bytes.`);
+  }
+  return archive.arrayBuffer().then((buffer) => {
+    let declaredFiles = 0;
+    let declaredTotal = 0;
+    const compressedBytes = Math.max(archive.size, 1);
+    let output: Record<string, Uint8Array>;
+    try {
+      output = unzipSync(new Uint8Array(buffer), {
+        filter(info) {
+          if (isIgnoredArchiveEntry(info.name) || info.name.endsWith('/')) return false;
+          assertSafeZipEntry(info, limits.maxPathLength);
+          declaredFiles += 1;
+          declaredTotal += info.originalSize;
+          if (declaredFiles > limits.maxFiles) {
+            fail('file-count', `Extension archive exceeds the ${limits.maxFiles} file limit.`);
+          }
+          if (info.originalSize > limits.maxFileBytes) {
+            fail('file-size', `Extension archive file is too large: ${info.name}`);
+          }
+          if (declaredTotal > limits.maxTotalBytes) {
+            fail('expanded-size', 'Extension archive expands beyond the configured size limit.');
+          }
+          if (declaredTotal / compressedBytes > limits.maxCompressionRatio) {
+            fail('compression-ratio', 'Extension archive compression ratio is unsafe.');
+          }
+          return true;
+        },
+      });
+    } catch (error) {
+      if (error instanceof ExtensionPackageValidationError) throw error;
+      fail('invalid-zip', `Extension archive is not a supported ZIP: ${errorMessage(error)}`);
+    }
+
+    const entries = Object.entries(output).map(([path, data]) => ({ path, data }));
+    const root = commonArchiveRoot(entries.map((entry) => entry.path));
+    return entries.map((entry) => {
+      const path = root ? entry.path.slice(root.length + 1) : entry.path;
+      const copy = new Uint8Array(entry.data.byteLength);
+      copy.set(entry.data);
+      return {
+        path,
+        data: new Blob([copy.buffer], { type: mimeTypeForPath(path) }),
+      };
+    });
+  });
+}
+
+export async function validateLegacyExtensionPackage(
   inputFiles: readonly ExtensionPackageFile[],
   limits: ExtensionPackageLimits = DEFAULT_EXTENSION_PACKAGE_LIMITS,
-): Promise<ValidatedLocalExtensionPackage> {
+): Promise<ValidatedLegacyExtensionPackage> {
   assertPositiveLimits(limits);
   if (inputFiles.length === 0) fail('empty-package', 'Extension package is empty.');
   if (inputFiles.length > limits.maxFiles) {
@@ -57,14 +114,18 @@ export async function validateLocalExtensionPackage(
   const pathKeys = new Set<string>();
   let totalBytes = 0;
   for (const file of inputFiles) {
-    if (!(file.data instanceof Blob))
+    if (!(file.data instanceof Blob)) {
       fail('invalid-file', 'Every package entry must contain a Blob.');
+    }
     const path = validatePackagePath(file.path, limits.maxPathLength);
     const conflictKey = path.normalize('NFKC').toLocaleLowerCase('en-US');
     if (pathKeys.has(conflictKey)) {
       fail('duplicate-path', `Duplicate or case-conflicting package path: ${path}`);
     }
     pathKeys.add(conflictKey);
+    if (file.data.size > limits.maxFileBytes) {
+      fail('file-size', `Extension package file exceeds the size limit: ${path}`);
+    }
     totalBytes += file.data.size;
     if (totalBytes > limits.maxTotalBytes) {
       fail('package-size', `Extension package exceeds the ${limits.maxTotalBytes} byte limit.`);
@@ -73,64 +134,50 @@ export async function validateLocalExtensionPackage(
   }
 
   const manifestFile = files.find((file) => file.path === 'manifest.json');
-  if (!manifestFile)
-    fail('missing-manifest', 'Extension package must contain manifest.json at its root.');
+  if (!manifestFile) {
+    fail('missing-manifest', 'SillyTavern extension must contain manifest.json at its root.');
+  }
   if (manifestFile.data.size > limits.maxManifestBytes) {
     fail('manifest-size', `manifest.json exceeds the ${limits.maxManifestBytes} byte limit.`);
   }
-
-  const rawManifest = await parseManifestJson(manifestFile.data);
-  const parsed = parsePackageManifest(rawManifest, limits.maxPathLength);
-  const filePaths = new Set(files.map((file) => file.path));
-  if (!filePaths.has(parsed.manifest.entrypoint.path)) {
-    fail(
-      'missing-entrypoint',
-      `Manifest entrypoint does not exist: ${parsed.manifest.entrypoint.path}`,
-    );
-  }
-
-  const expectedPaths = [...filePaths].filter((path) => path !== 'manifest.json').sort();
-  const declaredPaths = Object.keys(parsed.hashes).sort();
-  if (
-    expectedPaths.length !== declaredPaths.length ||
-    expectedPaths.some((path, index) => path !== declaredPaths[index])
-  ) {
-    fail(
-      'hash-coverage',
-      'Manifest hashes must contain every package file except manifest.json, with no extra paths.',
-    );
+  const manifest = await parseLegacyManifest(manifestFile.data, limits.maxPathLength);
+  const paths = new Set(files.map((file) => file.path));
+  for (const referencedPath of [manifest.js, manifest.css].filter(
+    (value): value is string => typeof value === 'string' && Boolean(value),
+  )) {
+    if (!paths.has(referencedPath)) {
+      fail('missing-entrypoint', `Manifest references a missing package file: ${referencedPath}`);
+    }
   }
 
   const validatedFiles: ValidatedExtensionPackageFile[] = [];
   for (const file of files) {
-    const digest = await sha256Hex(file.data);
-    if (file.path !== 'manifest.json') {
-      const expected = parsed.hashes[file.path];
-      if (expected !== digest) {
-        fail('hash-mismatch', `SHA-256 mismatch for package file: ${file.path}`);
-      }
-    }
-    validatedFiles.push({ path: file.path, data: file.data, sha256: digest });
+    validatedFiles.push({
+      path: file.path,
+      data: file.data,
+      sha256: await sha256Hex(file.data),
+    });
   }
-
-  const packageHashInput = validatedFiles
-    .map((file) => `${file.path}\u0000${file.sha256}`)
-    .sort()
-    .join('\n');
-  const packageHash = await sha256Hex(new TextEncoder().encode(packageHashInput));
-
+  const packageHash = await sha256Hex(
+    new TextEncoder().encode(
+      validatedFiles
+        .map((file) => `${file.path}\u0000${file.sha256}`)
+        .sort()
+        .join('\n'),
+    ),
+  );
   return {
-    manifest: parsed.manifest,
+    manifest,
     files: validatedFiles,
     packageHash,
     totalBytes,
-    fileCount: files.length,
+    fileCount: validatedFiles.length,
   };
 }
 
-export function validatePackagePath(path: string, maxPathLength = 240): string {
+export function validatePackagePath(path: string, maxPathLength = 300): string {
   if (typeof path !== 'string') fail('invalid-path', 'Package path must be a string.');
-  const normalized = path.normalize('NFC');
+  const normalized = path.replace(/^\.\//u, '').normalize('NFC');
   if (!normalized || normalized.length > maxPathLength) {
     fail('invalid-path', `Package path must be 1-${maxPathLength} characters.`);
   }
@@ -138,12 +185,11 @@ export function validatePackagePath(path: string, maxPathLength = 240): string {
     normalized !== normalized.trim() ||
     normalized.startsWith('/') ||
     normalized.includes('\\') ||
-    normalized.includes('%') ||
     normalized.includes('?') ||
     normalized.includes('#') ||
     normalized.includes(':') ||
     hasControlCharacters(normalized) ||
-    /^[a-zA-Z]:/.test(normalized)
+    /^[a-zA-Z]:/u.test(normalized)
   ) {
     fail('unsafe-path', `Unsafe package path: ${path}`);
   }
@@ -154,7 +200,7 @@ export function validatePackagePath(path: string, maxPathLength = 240): string {
         !segment ||
         segment === '.' ||
         segment === '..' ||
-        segment.length > 100 ||
+        segment.length > 140 ||
         segment.endsWith(' ') ||
         segment.endsWith('.'),
     )
@@ -177,88 +223,43 @@ export async function sha256Hex(data: Blob | Uint8Array): Promise<string> {
   return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, '0')).join('');
 }
 
-async function parseManifestJson(blob: Blob): Promise<Record<string, unknown>> {
+async function parseLegacyManifest(
+  blob: Blob,
+  maxPathLength: number,
+): Promise<LegacyExtensionManifest> {
+  let value: unknown;
   try {
-    const value = JSON.parse(await blob.text()) as unknown;
-    if (!isRecord(value)) fail('manifest-schema', 'manifest.json must contain a JSON object.');
-    return value;
+    value = JSON.parse(await blob.text()) as unknown;
   } catch (error) {
-    if (error instanceof ExtensionPackageValidationError) throw error;
-    fail('manifest-json', `manifest.json is not valid JSON: ${String(error)}`);
+    fail('manifest-json', `manifest.json is not valid JSON: ${errorMessage(error)}`);
   }
+  if (!isRecord(value)) fail('manifest-schema', 'manifest.json must contain a JSON object.');
+  const displayName = requiredString(value.display_name, 'display_name', 160);
+  const version = optionalString(value.version, 'version', 80);
+  const author = optionalString(value.author, 'author', 160);
+  const js = optionalPackagePath(value.js, 'js', maxPathLength);
+  const css = optionalPackagePath(value.css, 'css', maxPathLength);
+  if (!js && !css) {
+    fail('manifest-entrypoint', 'SillyTavern extension manifest must declare js and/or css.');
+  }
+  return {
+    ...structuredClone(value),
+    display_name: displayName,
+    version: version || '0.0.0',
+    author,
+    ...(js ? { js } : {}),
+    ...(css ? { css } : {}),
+  };
 }
 
-function parsePackageManifest(
-  input: Record<string, unknown>,
+function optionalPackagePath(
+  value: unknown,
+  field: string,
   maxPathLength: number,
-): { manifest: ExtensionManifest; hashes: Record<string, string> } {
-  if (input.schema_version !== 1) {
-    fail('manifest-schema', 'manifest schema_version must be 1.');
-  }
-  const id = requiredString(input.id, 'id', 128);
-  try {
-    assertExtensionId(id);
-  } catch (error) {
-    fail('manifest-id', error instanceof Error ? error.message : String(error));
-  }
-  const displayName = requiredString(input.display_name, 'display_name', 120);
-  const version = requiredString(input.version, 'version', 64);
-  const author = optionalString(input.author, 'author', 120);
-  const description = optionalString(input.description, 'description', 2_000);
-
-  if (!isRecord(input.entry)) fail('manifest-entry', 'Manifest entry must be an object.');
-  if (input.entry.type !== 'iframe' && input.entry.type !== 'worker') {
-    fail(
-      'entry-type',
-      'User extension entry.type must be iframe or worker; same-context is reserved for trusted built-ins.',
-    );
-  }
-  const entryPath = validatePackagePath(
-    requiredString(input.entry.path, 'entry.path', maxPathLength),
-    maxPathLength,
-  );
-  if (input.entry.type === 'iframe' && !/\.html?$/i.test(entryPath)) {
-    fail('entry-type', 'Iframe entrypoints must be an .html file.');
-  }
-  if (input.entry.type === 'worker' && !/\.(?:js|mjs)$/i.test(entryPath)) {
-    fail('entry-type', 'Worker entrypoints must be a .js or .mjs file.');
-  }
-
-  const permissions = input.permissions ?? [];
-  if (!Array.isArray(permissions) || !permissions.every(isExtensionCapability)) {
-    fail('manifest-permissions', 'Manifest permissions contains an unknown capability.');
-  }
-  const requestedCapabilities = [...new Set(permissions as ExtensionCapability[])];
-
-  if (!isRecord(input.hashes)) fail('manifest-hashes', 'Manifest hashes must be an object.');
-  const hashes: Record<string, string> = {};
-  for (const [rawPath, rawDigest] of Object.entries(input.hashes)) {
-    const path = validatePackagePath(rawPath, maxPathLength);
-    if (path === 'manifest.json') {
-      fail('manifest-hashes', 'manifest.json cannot declare a self hash.');
-    }
-    if (typeof rawDigest !== 'string' || !/^[a-fA-F0-9]{64}$/.test(rawDigest)) {
-      fail('manifest-hashes', `Hash for ${path} must be a 64-character SHA-256 hex digest.`);
-    }
-    if (Object.prototype.hasOwnProperty.call(hashes, path)) {
-      fail('duplicate-path', `Duplicate manifest hash path: ${path}`);
-    }
-    hashes[path] = rawDigest.toLowerCase();
-  }
-
-  return {
-    manifest: {
-      schemaVersion: 1,
-      id,
-      displayName,
-      version,
-      author,
-      description,
-      entrypoint: { type: input.entry.type, path: entryPath },
-      requestedCapabilities,
-    },
-    hashes,
-  };
+): string | undefined {
+  if (value === undefined || value === null || value === '') return undefined;
+  if (typeof value !== 'string') fail('manifest-schema', `Manifest ${field} must be a string.`);
+  return validatePackagePath(value, maxPathLength);
 }
 
 function requiredString(value: unknown, field: string, maxLength: number): string {
@@ -272,15 +273,75 @@ function requiredString(value: unknown, field: string, maxLength: number): strin
 }
 
 function optionalString(value: unknown, field: string, maxLength: number): string {
-  if (value === undefined) return '';
+  if (value === undefined || value === null) return '';
   if (typeof value !== 'string' || value.length > maxLength) {
     fail('manifest-schema', `Manifest ${field} must be a string up to ${maxLength} characters.`);
   }
   return value.trim();
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+function assertSafeZipEntry(info: UnzipFileInfo, maxPathLength: number): void {
+  validatePackagePath(info.name.replace(/\/$/u, ''), maxPathLength + 160);
+  if (!Number.isSafeInteger(info.originalSize) || info.originalSize < 0) {
+    fail('invalid-zip', `Extension archive contains an invalid size: ${info.name}`);
+  }
+}
+
+function commonArchiveRoot(paths: readonly string[]): string | null {
+  if (paths.some((path) => path === 'manifest.json')) return null;
+  const roots = new Set(paths.map((path) => path.split('/')[0]).filter(Boolean));
+  if (roots.size !== 1) return null;
+  const root = [...roots][0];
+  return root && paths.some((path) => path === `${root}/manifest.json`) ? root : null;
+}
+
+function isIgnoredArchiveEntry(path: string): boolean {
+  const normalized = path.replace(/\\/gu, '/');
+  return (
+    normalized.startsWith('__MACOSX/') ||
+    normalized.endsWith('/.DS_Store') ||
+    normalized === '.DS_Store'
+  );
+}
+
+function mimeTypeForPath(path: string): string {
+  const extension = path.split('.').at(-1)?.toLocaleLowerCase('en-US');
+  switch (extension) {
+    case 'js':
+    case 'mjs':
+      return 'text/javascript';
+    case 'css':
+      return 'text/css';
+    case 'json':
+      return 'application/json';
+    case 'html':
+    case 'htm':
+      return 'text/html';
+    case 'svg':
+      return 'image/svg+xml';
+    case 'png':
+      return 'image/png';
+    case 'jpg':
+    case 'jpeg':
+      return 'image/jpeg';
+    case 'webp':
+      return 'image/webp';
+    case 'woff':
+      return 'font/woff';
+    case 'woff2':
+      return 'font/woff2';
+    default:
+      return 'application/octet-stream';
+  }
+}
+
+function assertPositiveLimits(limits: ExtensionPackageLimits): void {
+  if (
+    Object.values(limits).some((value) => !Number.isInteger(value) || value <= 0) ||
+    limits.maxFileBytes > limits.maxTotalBytes
+  ) {
+    throw new TypeError('Extension package limits must be positive coherent integers.');
+  }
 }
 
 function hasControlCharacters(value: string): boolean {
@@ -290,16 +351,12 @@ function hasControlCharacters(value: string): boolean {
   });
 }
 
-function assertPositiveLimits(limits: ExtensionPackageLimits): void {
-  if (
-    !Number.isInteger(limits.maxFiles) ||
-    !Number.isInteger(limits.maxTotalBytes) ||
-    !Number.isInteger(limits.maxManifestBytes) ||
-    !Number.isInteger(limits.maxPathLength) ||
-    Object.values(limits).some((value) => value <= 0)
-  ) {
-    throw new TypeError('Extension package limits must be positive integers.');
-  }
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }
 
 function fail(code: string, message: string): never {

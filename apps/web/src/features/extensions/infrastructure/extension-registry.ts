@@ -1,8 +1,6 @@
 import {
   cloneExtensionRecord,
   createVersionMetadata,
-  type ExtensionInstallation,
-  type ExtensionManifest,
   type ExtensionRecord,
   type ExtensionVersionMetadata,
 } from '../domain/extension';
@@ -14,13 +12,7 @@ import {
 } from '../ports/extension-registry';
 import type { ExtensionRecordStore } from './record-store';
 
-const MANIFESTS_COLLECTION = 'manifests';
-const INSTALLATIONS_COLLECTION = 'installations';
-const ENABLED_COLLECTION = 'enabled';
-
-interface EnabledRecord {
-  enabled: boolean;
-}
+const REGISTRY_COLLECTION = 'registry-v2';
 
 export class RecordExtensionRegistry implements ExtensionRegistry {
   readonly #records: ExtensionRecordStore;
@@ -30,25 +22,18 @@ export class RecordExtensionRegistry implements ExtensionRegistry {
   }
 
   async discover(): Promise<ExtensionRecord[]> {
-    return (await this.list()).filter((record) => record.enabled);
+    return this.list();
   }
 
   async list(): Promise<ExtensionRecord[]> {
-    const installations = await this.#records.list<ExtensionInstallation>(INSTALLATIONS_COLLECTION);
-    const records = await Promise.all(
-      installations.map((installation) => this.#readRecord(installation.value)),
-    );
-    return records
-      .filter((record): record is ExtensionRecord => record !== null)
+    return (await this.#records.list<ExtensionRecord>(REGISTRY_COLLECTION))
+      .map((entry) => cloneExtensionRecord(entry.value))
       .sort(compareRecords);
   }
 
   async get(extensionId: string): Promise<ExtensionRecord | null> {
-    const installation = await this.#records.get<ExtensionInstallation>(
-      INSTALLATIONS_COLLECTION,
-      extensionId,
-    );
-    return installation ? this.#readRecord(installation.value) : null;
+    const entry = await this.#records.get<ExtensionRecord>(REGISTRY_COLLECTION, extensionId);
+    return entry ? cloneExtensionRecord(entry.value) : null;
   }
 
   async findByLegacyName(legacyName: string): Promise<ExtensionRecord | null> {
@@ -61,7 +46,13 @@ export class RecordExtensionRegistry implements ExtensionRegistry {
 
   async install(record: ExtensionRecord): Promise<void> {
     await assertNoConflict(this, record);
-    await this.#writeRecord(record);
+    await this.#records.put(REGISTRY_COLLECTION, record.extensionId, cloneExtensionRecord(record));
+  }
+
+  async replace(record: ExtensionRecord): Promise<void> {
+    if (!(await this.get(record.extensionId))) throw new ExtensionNotFoundError(record.extensionId);
+    await assertNoConflict(this, record, record.extensionId);
+    await this.#records.put(REGISTRY_COLLECTION, record.extensionId, cloneExtensionRecord(record));
   }
 
   async upsertTrusted(record: ExtensionRecord): Promise<void> {
@@ -74,31 +65,19 @@ export class RecordExtensionRegistry implements ExtensionRegistry {
         `Extension id is already owned by a user package: ${record.extensionId}`,
       );
     }
-    const legacyConflict = (await this.list()).find(
-      (candidate) =>
-        candidate.extensionId !== record.extensionId &&
-        normalizeLegacyName(candidate.legacyName) === normalizeLegacyName(record.legacyName),
-    );
-    if (legacyConflict) {
-      throw new ExtensionConflictError(
-        `Legacy extension path is already in use: ${record.legacyName}`,
-      );
-    }
-    await this.#writeRecord(
-      existing
-        ? {
-            ...record,
-            enabled: existing.enabled,
-            installedAt: existing.installedAt,
-            version: createVersionMetadata({
-              extensionId: record.extensionId,
-              manifestVersion: record.manifest.version,
-              source: record.source,
+    await assertNoConflict(this, record, record.extensionId);
+    await this.#records.put(
+      REGISTRY_COLLECTION,
+      record.extensionId,
+      cloneExtensionRecord(
+        existing
+          ? {
+              ...record,
+              enabled: existing.enabled,
               installedAt: existing.installedAt,
-              updatedAt: record.updatedAt,
-            }),
-          }
-        : record,
+            }
+          : record,
+      ),
     );
   }
 
@@ -112,53 +91,18 @@ export class RecordExtensionRegistry implements ExtensionRegistry {
 
   async remove(extensionId: string): Promise<void> {
     if (!(await this.get(extensionId))) throw new ExtensionNotFoundError(extensionId);
-    await this.#records.delete(ENABLED_COLLECTION, extensionId);
-    await this.#records.delete(MANIFESTS_COLLECTION, extensionId);
-    await this.#records.delete(INSTALLATIONS_COLLECTION, extensionId);
+    await this.#records.delete(REGISTRY_COLLECTION, extensionId);
   }
 
   async getVersion(extensionId: string): Promise<ExtensionVersionMetadata | null> {
-    return (await this.get(extensionId))?.version ?? null;
-  }
-
-  async #readRecord(installation: ExtensionInstallation): Promise<ExtensionRecord | null> {
-    const [manifest, enabled] = await Promise.all([
-      this.#records.get<ExtensionManifest>(MANIFESTS_COLLECTION, installation.extensionId),
-      this.#records.get<EnabledRecord>(ENABLED_COLLECTION, installation.extensionId),
-    ]);
-    if (!manifest || !enabled) return null;
-    return cloneExtensionRecord({
-      ...installation,
-      enabled: enabled.value.enabled,
-      manifest: manifest.value,
-      version: createVersionMetadata({
-        extensionId: installation.extensionId,
-        manifestVersion: manifest.value.version,
-        source: installation.source,
-        installedAt: installation.installedAt,
-        updatedAt: installation.updatedAt,
-      }),
-    });
-  }
-
-  async #writeRecord(record: ExtensionRecord): Promise<void> {
-    const installation: ExtensionInstallation = {
-      extensionId: record.extensionId,
-      legacyName: record.legacyName,
-      trust: record.trust,
-      source: structuredClone(record.source),
-      installedAt: record.installedAt,
-      updatedAt: record.updatedAt,
-    };
-    await this.#records.put(MANIFESTS_COLLECTION, record.extensionId, record.manifest);
-    await this.#records.put(INSTALLATIONS_COLLECTION, record.extensionId, installation);
-    await this.#records.put(ENABLED_COLLECTION, record.extensionId, { enabled: record.enabled });
+    const record = await this.get(extensionId);
+    return record ? createVersionMetadata(record) : null;
   }
 
   async #setEnabled(extensionId: string, enabled: boolean): Promise<void> {
-    const existing = await this.get(extensionId);
-    if (!existing) throw new ExtensionNotFoundError(extensionId);
-    await this.#records.put(ENABLED_COLLECTION, extensionId, { enabled });
+    const record = await this.get(extensionId);
+    if (!record) throw new ExtensionNotFoundError(extensionId);
+    await this.#records.put(REGISTRY_COLLECTION, extensionId, { ...record, enabled });
   }
 }
 
@@ -166,7 +110,7 @@ export class MemoryExtensionRegistry implements ExtensionRegistry {
   readonly #records = new Map<string, ExtensionRecord>();
 
   async discover(): Promise<ExtensionRecord[]> {
-    return (await this.list()).filter((record) => record.enabled);
+    return this.list();
   }
 
   async list(): Promise<ExtensionRecord[]> {
@@ -191,6 +135,13 @@ export class MemoryExtensionRegistry implements ExtensionRegistry {
     this.#records.set(record.extensionId, cloneExtensionRecord(record));
   }
 
+  async replace(record: ExtensionRecord): Promise<void> {
+    if (!this.#records.has(record.extensionId))
+      throw new ExtensionNotFoundError(record.extensionId);
+    await assertNoConflict(this, record, record.extensionId);
+    this.#records.set(record.extensionId, cloneExtensionRecord(record));
+  }
+
   async upsertTrusted(record: ExtensionRecord): Promise<void> {
     if (record.trust !== 'trusted-builtin') {
       throw new TypeError('Only trusted built-ins can use registry upsert.');
@@ -201,16 +152,7 @@ export class MemoryExtensionRegistry implements ExtensionRegistry {
         `Extension id is already owned by a user package: ${record.extensionId}`,
       );
     }
-    const legacyConflict = [...this.#records.values()].find(
-      (candidate) =>
-        candidate.extensionId !== record.extensionId &&
-        normalizeLegacyName(candidate.legacyName) === normalizeLegacyName(record.legacyName),
-    );
-    if (legacyConflict) {
-      throw new ExtensionConflictError(
-        `Legacy extension path is already in use: ${record.legacyName}`,
-      );
-    }
+    await assertNoConflict(this, record, record.extensionId);
     this.#records.set(
       record.extensionId,
       cloneExtensionRecord(
@@ -219,13 +161,6 @@ export class MemoryExtensionRegistry implements ExtensionRegistry {
               ...record,
               enabled: existing.enabled,
               installedAt: existing.installedAt,
-              version: createVersionMetadata({
-                extensionId: record.extensionId,
-                manifestVersion: record.manifest.version,
-                source: record.source,
-                installedAt: existing.installedAt,
-                updatedAt: record.updatedAt,
-              }),
             }
           : record,
       ),
@@ -245,7 +180,8 @@ export class MemoryExtensionRegistry implements ExtensionRegistry {
   }
 
   async getVersion(extensionId: string): Promise<ExtensionVersionMetadata | null> {
-    return (await this.get(extensionId))?.version ?? null;
+    const record = await this.get(extensionId);
+    return record ? createVersionMetadata(record) : null;
   }
 
   replaceAll(records: readonly ExtensionRecord[]): void {
@@ -285,7 +221,7 @@ export class ResilientExtensionRegistry implements ExtensionRegistry {
   }
 
   async discover(): Promise<ExtensionRecord[]> {
-    return (await this.list()).filter((record) => record.enabled);
+    return this.list();
   }
 
   async list(): Promise<ExtensionRecord[]> {
@@ -304,11 +240,7 @@ export class ResilientExtensionRegistry implements ExtensionRegistry {
     if (this.diagnostics.status === 'degraded') return this.#fallback.get(extensionId);
     try {
       const record = await this.#primary.get(extensionId);
-      if (record) {
-        this.#fallback.hydrate(record);
-      } else if (await this.#fallback.get(extensionId)) {
-        await this.#fallback.remove(extensionId);
-      }
+      if (record) this.#fallback.hydrate(record);
       return record;
     } catch (error) {
       this.#degrade(error);
@@ -331,18 +263,13 @@ export class ResilientExtensionRegistry implements ExtensionRegistry {
   async install(record: ExtensionRecord): Promise<void> {
     if (this.diagnostics.status !== 'degraded') await this.list();
     await this.#fallback.install(record);
-    if (this.diagnostics.status === 'degraded') return this.#saved();
-    try {
-      await this.#primary.install(record);
-      this.#saved();
-    } catch (error) {
-      if (error instanceof ExtensionConflictError) {
-        await this.#fallback.remove(record.extensionId);
-        throw error;
-      }
-      this.#degrade(error);
-      this.#saved();
-    }
+    await this.#write(() => this.#primary.install(record));
+  }
+
+  async replace(record: ExtensionRecord): Promise<void> {
+    await this.#hydrate(record.extensionId);
+    await this.#fallback.replace(record);
+    await this.#write(() => this.#primary.replace(record));
   }
 
   async upsertTrusted(record: ExtensionRecord): Promise<void> {
@@ -370,25 +297,33 @@ export class ResilientExtensionRegistry implements ExtensionRegistry {
   }
 
   async getVersion(extensionId: string): Promise<ExtensionVersionMetadata | null> {
-    return (await this.get(extensionId))?.version ?? null;
+    const record = await this.get(extensionId);
+    return record ? createVersionMetadata(record) : null;
   }
 
   async #hydrate(extensionId: string): Promise<void> {
-    if (this.diagnostics.status === 'degraded') return;
+    if (await this.#fallback.get(extensionId)) return;
     const record = await this.get(extensionId);
     if (!record) throw new ExtensionNotFoundError(extensionId);
+    this.#fallback.hydrate(record);
   }
 
   async #write(operation: () => Promise<void>): Promise<void> {
-    if (this.diagnostics.status !== 'degraded') {
-      try {
-        await operation();
-      } catch (error) {
-        if (error instanceof ExtensionConflictError || error instanceof ExtensionNotFoundError) {
-          throw error;
-        }
-        this.#degrade(error);
+    if (this.diagnostics.status === 'degraded') {
+      this.#saved();
+      return;
+    }
+    try {
+      await operation();
+    } catch (error) {
+      if (
+        error instanceof ExtensionConflictError ||
+        error instanceof ExtensionNotFoundError ||
+        error instanceof TypeError
+      ) {
+        throw error;
       }
+      this.#degrade(error);
     }
     this.#saved();
   }
@@ -400,18 +335,28 @@ export class ResilientExtensionRegistry implements ExtensionRegistry {
   #degrade(error: unknown): void {
     this.diagnostics.status = 'degraded';
     this.diagnostics.backend = 'memory';
-    this.diagnostics.message = error instanceof Error ? error.message : String(error);
+    this.diagnostics.message = `IndexedDB extension registry failed; using page memory: ${
+      error instanceof Error ? error.message : String(error)
+    }`;
   }
 }
 
 async function assertNoConflict(
-  registry: ExtensionRegistry,
+  registry: Pick<ExtensionRegistry, 'get' | 'list'>,
   record: ExtensionRecord,
+  ignoredExtensionId?: string,
 ): Promise<void> {
-  if (await registry.get(record.extensionId)) {
+  const existing = await registry.get(record.extensionId);
+  if (existing && existing.extensionId !== ignoredExtensionId) {
     throw new ExtensionConflictError(`Extension id is already installed: ${record.extensionId}`);
   }
-  if (await registry.findByLegacyName(record.legacyName)) {
+  const target = normalizeLegacyName(record.legacyName);
+  const conflict = (await registry.list()).find(
+    (candidate) =>
+      candidate.extensionId !== ignoredExtensionId &&
+      normalizeLegacyName(candidate.legacyName) === target,
+  );
+  if (conflict) {
     throw new ExtensionConflictError(
       `Legacy extension path is already in use: ${record.legacyName}`,
     );
@@ -419,18 +364,12 @@ async function assertNoConflict(
 }
 
 function normalizeLegacyName(value: string): string {
-  return value
-    .trim()
-    .replace(/^\/+/, '')
-    .replace(/^third-party\//i, '')
-    .normalize('NFKC')
-    .toLocaleLowerCase('en-US');
+  return value.replace(/^\/+|\/+$/gu, '').toLocaleLowerCase('en-US');
 }
 
 function compareRecords(left: ExtensionRecord, right: ExtensionRecord): number {
   return (
-    Number(right.trust === 'trusted-builtin') - Number(left.trust === 'trusted-builtin') ||
-    left.manifest.displayName.localeCompare(right.manifest.displayName) ||
-    left.extensionId.localeCompare(right.extensionId)
+    left.manifest.display_name.localeCompare(right.manifest.display_name, 'en') ||
+    left.extensionId.localeCompare(right.extensionId, 'en')
   );
 }

@@ -31,6 +31,7 @@ describe('Assets cross-feature bridges', () => {
 
     await service.saveExtensionPackage({
       extensionId,
+      legacyName: 'third-party/browser-probe',
       packageHash: 'a'.repeat(64),
       installedAt: new Date().toISOString(),
       files: [
@@ -49,12 +50,13 @@ describe('Assets cross-feature bridges', () => {
 
     const htmlUrl = await service.resolveExtensionPackageAssetUrl(extensionId, 'index.html');
     const workerUrl = await service.resolveExtensionPackageAssetUrl(extensionId, 'worker/index.js');
-    expect(htmlUrl).toBe('/assets/extensions/local.browser-probe/index.html');
-    expect(workerUrl).toBe('/assets/extensions/local.browser-probe/worker/index.js');
+    expect(htmlUrl).toBe('/scripts/extensions/third-party/browser-probe/index.html');
+    expect(workerUrl).toBe('/scripts/extensions/third-party/browser-probe/worker/index.js');
     expect((await service.getAssetByPath(workerUrl!))?.blob.data.size).toBeGreaterThan(0);
 
     await service.saveExtensionPackage({
       extensionId,
+      legacyName: 'third-party/browser-probe',
       packageHash: 'd'.repeat(64),
       installedAt: new Date().toISOString(),
       files: [

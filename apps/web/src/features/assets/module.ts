@@ -31,6 +31,7 @@ export const ASSET_RESOURCE_NAMESPACES = Object.freeze([
   '/user/images/',
   '/characters/',
   '/assets/',
+  '/scripts/extensions/third-party/',
 ]);
 
 export interface AssetsFeatureOptions {
