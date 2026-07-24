@@ -20,6 +20,12 @@ export async function registerAssetServiceWorker(): Promise<'ready' | 'skipped'>
 
   await navigator.serviceWorker.ready;
   await waitForController(expectedScriptUrl);
+  await warmRuntimeCache(expectedScriptUrl).catch((error: unknown) => {
+    console.warn(
+      '[PureTavern Assets] Runtime cache warm-up failed; normal browser caching remains available.',
+      error,
+    );
+  });
   return 'ready';
 }
 
@@ -44,6 +50,50 @@ function waitForActivation(worker: ServiceWorker, timeoutMs = 10_000): Promise<v
       }
     }
     worker.addEventListener('statechange', onStateChange);
+  });
+}
+
+async function warmRuntimeCache(expectedScriptUrl: string): Promise<void> {
+  if (document.readyState !== 'complete') {
+    await new Promise<void>((resolve) =>
+      window.addEventListener('load', () => resolve(), { once: true }),
+    );
+  }
+  const controller = navigator.serviceWorker.controller;
+  if (!controller || controller.scriptURL !== expectedScriptUrl) return;
+
+  const urls = [
+    ...performance.getEntriesByType('resource').map((entry) => entry.name),
+    ...Array.from(
+      document.querySelectorAll<HTMLScriptElement | HTMLLinkElement>('script[src],link[href]'),
+    )
+      .map((element) => (element instanceof HTMLScriptElement ? element.src : element.href))
+      .filter(Boolean),
+  ];
+  const channel = new MessageChannel();
+  await new Promise<void>((resolve, reject) => {
+    const timeout = window.setTimeout(() => {
+      channel.port1.close();
+      reject(new Error('Runtime cache warm-up timed out.'));
+    }, 20_000);
+    channel.port1.onmessage = (event: MessageEvent<unknown>) => {
+      window.clearTimeout(timeout);
+      channel.port1.close();
+      const value = event.data;
+      if (
+        !value ||
+        typeof value !== 'object' ||
+        !('ok' in value) ||
+        (value as { ok: unknown }).ok !== true
+      ) {
+        reject(new Error('Runtime cache warm-up was rejected by the Service Worker.'));
+        return;
+      }
+      resolve();
+    };
+    controller.postMessage({ type: 'warm-runtime-cache', buildId: RUNTIME_BUILD_ID, urls }, [
+      channel.port2,
+    ]);
   });
 }
 

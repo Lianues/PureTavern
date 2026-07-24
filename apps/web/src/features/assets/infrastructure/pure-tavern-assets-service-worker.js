@@ -1,18 +1,25 @@
-/* global self, URL, Response, fetch, Headers, console, indexedDB */
+/* global self, URL, Response, Request, fetch, Headers, console, indexedDB, caches */
 
 const DATABASE_NAME = 'pure-tavern-modular-dev';
 const KEY_SEPARATOR = '\u001f';
 const ASSETS_MODULE = 'assets';
 const CHARACTERS_MODULE = 'characters';
 const ASSET_MARKER_HEADER = 'X-Pure-Tavern-Asset';
-const WORKER_VERSION = '2';
+const WORKER_VERSION = '3';
+const RUNTIME_BUILD_QUERY = '__pt_build';
+const RUNTIME_CACHE_PREFIX = 'pure-tavern-runtime-';
+const BUILD_ID_PATTERN = /^[a-zA-Z0-9_-]{8,128}$/u;
+const RUNTIME_FILE_PATTERN = /\.(?:css|eot|htm|html|js|json|mjs|otf|ttf|wasm|woff|woff2)$/iu;
+const WORKER_BUILD_ID =
+  readBuildId(new URL(self.location.href).searchParams.get('v')) || 'development';
+let activeRuntimeBuildId = WORKER_BUILD_ID;
 
 self.addEventListener('install', (event) => {
   event.waitUntil(self.skipWaiting());
 });
 
 self.addEventListener('activate', (event) => {
-  event.waitUntil(self.clients.claim());
+  event.waitUntil(Promise.all([self.clients.claim(), deleteStaleRuntimeCaches(WORKER_BUILD_ID)]));
 });
 
 self.addEventListener('fetch', (event) => {
@@ -20,9 +27,39 @@ self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
   if (url.origin !== self.location.origin) return;
 
+  const requestedBuildId = readBuildId(url.searchParams.get(RUNTIME_BUILD_QUERY));
+  if (requestedBuildId) activeRuntimeBuildId = requestedBuildId;
+
   const lookup = resolveLookup(url);
-  if (!lookup) return;
-  event.respondWith(respondWithAsset(event.request, lookup));
+  if (lookup) {
+    event.respondWith(respondWithAsset(event.request, lookup));
+    return;
+  }
+  if (isRuntimeStaticRequest(event.request, url)) {
+    event.respondWith(respondWithRuntimeResource(event.request, url, activeRuntimeBuildId));
+  }
+});
+
+self.addEventListener('message', (event) => {
+  const data = event.data;
+  if (!data || data.type !== 'warm-runtime-cache') return;
+  const buildId = readBuildId(data.buildId);
+  const urls = Array.isArray(data.urls) ? data.urls : [];
+  const task = buildId
+    ? warmRuntimeCache(buildId, urls)
+    : Promise.reject(new Error('Runtime cache warm-up received an invalid build ID.'));
+  event.waitUntil(task);
+  const reply = event.ports?.[0];
+  if (reply) {
+    task.then(
+      (count) => reply.postMessage({ ok: true, count }),
+      (error) =>
+        reply.postMessage({
+          ok: false,
+          error: error instanceof Error ? error.message : String(error),
+        }),
+    );
+  }
 });
 
 function resolveLookup(url) {
@@ -102,7 +139,146 @@ async function respondWithAsset(request, lookup) {
     console.warn('[PureTavern Assets SW] Asset lookup failed:', error);
   }
 
-  return fetch(lookup.fallback, { cache: 'no-store' });
+  const fallbackUrl = new URL(lookup.fallback, self.location.origin);
+  return fetchRuntimeResource(request, fallbackUrl, activeRuntimeBuildId, 'no-store');
+}
+
+async function respondWithRuntimeResource(request, url, buildId) {
+  return fetchRuntimeResource(request, url, buildId, 'no-store');
+}
+
+async function fetchRuntimeResource(request, url, buildId, networkCacheMode) {
+  if (
+    request.method !== 'GET' ||
+    request.headers.has('Range') ||
+    !isRuntimeStaticPath(url.pathname)
+  ) {
+    return fetch(url.href, {
+      method: request.method,
+      headers: request.headers,
+      cache: networkCacheMode,
+      credentials: 'same-origin',
+    });
+  }
+
+  const cache = await caches.open(runtimeCacheName(buildId));
+  const cacheKey = runtimeCacheKey(url);
+  const cached = await cache.match(cacheKey);
+  if (cached) return markRuntimeCacheHit(cached, buildId);
+
+  const response = await fetch(url.href, {
+    cache: networkCacheMode,
+    credentials: 'same-origin',
+  });
+  if (response.ok && response.status === 200) {
+    await cache.put(cacheKey, response.clone());
+  }
+  return response;
+}
+
+async function warmRuntimeCache(buildId, values) {
+  activeRuntimeBuildId = buildId;
+  const urls = [];
+  const seen = new Set();
+  for (const value of values.slice(0, 2000)) {
+    if (typeof value !== 'string') continue;
+    let url;
+    try {
+      url = new URL(value, self.location.origin);
+    } catch {
+      continue;
+    }
+    if (
+      url.origin !== self.location.origin ||
+      !isRuntimeStaticPath(url.pathname) ||
+      seen.has(url.href)
+    ) {
+      continue;
+    }
+    seen.add(url.href);
+    urls.push(url);
+  }
+
+  const cache = await caches.open(runtimeCacheName(buildId));
+  let stored = 0;
+  for (let offset = 0; offset < urls.length; offset += 12) {
+    await Promise.all(
+      urls.slice(offset, offset + 12).map(async (url) => {
+        const cacheKey = runtimeCacheKey(url);
+        if (await cache.match(cacheKey)) return;
+        const response = await fetch(url.href, {
+          cache: 'force-cache',
+          credentials: 'same-origin',
+        });
+        if (!response.ok || response.status !== 200) return;
+        await cache.put(cacheKey, response.clone());
+        stored += 1;
+      }),
+    );
+  }
+  return stored;
+}
+
+async function deleteStaleRuntimeCaches(currentBuildId) {
+  const names = await caches.keys();
+  await Promise.all(
+    names
+      .filter(
+        (name) =>
+          name.startsWith(RUNTIME_CACHE_PREFIX) && name !== runtimeCacheName(currentBuildId),
+      )
+      .map((name) => caches.delete(name)),
+  );
+}
+
+function isRuntimeStaticRequest(request, url) {
+  return (
+    request.method === 'GET' &&
+    !request.headers.has('Range') &&
+    request.mode !== 'navigate' &&
+    isRuntimeStaticPath(url.pathname)
+  );
+}
+
+function isRuntimeStaticPath(pathname) {
+  if (
+    pathname === '/' ||
+    pathname === '/index.html' ||
+    pathname === '/modern.html' ||
+    pathname === '/__pure_tavern/runtime-version.json' ||
+    pathname === '/__pure_tavern/legacy-hook.js' ||
+    pathname === '/pure-tavern-assets-service-worker.js' ||
+    pathname.startsWith('/api/')
+  ) {
+    return false;
+  }
+  return RUNTIME_FILE_PATTERN.test(pathname);
+}
+
+function runtimeCacheName(buildId) {
+  return `${RUNTIME_CACHE_PREFIX}${buildId}`;
+}
+
+function runtimeCacheKey(url) {
+  const normalized = new URL(url.href);
+  normalized.searchParams.delete(RUNTIME_BUILD_QUERY);
+  normalized.hash = '';
+  return new Request(normalized.href, { method: 'GET', credentials: 'same-origin' });
+}
+
+function markRuntimeCacheHit(response, buildId) {
+  const headers = new Headers(response.headers);
+  headers.set('X-Pure-Tavern-Runtime-Cache', 'hit');
+  headers.set('X-Pure-Tavern-Runtime-Build', buildId);
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers,
+  });
+}
+
+function readBuildId(value) {
+  return typeof value === 'string' && BUILD_ID_PATTERN.test(value) ? value : null;
 }
 
 async function readCharacterAvatar(avatarFile) {

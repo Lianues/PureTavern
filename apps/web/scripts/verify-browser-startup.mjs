@@ -319,9 +319,22 @@ try {
   let pageLoadEvents = 0;
 
   client.on('Network.requestWillBeSent', ({ request }) => requests.push(request.url));
-  client.on('Network.responseReceived', ({ response }) =>
-    responses.push({ url: response.url, status: response.status }),
-  );
+  client.on('Network.responseReceived', ({ response }) => {
+    const runtimeCache = Object.entries(response.headers ?? {}).find(
+      ([name]) => name.toLowerCase() === 'x-pure-tavern-runtime-cache',
+    )?.[1];
+    const runtimeBuild = Object.entries(response.headers ?? {}).find(
+      ([name]) => name.toLowerCase() === 'x-pure-tavern-runtime-build',
+    )?.[1];
+    responses.push({
+      url: response.url,
+      status: response.status,
+      fromServiceWorker: response.fromServiceWorker === true,
+      fromDiskCache: response.fromDiskCache === true,
+      runtimeCache: typeof runtimeCache === 'string' ? runtimeCache : null,
+      runtimeBuild: typeof runtimeBuild === 'string' ? runtimeBuild : null,
+    });
+  });
   client.on('Runtime.exceptionThrown', ({ exceptionDetails }) => {
     runtimeExceptions.push({
       text: exceptionDetails.text,
@@ -3053,8 +3066,55 @@ try {
     },
   };
 
-  // Allow animations, nested CSS imports, fonts, and images to finish so late failures are included.
+  // Let Legacy debounced writes settle and establish an explicit settings write barrier before the
+  // cache probe reload. Reloading during a pending save would create a navigation-aborted false error.
+  await client.send('Runtime.evaluate', {
+    expression: `(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 2_500));
+      const scriptModule = await import('/script.js');
+      await scriptModule.saveSettings();
+      await new Promise((resolve) => setTimeout(resolve, 250));
+      return true;
+    })()`,
+    awaitPromise: true,
+    returnByValue: true,
+  });
+
+  const runtimeCacheResponseStart = responses.length;
+  const runtimeCacheLoadEvents = pageLoadEvents;
+  await client.send('Page.reload', { ignoreCache: false });
+  const runtimeCacheReloadDeadline = Date.now() + 20_000;
+  while (pageLoadEvents <= runtimeCacheLoadEvents && Date.now() < runtimeCacheReloadDeadline) {
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+  snapshot = await waitForApplicationSnapshot();
   await new Promise((resolve) => setTimeout(resolve, 750));
+  const runtimeCacheResponses = responses.slice(runtimeCacheResponseStart).filter(({ url }) => {
+    const parsed = new URL(url);
+    return (
+      parsed.origin === new URL(appUrl).origin &&
+      /\.(?:css|eot|htm|html|js|json|mjs|otf|ttf|wasm|woff|woff2)$/iu.test(parsed.pathname) &&
+      parsed.pathname !== '/__pure_tavern/legacy-hook.js' &&
+      parsed.pathname !== '/pure-tavern-assets-service-worker.js' &&
+      parsed.pathname !== '/__pure_tavern/runtime-version.json'
+    );
+  });
+  const runtimeCacheHits = runtimeCacheResponses.filter(
+    (response) => response.runtimeCache === 'hit' && response.fromServiceWorker,
+  );
+  const runtimeCacheMisses = runtimeCacheResponses.filter(
+    (response) => response.runtimeCache !== 'hit' && !response.fromDiskCache,
+  );
+  const runtimeCacheWorkflow = {
+    reloadCompleted: pageLoadEvents > runtimeCacheLoadEvents,
+    responseCount: runtimeCacheResponses.length,
+    hitCount: runtimeCacheHits.length,
+    missCount: runtimeCacheMisses.length,
+    allCodeFromLocalCache: runtimeCacheResponses.length > 0 && runtimeCacheMisses.length === 0,
+    buildIds: [
+      ...new Set(runtimeCacheHits.map((response) => response.runtimeBuild).filter(Boolean)),
+    ],
+  };
 
   const appOrigin = new URL(appUrl).origin;
   const compatibilityNetworkRequests = requests.filter((requestUrl) => {
@@ -3278,6 +3338,12 @@ try {
       assetsWorkflow?.storage?.index?.backend === 'indexeddb' &&
       assetsWorkflow?.serviceWorker?.status === 'ready' &&
       assetsWorkflow?.defaultBackgroundSeed?.status === 'ready',
+    runtimeStaticCacheReady:
+      runtimeCacheWorkflow.reloadCompleted === true &&
+      runtimeCacheWorkflow.responseCount > 0 &&
+      runtimeCacheWorkflow.hitCount === runtimeCacheWorkflow.responseCount &&
+      runtimeCacheWorkflow.missCount === 0 &&
+      runtimeCacheWorkflow.buildIds.length === 1,
     assetsBrowserWorkflow:
       assetsWorkflow?.available === true &&
       assetsWorkflow?.defaultBackgroundCount > 0 &&
@@ -3437,7 +3503,7 @@ try {
       moduleContracts?.eventSystem?.scriptEventSourceMatches === true,
     extensionContextAvailable: moduleContracts?.extensionContext?.ok === true,
     legacyCssLoaded:
-      snapshot?.styleSheetHrefs?.some((href) => href.endsWith('/style.css')) === true,
+      snapshot?.styleSheetHrefs?.some((href) => new URL(href).pathname === '/style.css') === true,
     legacyLibraryLoaded:
       localScriptRequests.some((url) => new URL(url).pathname === '/lib.js') &&
       snapshot?.legacyLodashGlobal === true,
@@ -3481,6 +3547,7 @@ try {
     chatWorkflow,
     statsWorkflow,
     dataManagementWorkflow,
+    runtimeCacheWorkflow,
     requestCount: requests.length,
     localScriptRequestCount: localScriptRequests.length,
     compatibilityNetworkRequests,

@@ -11,7 +11,7 @@
 
 功能代码禁止继续加入本目录。每个模块必须把装配、Repository、Legacy routes、契约声明和测试放在 `src/features/<module>/**`。
 
-Cloudflare Pages 的首页、Hook、版本文件、Assets Service Worker 与第一方数据管理扩展由构建生成的 `_headers` 强制重新验证。Hook 和 Worker URL 同时携带 build ID，因此新版本不会复用旧脚本缓存；此机制只刷新代码，不清除 IndexedDB。
+Cloudflare Pages 的首页与 `runtime-version.json` 保持 `no-store`，用于发现新部署。构建在 `<head>` 最前方注入阻塞式 Build marker；现有根 Assets Service Worker 以 `pure-tavern-runtime-<buildId>` 缓存 JS/CSS/字体/静态配置。同一 Build 后续加载直接命中 CacheStorage，不逐文件 ETag 校验；新 marker 先切换命名空间，新 Worker 激活后清理旧缓存。原版 ES Module URL 不添加查询参数，避免同一模块产生重复实例。此机制只更新代码缓存，不清除 IndexedDB 业务数据。
 
 模块诊断统一位于：
 

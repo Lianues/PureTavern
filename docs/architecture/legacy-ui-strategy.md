@@ -97,6 +97,7 @@ Hook 必须在原版主模块执行前安装。当前职责仅有：
 - 包装同源 `fetch`；
 - 通过 Feature Registry 安装 Import/Export/Backup、Settings、Secrets、Generation、Characters、Chats、Stats、Personas、World Books、Presets、Assets、Extensions 与 Tokenizers，并将对应 Legacy 路径或 capability 桥接到浏览器 Use Case；Prompt Pipeline 直接保留原版实现，不注册重复 Feature；
 - 通过类型化 Capability Registry 连接模块间的可选能力，而不是互相 import Repository；
+- 以阻塞式 Build marker 和现有根 Service Worker 管理版本化运行时 CacheStorage；同 Build 的代码/config cache-first，新 Build 先切换命名空间，不改写原版 ES Module URL；
 - 对尚未迁移但启动阶段必需的路径返回固定空数据或安全默认值；
 - 记录已处理请求和未处理路径；
 - 暴露 `globalThis.__PURE_TAVERN__` 诊断信息；

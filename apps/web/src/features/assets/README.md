@@ -54,6 +54,14 @@ Characters consumes the typed `AssetServiceWorkerCapability`; it does not instal
 The worker opens the existing database without requesting a version or creating stores, preventing
 version conflicts with the application database.
 
+The same root worker owns `pure-tavern-runtime-<buildId>` CacheStorage namespaces for code and static
+configuration. A parser-blocking marker at the beginning of `<head>` switches an already active old
+worker to the page's Build ID before any Legacy stylesheet or script is requested. Runtime JS/MJS,
+CSS, fonts, WASM, JSON, and HTML are cache-first within that namespace. The page warms resources
+already loaded during its first visit from the browser HTTP cache. API/navigation/version requests
+and IndexedDB-backed dynamic blobs are excluded. Worker activation removes prior Build caches.
+Original ES Module URLs stay unchanged, preserving module singleton and circular-import semantics.
+
 ## Browser-only limitations
 
 Remote extension asset and external character-card downloads use the injected native browser
@@ -65,4 +73,5 @@ bounds large local libraries.
 The production Chrome gate covers default backgrounds, upload/list/direct URL/thumbnail/rename/
 delete, folders, attachments persisted through M05 chat metadata, user images, persona avatars,
 sprites, extension assets/packages, the original external-URL Character Card import flow, Persona
-alias lifecycle, shared Worker routing, IndexedDB diagnostics, and zero local 404s.
+alias lifecycle, shared Worker routing, IndexedDB diagnostics, and a normal reload where all 331
+runtime code responses are local cache hits with zero misses and zero local 404s.

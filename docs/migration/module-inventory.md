@@ -400,8 +400,9 @@ features/<module>/
   - 文件名、MIME/signature、单文件大小、ZIP 文件数/压缩与展开总量、zip-slip 均有门禁；远程 asset 遵循浏览器 CORS；
   - 构建生成默认背景 hash 清单，新 upstream 默认可增量补入，用户删除以 seed state 保留；
   - 共享根 scope Service Worker 统一解析 Character 头像、背景、persona、聊天附件、用户图片、sprites 与 extension/library URL；Worker 无版本打开现有数据库，不创建 schema；
+  - 同一 Worker 以 Build ID 隔离静态运行时 CacheStorage；JS/CSS/字体/config 在首次加载后 cache-first，新 Build marker 切换命名空间并清理旧缓存，首页与版本探针不缓存；
   - Characters 通过 `AssetServiceWorkerCapability` 复用该 Worker；聊天只保存附件 metadata，实际 Blob 生命周期归 M13。
-- **验收**：真实 Chrome 覆盖默认背景、原版背景列表 DOM、上传/缩略图/文件夹/rename/delete、聊天附件跨刷新、用户图片、persona、sprite、extension asset、直接 Blob URL，以及原版 `importFromExternalUrl` 的 CORS PNG 下载→角色导入闭环；零资源 404、零运行时异常。
+- **验收**：真实 Chrome 覆盖默认背景、原版背景列表 DOM、上传/缩略图/文件夹/rename/delete、聊天附件跨刷新、用户图片、persona、sprite、extension asset、直接 Blob URL，以及原版 `importFromExternalUrl` 的 CORS PNG 下载→角色导入闭环；正常刷新 331/331 个运行时代码响应命中同一 Build CacheStorage、miss 为 0，且零资源 404、零运行时异常。
 - **可选后端**：未来提供远程 Blob/S3/WebDAV Adapter；浏览器 CORS 与站点配额不能被本地实现绕过。
 - **依赖**：M02；与 M04/M05 仅通过 capability 或公开 URL DTO 协作。
 - **删除影响**：媒体子模块可删；文本聊天仍应工作。

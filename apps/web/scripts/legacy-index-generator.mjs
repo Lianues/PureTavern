@@ -4,6 +4,8 @@ const SCRIPT_ANCHOR_PATTERN =
   /<script\b[^>]*\bsrc=["']\/?lib\/polyfill\.js["'][^>]*>\s*<\/script>/giu;
 const GENERATED_NOTICE =
   '<!-- GENERATED FROM legacy/upstream/public/index.html. DO NOT EDIT DIRECTLY. -->';
+const HEAD_PATTERN = /<head\b[^>]*>/giu;
+const RUNTIME_MARKER = 'data-pure-tavern-runtime="build-marker"';
 
 export function generateHookedIndex(upstreamIndex, buildId) {
   if (!BUILD_ID_PATTERN.test(buildId)) {
@@ -17,7 +19,14 @@ export function generateHookedIndex(upstreamIndex, buildId) {
     throw new Error(`Expected exactly one Legacy script anchor, found ${anchorMatches.length}.`);
   }
 
+  const headMatches = upstreamIndex.match(HEAD_PATTERN) ?? [];
+  if (headMatches.length !== 1) {
+    throw new Error(`Expected exactly one Legacy head element, found ${headMatches.length}.`);
+  }
+
   const hookTag = `    <script type="module" src="/__pure_tavern/legacy-hook.js?v=${buildId}" ${HOOK_MARKER}></script>`;
+  const markerTag = `    <script src="/__pure_tavern/runtime-marker.js?__pt_build=${buildId}" ${RUNTIME_MARKER}></script>`;
   const withNotice = upstreamIndex.replace(/(<!doctype html>)/iu, `$1\n${GENERATED_NOTICE}`);
-  return withNotice.replace(SCRIPT_ANCHOR_PATTERN, `${hookTag}\n$&`);
+  const withMarker = withNotice.replace(HEAD_PATTERN, `$&\n${markerTag}`);
+  return withMarker.replace(SCRIPT_ANCHOR_PATTERN, `${hookTag}\n$&`);
 }

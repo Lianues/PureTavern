@@ -11,7 +11,7 @@ pnpm install
 pnpm dev
 ```
 
-默认地址由 Vite 输出。Web 页面不需要运行 `SillyTavern-1.18.0/server.js`。
+默认地址由 Vite 输出。Web 页面不需要运行 `SillyTavern-1.18.0/server.js`。生产部署以 Build ID 管理静态运行时缓存：首次加载后，后续同版本页面直接从 CacheStorage 读取 JS/CSS/字体/配置，不再逐文件发起 ETag 校验；仅首页与版本探针保持动态检查。
 
 - `/`：原版 UI + 原版交互 + Pure Tavern Hook。
 - `/modern.html`：Vue 3 现代模块/诊断入口。

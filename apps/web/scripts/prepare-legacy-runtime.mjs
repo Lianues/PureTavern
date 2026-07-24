@@ -27,12 +27,16 @@ const featuresRoot = path.join(packageRoot, 'src', 'features');
 
 const RUNTIME_EXCLUDES = new Set(['index.html', 'UPSTREAM_LICENSE', 'UPSTREAM_SOURCE.md']);
 const CLOUDFLARE_PAGES_HEADERS = `
+/assets/modern-*
+  Cache-Control: public, max-age=31536000, immutable
 /
   Cache-Control: no-cache, no-store, must-revalidate
 /index.html
   Cache-Control: no-cache, no-store, must-revalidate
 /__pure_tavern/runtime-version.json
   Cache-Control: no-cache, no-store, must-revalidate
+/__pure_tavern/runtime-marker.js
+  Cache-Control: public, max-age=31536000, immutable
 /__pure_tavern/legacy-hook.js
   Cache-Control: no-cache, must-revalidate
 /pure-tavern-assets-service-worker.js
@@ -100,6 +104,7 @@ export async function prepareLegacyRuntime() {
       JSON.stringify({ buildId }),
       'utf8',
     ),
+    writeFile(path.join(compatibilityAssetsRoot, 'runtime-marker.js'), "'use strict';\n", 'utf8'),
     writeFile(path.join(generatedPublicRoot, '_headers'), CLOUDFLARE_PAGES_HEADERS, 'utf8'),
   ]);
   await mkdir(path.join(generatedPublicRoot, 'User Avatars'), { recursive: true });
