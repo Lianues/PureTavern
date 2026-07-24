@@ -24,6 +24,17 @@ const upstreamMetadataPath = path.join(packageRoot, 'legacy', 'upstream.json');
 const generatedPublicRoot = path.join(packageRoot, '.generated', 'public');
 const generatedIndexPath = path.join(packageRoot, 'index.html');
 const featuresRoot = path.join(packageRoot, 'src', 'features');
+const brandingRoot = path.join(packageRoot, 'src', 'branding');
+const BRANDING_ASSETS = Object.freeze([
+  ['pure-tavern-favicon.ico', 'favicon.ico'],
+  ['pure-tavern-icon.png', 'img/pure-tavern-icon.png'],
+  ['pure-tavern-logo-330.png', 'img/logo.png'],
+  ['pure-tavern-system-avatar.png', 'img/five.png'],
+  ...[57, 72, 114, 144, 192, 512].map((size) => [
+    `apple-icon-${size}x${size}.png`,
+    `img/apple-icon-${size}x${size}.png`,
+  ]),
+]);
 
 const RUNTIME_EXCLUDES = new Set(['index.html', 'UPSTREAM_LICENSE', 'UPSTREAM_SOURCE.md']);
 const CLOUDFLARE_PAGES_HEADERS = `
@@ -107,6 +118,7 @@ export async function prepareLegacyRuntime() {
     writeFile(path.join(compatibilityAssetsRoot, 'runtime-marker.js'), "'use strict';\n", 'utf8'),
     writeFile(path.join(generatedPublicRoot, '_headers'), CLOUDFLARE_PAGES_HEADERS, 'utf8'),
   ]);
+  await copyBrandingAssets();
   await mkdir(path.join(generatedPublicRoot, 'User Avatars'), { recursive: true });
   await cp(
     path.join(upstreamDefaultContentRoot, 'user-default.png'),
@@ -175,6 +187,14 @@ export async function loadDataManagementExtensionDefinition() {
     sourceKind: 'pure-tavern-first-party',
     sourceHash: createHash('sha256').update(raw).digest('hex'),
   };
+}
+
+async function copyBrandingAssets() {
+  for (const [source, target] of BRANDING_ASSETS) {
+    const targetPath = path.join(generatedPublicRoot, target);
+    await mkdir(path.dirname(targetPath), { recursive: true });
+    await cp(path.join(brandingRoot, source), targetPath, { force: true });
+  }
 }
 
 async function copyFeatureRuntimeAssets() {

@@ -468,6 +468,64 @@ try {
 
   let snapshot = await waitForApplicationSnapshot();
 
+  const brandingEvaluation = await client.send('Runtime.evaluate', {
+    expression: `(async () => {
+      const waitFor = async (read, timeoutMs = 5_000) => {
+        const deadline = Date.now() + timeoutMs;
+        while (Date.now() < deadline) {
+          const value = read();
+          if (value) return value;
+          await new Promise((resolve) => setTimeout(resolve, 50));
+        }
+        return null;
+      };
+      const version = await waitFor(() => {
+        const value = document.querySelector('.welcomeHeaderVersionDisplay')?.textContent?.trim();
+        return value?.startsWith('PureTavern') ? value : null;
+      });
+      const logo = await waitFor(() => document.querySelector('.welcomeHeaderLogo'));
+      if (logo instanceof HTMLImageElement && !logo.complete) {
+        await new Promise((resolve) => {
+          logo.addEventListener('load', resolve, { once: true });
+          logo.addEventListener('error', resolve, { once: true });
+        });
+      }
+      const loadImage = (source) => new Promise((resolve) => {
+        const image = new Image();
+        image.onload = () => resolve({ ok: true, width: image.naturalWidth, height: image.naturalHeight });
+        image.onerror = () => resolve({ ok: false, width: 0, height: 0 });
+        image.src = source;
+      });
+      const [systemAvatar, faviconResponse] = await Promise.all([
+        loadImage('/img/five.png'),
+        fetch('/favicon.ico', { cache: 'no-cache' }),
+      ]);
+      return {
+        title: document.title,
+        version,
+        logo: logo instanceof HTMLImageElement
+          ? {
+              pathname: new URL(logo.src, location.href).pathname,
+              width: logo.naturalWidth,
+              height: logo.naturalHeight,
+              alt: logo.alt,
+              ariaLabel: logo.getAttribute('aria-label'),
+              hasI18n: logo.hasAttribute('data-i18n'),
+            }
+          : null,
+        systemAvatar,
+        favicon: {
+          ok: faviconResponse.ok,
+          contentType: faviconResponse.headers.get('content-type'),
+          bytes: faviconResponse.ok ? (await faviconResponse.blob()).size : 0,
+        },
+      };
+    })()`,
+    awaitPromise: true,
+    returnByValue: true,
+  });
+  const brandingWorkflow = brandingEvaluation.result?.value;
+
   const interactionEvaluation = await client.send('Runtime.evaluate', {
     expression: `(async () => {
       const delay = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
@@ -3136,6 +3194,20 @@ try {
 
   const checks = {
     hookInstalled: snapshot?.hookInstalled === 'installed',
+    brandingReady:
+      brandingWorkflow?.title === 'PureTavern' &&
+      brandingWorkflow?.version === 'PureTavern (SillyTavern 1.18.0)' &&
+      brandingWorkflow?.logo?.pathname === '/img/logo.png' &&
+      brandingWorkflow?.logo?.width === 330 &&
+      brandingWorkflow?.logo?.height === 330 &&
+      brandingWorkflow?.logo?.alt === 'PureTavern Logo' &&
+      brandingWorkflow?.logo?.ariaLabel === 'PureTavern Logo' &&
+      brandingWorkflow?.logo?.hasI18n === false &&
+      brandingWorkflow?.systemAvatar?.ok === true &&
+      brandingWorkflow?.systemAvatar?.width === 400 &&
+      brandingWorkflow?.systemAvatar?.height === 600 &&
+      brandingWorkflow?.favicon?.ok === true &&
+      brandingWorkflow?.favicon?.bytes > 0,
     databaseReady: snapshot?.databaseState === 'ready',
     settingsStorageReady:
       snapshot?.settingsStorage?.status === 'ready' &&
@@ -3531,6 +3603,7 @@ try {
     appUrl,
     browserPath,
     snapshot,
+    brandingWorkflow,
     interactions,
     moduleContracts,
     settingsPersistence,

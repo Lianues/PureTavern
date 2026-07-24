@@ -8,6 +8,7 @@ import {
 import { registerCoreLegacyRoutes } from '../platform/legacy/register-core-routes';
 import { loadUpstreamMetadata } from '../platform/legacy/upstream-metadata';
 import { RUNTIME_BUILD_ID } from '../platform/runtime/build-id';
+import { installLegacyBranding } from '../platform/runtime/legacy-branding';
 import { installRuntimeUpdateWatcher } from '../platform/runtime/runtime-update';
 import { appStorage } from '../platform/storage/app-storage';
 import { initializeStorageSafely } from '../platform/storage/initialize-storage';
@@ -15,6 +16,7 @@ import { initializeStorageSafely } from '../platform/storage/initialize-storage'
 const router = new CompatibilityRouter();
 const nativeFetch = installCompatibilityFetch(router);
 const upstreamMetadata = loadUpstreamMetadata(nativeFetch);
+installLegacyBranding(upstreamMetadata);
 registerCoreLegacyRoutes(router, upstreamMetadata);
 
 const features = installFeatureModules(featureModules, {
