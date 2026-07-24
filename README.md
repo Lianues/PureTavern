@@ -65,6 +65,31 @@ pnpm build
 apps/web/dist
 ```
 
+这是不绑定托管服务商的通用静态产物，可以部署到 Cloudflare Pages、GitHub Pages、普通静态服务器，也会直接作为 Android 外壳的 Web 内容。
+
+### Android APK
+
+Android 外壳位于 `apps/mobile`，只消费 `apps/web/dist`，不包含业务逻辑或平台专用功能实现。更新 Web 代码后无需手工修改 Android 工程。
+
+```bash
+# 构建 Web 并同步到 Android
+pnpm android:sync
+
+# 构建可安装的 Debug APK
+pnpm android:debug
+
+# 同步后用 Android Studio 打开
+pnpm android:open
+```
+
+本地 Android 构建需要 JDK 21、Android SDK Platform 36 和 Build Tools 36。APK 输出位置：
+
+```text
+apps/mobile/android/app/build/outputs/apk/debug/app-debug.apk
+```
+
+推送相关改动到 `main` 后，GitHub Actions 也会自动构建并上传 Debug APK artifact。Debug APK 适合测试；正式发布仍需配置私有签名密钥并构建 Release APK/AAB。
+
 ## 浏览器限制
 
 纯前端无法绕过目标服务的 CORS、TLS 和 Private Network Access 策略。当前密钥保存在浏览器本地，不应视为安全 Vault。

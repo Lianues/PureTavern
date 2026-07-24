@@ -12,6 +12,7 @@ export default tseslint.config(
       'apps/web/legacy/upstream/**',
       'apps/web/.generated/**',
       'apps/web/index.html',
+      'apps/mobile/android/**',
       'SillyTavern-1.18.0/**',
     ],
   },

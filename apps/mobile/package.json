@@ -1,0 +1,17 @@
+{
+  "name": "@pure-tavern/mobile",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "sync:android": "cap sync android",
+    "open:android": "cap sync android && cap open android",
+    "build:android:debug": "cap sync android && node scripts/run-gradle.mjs assembleDebug"
+  },
+  "dependencies": {
+    "@capacitor/android": "8.4.2",
+    "@capacitor/core": "8.4.2"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "8.4.2"
+  }
+}

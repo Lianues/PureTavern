@@ -18,7 +18,10 @@
     "legacy:sync:check": "node apps/web/scripts/sync-legacy.mjs --check",
     "legacy:contracts:generate": "node apps/web/scripts/legacy-contracts.mjs generate",
     "legacy:contracts:check": "node apps/web/scripts/legacy-contracts.mjs check",
-    "legacy:verify": "pnpm --filter @pure-tavern/web legacy:verify"
+    "legacy:verify": "pnpm --filter @pure-tavern/web legacy:verify",
+    "android:sync": "pnpm build && pnpm --filter @pure-tavern/mobile sync:android",
+    "android:open": "pnpm build && pnpm --filter @pure-tavern/mobile open:android",
+    "android:debug": "pnpm build && pnpm --filter @pure-tavern/mobile build:android:debug"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
