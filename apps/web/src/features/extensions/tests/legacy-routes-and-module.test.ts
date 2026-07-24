@@ -1,7 +1,10 @@
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { CapabilityRegistry } from '@/platform/features/capability-registry';
-import { legacyExtensionSettingsCapability } from '@/platform/features/standard-capabilities';
+import {
+  assetServiceWorkerCapability,
+  legacyExtensionSettingsCapability,
+} from '@/platform/features/standard-capabilities';
 import { CompatibilityRouter } from '@/platform/legacy/compatibility-router';
 import { AppDatabase } from '@/platform/storage/app-database';
 import { AppStorage } from '@/platform/storage/app-storage';
@@ -93,6 +96,28 @@ describe('M11 Legacy routes and module composition', () => {
     );
   });
 
+  it('waits for the Assets Service Worker before accepting extension installation', async () => {
+    const source = new FakeExtensionSourceGateway();
+    let releaseWorker!: (value: 'ready') => void;
+    const workerReady = new Promise<'ready'>((resolve) => {
+      releaseWorker = resolve;
+    });
+    const { router } = installFeature(source, workerReady);
+    let completed = false;
+    const installation = postJson(router, '/api/extensions/install', {
+      url: 'https://example.test/cocktail.zip',
+      global: false,
+    }).then((response) => {
+      completed = true;
+      return response;
+    });
+
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(completed).toBe(false);
+    releaseWorker('ready');
+    expect((await installation).status).toBe(200);
+  });
+
   it('keeps original Settings disabledExtensions synchronized with registry state', async () => {
     const source = new FakeExtensionSourceGateway();
     const { router, capabilities } = installFeature(source);
@@ -129,7 +154,10 @@ describe('M11 Legacy routes and module composition', () => {
   });
 });
 
-function installFeature(source: FakeExtensionSourceGateway): {
+function installFeature(
+  source: FakeExtensionSourceGateway,
+  workerReady?: Promise<unknown>,
+): {
   router: CompatibilityRouter;
   capabilities: CapabilityRegistry;
   diagnostics: Record<string, unknown>;
@@ -139,6 +167,7 @@ function installFeature(source: FakeExtensionSourceGateway): {
   const storage = new AppStorage(database);
   const router = new CompatibilityRouter();
   const capabilities = new CapabilityRegistry();
+  if (workerReady) capabilities.register(assetServiceWorkerCapability, { ready: workerReady });
   const feature = createExtensionsFeature({
     sourceGateway: source,
     packageAssets: new MemoryExtensionPackageAssets(),

@@ -9,7 +9,7 @@ export function registerCoreLegacyRoutes(
   router.register('GET', '/version', async () => {
     const metadata = await upstreamMetadata;
     return jsonResponse({
-      agent: `PureTavern-LegacyHook/${metadata.version}`,
+      agent: `SillyTavern:${metadata.version}:PureTavern`,
       pkgVersion: metadata.version,
       gitBranch: 'legacy-hook',
       gitRevision: 'local',

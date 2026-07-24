@@ -2,6 +2,7 @@ import { defineCapability } from '@/platform/features/capability-registry';
 import type { FeatureInstallContext, FeatureModule } from '@/platform/features/feature-module';
 import { registerArchiveModule } from '@/platform/features/register-archive-module';
 import {
+  assetServiceWorkerCapability,
   extensionPackageAssetsCapability,
   legacyExtensionSettingsCapability,
 } from '@/platform/features/standard-capabilities';
@@ -75,6 +76,7 @@ export function createExtensionsFeature(options: ExtensionsFeatureOptions = {}):
         message: null as string | null,
       };
       const ready = (async () => {
+        await (capabilities.get(assetServiceWorkerCapability)?.ready ?? Promise.resolve());
         let definitions = options.trustedBuiltIns ?? TRUSTED_LEGACY_BUILTINS;
         if (options.loadTrustedBuiltIns) {
           try {

@@ -151,10 +151,11 @@ function createMockLegacyExtensionArchive(version) {
     requires: [],
     optional: [],
     dependencies: [],
-    js: 'index.js',
-    css: 'style.css',
+    js: 'dist/index.js',
+    css: 'dist/index.css',
     author: 'Pure Tavern Browser Gate',
     version,
+    minimum_client_version: '1.12.13',
     hooks: {
       install: 'onInstall',
       update: 'onUpdate',
@@ -177,10 +178,13 @@ export function onDisable() { state.hooks.push('disable'); }
   return Buffer.from(
     zipSync({
       'browser-extension/manifest.json': new TextEncoder().encode(manifest),
-      'browser-extension/index.js': new TextEncoder().encode(script),
-      'browser-extension/style.css': new TextEncoder().encode(
+      'browser-extension/dist/index.js': new TextEncoder().encode(script),
+      'browser-extension/dist/index.css': new TextEncoder().encode(
         '.browser-cors-extension-marker { --pure-tavern-extension: ready; }',
       ),
+      'browser-extension/.gitignore': new TextEncoder().encode('dist-cache/'),
+      'browser-extension/.github/workflows/build.yml': new TextEncoder().encode('name: build'),
+      'browser-extension/.vscode/settings.json': new TextEncoder().encode('{}'),
     }),
   );
 }
@@ -743,6 +747,7 @@ try {
       const extensionModule = await import('/scripts/extensions.js');
       const scriptModule = await import('/script.js');
       const headers = scriptModule.getRequestHeaders();
+      const legacyClientVersion = scriptModule.CLIENT_VERSION.split(':')[1] ?? null;
       const mockBase = ${JSON.stringify(mockProvider.baseUrl)};
       const extensionUrl = mockBase + '/browser-extension.zip';
       const post = (pathname, body) => fetch(pathname, {
@@ -830,14 +835,22 @@ try {
         { cache: 'no-store' },
       );
       const scriptResponse = await fetch(
-        '/scripts/extensions/third-party/browser-extension/index.js',
+        '/scripts/extensions/third-party/browser-extension/dist/index.js',
+        { cache: 'no-store' },
+      );
+      const styleResponse = await fetch(
+        '/scripts/extensions/third-party/browser-extension/dist/index.css',
+        { cache: 'no-store' },
+      );
+      const dotFileResponse = await fetch(
+        '/scripts/extensions/third-party/browser-extension/.gitignore',
         { cache: 'no-store' },
       );
       const thirdPartyScriptLoaded = [...document.scripts].some((script) =>
-        script.src.endsWith('/scripts/extensions/third-party/browser-extension/index.js'),
+        script.src.endsWith('/scripts/extensions/third-party/browser-extension/dist/index.js'),
       );
       const thirdPartyStyleLoaded = [...document.styleSheets].some((sheet) =>
-        sheet.href?.endsWith('/scripts/extensions/third-party/browser-extension/style.css'),
+        sheet.href?.endsWith('/scripts/extensions/third-party/browser-extension/dist/index.css'),
       );
       const installHookCalled =
         globalThis.__PURE_TAVERN_THIRD_PARTY__?.hooks?.includes('install') === true;
@@ -895,7 +908,7 @@ try {
       );
 
       const thirdPartyModule = await import(
-        '/scripts/extensions/third-party/browser-extension/index.js'
+        '/scripts/extensions/third-party/browser-extension/dist/index.js'
       );
       await thirdPartyModule.onDelete();
       const deleteResponse = await post('/api/extensions/delete', {
@@ -936,13 +949,22 @@ try {
         runtimeCountAfterInstall: extensionModule.extensionNames.length,
         thirdPartyManifestLoaded:
           thirdPartyManifest?.display_name === 'Browser CORS Extension' &&
+          thirdPartyManifest?.minimum_client_version === '1.12.13' &&
           thirdPartyManifest?.future_manifest_field?.kept === true,
+        minimumClientVersionAccepted: legacyClientVersion === '1.18.0',
         manifestAssetServed:
           manifestResponse.ok &&
           manifestResponse.headers.get('X-Pure-Tavern-Asset') === 'assets/extensions',
         scriptAssetServed:
           scriptResponse.ok &&
           scriptResponse.headers.get('X-Pure-Tavern-Asset') === 'assets/extensions',
+        styleAssetServed:
+          styleResponse.ok &&
+          styleResponse.headers.get('X-Pure-Tavern-Asset') === 'assets/extensions' &&
+          styleResponse.headers.get('Content-Type') === 'text/css',
+        dotFileAssetServed:
+          dotFileResponse.ok &&
+          dotFileResponse.headers.get('X-Pure-Tavern-Asset') === 'assets/extensions',
         thirdPartyScriptLoaded,
         thirdPartyStyleLoaded,
         installHookCalled,
@@ -3084,6 +3106,9 @@ try {
       extensionWorkflow?.thirdPartyManifestLoaded === true &&
       extensionWorkflow?.manifestAssetServed === true &&
       extensionWorkflow?.scriptAssetServed === true &&
+      extensionWorkflow?.styleAssetServed === true &&
+      extensionWorkflow?.dotFileAssetServed === true &&
+      extensionWorkflow?.minimumClientVersionAccepted === true &&
       extensionWorkflow?.thirdPartyScriptLoaded === true &&
       extensionWorkflow?.thirdPartyStyleLoaded === true &&
       extensionWorkflow?.installHookCalled === true &&

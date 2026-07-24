@@ -23,33 +23,46 @@ export async function registerAssetServiceWorker(): Promise<'ready' | 'skipped'>
   return 'ready';
 }
 
-function waitForActivation(worker: ServiceWorker, timeoutMs = 5_000): Promise<void> {
+function waitForActivation(worker: ServiceWorker, timeoutMs = 10_000): Promise<void> {
   if (worker.state === 'activated') return Promise.resolve();
-  return new Promise((resolve) => {
-    const timeout = window.setTimeout(done, timeoutMs);
-    function done() {
+  return new Promise((resolve, reject) => {
+    const timeout = window.setTimeout(() => {
+      cleanup();
+      reject(new Error('Assets Service Worker activation timed out.'));
+    }, timeoutMs);
+    function cleanup() {
       window.clearTimeout(timeout);
       worker.removeEventListener('statechange', onStateChange);
-      resolve();
     }
     function onStateChange() {
-      if (worker.state === 'activated' || worker.state === 'redundant') done();
+      if (worker.state === 'activated') {
+        cleanup();
+        resolve();
+      } else if (worker.state === 'redundant') {
+        cleanup();
+        reject(new Error('Assets Service Worker became redundant before activation.'));
+      }
     }
     worker.addEventListener('statechange', onStateChange);
   });
 }
 
-function waitForController(expectedScriptUrl: string, timeoutMs = 5_000): Promise<void> {
+function waitForController(expectedScriptUrl: string, timeoutMs = 10_000): Promise<void> {
   if (navigator.serviceWorker.controller?.scriptURL === expectedScriptUrl) return Promise.resolve();
-  return new Promise((resolve) => {
-    const timeout = window.setTimeout(done, timeoutMs);
-    function done() {
+  return new Promise((resolve, reject) => {
+    const timeout = window.setTimeout(() => {
+      cleanup();
+      reject(new Error('Assets Service Worker did not take control of the page.'));
+    }, timeoutMs);
+    function cleanup() {
       window.clearTimeout(timeout);
       navigator.serviceWorker.removeEventListener('controllerchange', onControllerChange);
-      resolve();
     }
     function onControllerChange() {
-      if (navigator.serviceWorker.controller?.scriptURL === expectedScriptUrl) done();
+      if (navigator.serviceWorker.controller?.scriptURL === expectedScriptUrl) {
+        cleanup();
+        resolve();
+      }
     }
     navigator.serviceWorker.addEventListener('controllerchange', onControllerChange);
   });

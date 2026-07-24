@@ -38,5 +38,8 @@ describe('shared Assets Service Worker', () => {
     expect(source).toContain("[ASSETS_MODULE, 'path-aliases', legacyPath]");
     expect(source).toContain("return 'assets/extensions'");
     expect(source).toContain("const WORKER_VERSION = '2'");
+    expect(source).toContain("segment === '..'");
+    expect(source).not.toContain("segment.startsWith('.')");
+    expect(source).not.toContain("segment.includes('..')");
   });
 });

@@ -255,8 +255,6 @@ function isSafeRelativePath(value) {
       !segment ||
       segment === '.' ||
       segment === '..' ||
-      segment.startsWith('.') ||
-      segment.includes('..') ||
       [...segment].some((character) => {
         const code = character.codePointAt(0) || 0;
         return code <= 31 || code === 127;
