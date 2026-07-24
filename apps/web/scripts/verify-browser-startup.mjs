@@ -694,6 +694,7 @@ try {
         status: diagnostics?.status ?? null,
         ownership: diagnostics?.ownership ?? null,
         tokenizerPrecision: diagnostics?.tokenizerPrecision ?? null,
+        estimator: diagnostics?.estimator ?? null,
         replacementEnabled: diagnostics?.replacementEnabled ?? null,
         originalPrepareFunction: typeof openAiModule.prepareOpenAIMessages === 'function',
       };
@@ -702,6 +703,100 @@ try {
     returnByValue: true,
   });
   const promptPipelineWorkflow = promptPipelineWorkflowEvaluation.result?.value;
+
+  const tokenizerWorkflowEvaluation = await client.send('Runtime.evaluate', {
+    expression: `(async () => {
+      const tokenizerModule = await import('/scripts/tokenizers.js');
+      const scriptModule = await import('/script.js');
+      const text = 'Unified tokenx count 你好 👋 for every model.';
+      const headers = scriptModule.getRequestHeaders();
+      const routeHandled = (pathname) =>
+        globalThis.__PURE_TAVERN__?.diagnostics.requests.some(
+          (request) => request.pathname === pathname && request.handled,
+        ) ?? false;
+      const aliases = ['gpt2', 'llama', 'mistral', 'claude', 'deepseek'];
+      const encoded = [];
+      for (const alias of aliases) {
+        const response = await fetch('/api/tokenizers/' + alias + '/encode', {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ text }),
+        });
+        encoded.push(response.ok ? await response.json() : null);
+      }
+      const counts = encoded.map((result) => result?.count);
+      const allAliasCountsSame =
+        counts.every((count) => typeof count === 'number' && count === counts[0]) &&
+        encoded.every(
+          (result) =>
+            result?.approximate === true &&
+            result?.tokenizer === 'tokenx' &&
+            result?.backend === 'worker-tokenx',
+        );
+
+      const llamaIds = tokenizerModule.getTextTokens(tokenizerModule.tokenizers.LLAMA, text);
+      const decoded = tokenizerModule.decodeTextTokens(
+        tokenizerModule.tokenizers.LLAMA,
+        llamaIds,
+      );
+      const gpt2Ids = tokenizerModule.getTextTokens(tokenizerModule.tokenizers.GPT2, text);
+      const openAiCount = await tokenizerModule.countTokensOpenAIAsync(
+        [{ role: 'user', content: text }],
+        true,
+      );
+      const directOpenAiResponse = await fetch('/api/tokenizers/openai/count?model=ignored', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify([{ role: 'user', content: text }]),
+      });
+      const directOpenAi = directOpenAiResponse.ok ? await directOpenAiResponse.json() : null;
+      const remoteResponse = await fetch('/api/tokenizers/remote/kobold/count', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ text, url: 'http://not-contacted.invalid' }),
+      });
+      const remote = remoteResponse.ok ? await remoteResponse.json() : null;
+      const feature = globalThis.__PURE_TAVERN__?.features?.tokenizers;
+
+      return {
+        available: true,
+        aliases,
+        counts,
+        allAliasCountsSame,
+        workerResponses: encoded.map((result) => result?.backend),
+        originalLlamaCount: llamaIds.length,
+        originalGpt2Count: gpt2Ids.length,
+        originalCountsSame: llamaIds.length === gpt2Ids.length && llamaIds.length === counts[0],
+        pseudoDecodeRoundTrip:
+          decoded?.text === text &&
+          Array.isArray(decoded?.chunks) &&
+          decoded.chunks.join('') === text,
+        openAiCount,
+        directOpenAiCount: directOpenAi?.token_count ?? null,
+        openAiApproximate:
+          directOpenAi?.approximate === true && directOpenAi?.tokenizer === 'tokenx',
+        remoteLocalCount:
+          remote?.count === counts[0] &&
+          remote?.approximate === true &&
+          remote?.tokenizer === 'tokenx',
+        routesHandled: {
+          llamaEncode: routeHandled('/api/tokenizers/llama/encode'),
+          llamaDecode: routeHandled('/api/tokenizers/llama/decode'),
+          gpt2Encode: routeHandled('/api/tokenizers/gpt2/encode'),
+          openAiCount: routeHandled('/api/tokenizers/openai/count'),
+          remoteKobold: routeHandled('/api/tokenizers/remote/kobold/count'),
+        },
+        engine: feature?.engine ? { ...feature.engine } : null,
+        workerRequested: feature?.workerRequested ?? null,
+        semantics: feature?.semantics ?? null,
+        modelSpecific: feature?.modelSpecific ?? null,
+        pseudoTokenIds: feature?.pseudoTokenIds ?? null,
+      };
+    })()`,
+    awaitPromise: true,
+    returnByValue: true,
+  });
+  const tokenizerWorkflow = tokenizerWorkflowEvaluation.result?.value;
 
   const presetWorkflowEvaluation = await client.send('Runtime.evaluate', {
     expression: `(async () => {
@@ -2085,8 +2180,26 @@ try {
       promptPipelineWorkflow?.status === 'conformance-candidate' &&
       promptPipelineWorkflow?.ownership === 'legacy' &&
       promptPipelineWorkflow?.tokenizerPrecision === 'approximate' &&
+      promptPipelineWorkflow?.estimator === 'tokenx-unified-approximate' &&
       promptPipelineWorkflow?.replacementEnabled === false &&
       promptPipelineWorkflow?.originalPrepareFunction === true,
+    tokenizerWorkerReady:
+      tokenizerWorkflow?.available === true &&
+      tokenizerWorkflow?.engine?.status === 'ready' &&
+      tokenizerWorkflow?.engine?.workerFailures === 0 &&
+      tokenizerWorkflow?.workerRequested === true &&
+      tokenizerWorkflow?.semantics === 'unified-approximate-tokenx' &&
+      tokenizerWorkflow?.modelSpecific === false &&
+      tokenizerWorkflow?.pseudoTokenIds === true,
+    tokenizerBrowserWorkflow:
+      tokenizerWorkflow?.allAliasCountsSame === true &&
+      tokenizerWorkflow?.originalCountsSame === true &&
+      tokenizerWorkflow?.pseudoDecodeRoundTrip === true &&
+      tokenizerWorkflow?.openAiCount > 0 &&
+      tokenizerWorkflow?.directOpenAiCount > 0 &&
+      tokenizerWorkflow?.openAiApproximate === true &&
+      tokenizerWorkflow?.remoteLocalCount === true &&
+      Object.values(tokenizerWorkflow?.routesHandled ?? {}).every(Boolean),
     presetsStorageReady:
       presetWorkflow?.storage?.status === 'ready' &&
       presetWorkflow?.storage?.backend === 'indexeddb',
@@ -2253,6 +2366,7 @@ try {
     settingsSnapshotWorkflow,
     extensionWorkflow,
     promptPipelineWorkflow,
+    tokenizerWorkflow,
     personaWorkflow,
     presetWorkflow,
     worldBookWorkflow,

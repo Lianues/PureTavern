@@ -1,6 +1,11 @@
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { CompatibilityRouter, installCompatibilityXhr, jsonResponse } from './compatibility-router';
+import {
+  CompatibilityRouter,
+  installCompatibilityXhr,
+  jsonResponse,
+  syncJsonResponse,
+} from './compatibility-router';
 import { registerCoreLegacyRoutes } from './register-core-routes';
 
 const cleanups: Array<() => void> = [];
@@ -32,7 +37,26 @@ describe('CompatibilityRouter XMLHttpRequest bridge', () => {
     ]);
   });
 
-  it('labels tokenizer estimation and discarded stats update as narrow non-migrated boundaries', async () => {
+  it('routes explicitly registered synchronous Legacy XHR without native network access', () => {
+    const router = new CompatibilityRouter();
+    router.registerSync('POST', '/api/sync-probe', (body) =>
+      syncJsonResponse({ received: JSON.parse(body || '{}') }),
+    );
+    cleanups.push(installCompatibilityXhr(router));
+
+    const request = new XMLHttpRequest();
+    request.open('POST', new URL('/api/sync-probe', window.location.href), false);
+    request.setRequestHeader('Content-Type', 'application/json');
+    request.send(JSON.stringify({ probe: true }));
+
+    expect(request.status).toBe(200);
+    expect(JSON.parse(request.responseText)).toEqual({ received: { probe: true } });
+    expect(router.diagnostics.requests).toMatchObject([
+      { method: 'POST', pathname: '/api/sync-probe', handled: true },
+    ]);
+  });
+
+  it('keeps discarded stats update as a narrow non-migrated boundary', async () => {
     const router = new CompatibilityRouter();
     registerCoreLegacyRoutes(
       router,
@@ -44,22 +68,6 @@ describe('CompatibilityRouter XMLHttpRequest bridge', () => {
         fileCount: 591,
       }),
     );
-
-    const tokenizerUrl = new URL('/api/tokenizers/llama/encode', window.location.href);
-    const tokenizerResponse = await router.dispatch(
-      new Request(tokenizerUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: '12345678' }),
-      }),
-      tokenizerUrl,
-    );
-    expect(await tokenizerResponse?.json()).toEqual({
-      ids: [0, 1],
-      count: 2,
-      chunks: ['1234', '5678'],
-      approximate: true,
-    });
 
     const statsUrl = new URL('/api/stats/update', window.location.href);
     const statsResponse = await router.dispatch(

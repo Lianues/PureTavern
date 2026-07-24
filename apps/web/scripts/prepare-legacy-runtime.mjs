@@ -160,7 +160,23 @@ async function copyFeatureRuntimeAssets() {
       }
 
       await mkdir(path.dirname(targetPath), { recursive: true });
-      await cp(sourcePath, targetPath, { recursive: true, force: true });
+      if (asset.bundle === true) {
+        await build({
+          entryPoints: [sourcePath],
+          outfile: targetPath,
+          bundle: true,
+          format: 'esm',
+          platform: 'browser',
+          target: ['es2022'],
+          sourcemap: false,
+          logLevel: 'silent',
+          define: {
+            'process.env.NODE_ENV': '"production"',
+          },
+        });
+      } else {
+        await cp(sourcePath, targetPath, { recursive: true, force: true });
+      }
     }
   }
 }

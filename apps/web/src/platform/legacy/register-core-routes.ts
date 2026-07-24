@@ -60,23 +60,4 @@ export function registerCoreLegacyRoutes(
   router.register('POST', '/api/image-metadata/all', () => jsonResponse({ images: {} }));
   router.register('POST', '/api/stats/get', () => jsonResponse({}));
   router.register('POST', '/api/stats/update', () => emptyResponse(200));
-
-  // M15 is not migrated. This startup boundary only supplies an explicit rough estimate so
-  // rendering a local M05 message does not issue an accidental network request.
-  router.register('POST', '/api/tokenizers/llama/encode', async (request) => {
-    const text = await request
-      .json()
-      .then((body: unknown) => {
-        const value = body as { text?: unknown } | null;
-        return typeof value?.text === 'string' ? value.text : '';
-      })
-      .catch(() => '');
-    const chunks = text.match(/[\s\S]{1,4}/gu) ?? [];
-    return jsonResponse({
-      ids: chunks.map((_, index) => index),
-      count: chunks.length,
-      chunks,
-      approximate: true,
-    });
-  });
 }

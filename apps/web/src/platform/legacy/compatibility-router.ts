@@ -12,6 +12,18 @@ export interface CompatibilityDiagnostics {
 
 export type CompatibilityHandler = (request: Request, url: URL) => Promise<Response> | Response;
 
+export interface SynchronousCompatibilityResponse {
+  status: number;
+  statusText?: string;
+  headers?: Record<string, string>;
+  body: string;
+}
+
+export type SynchronousCompatibilityHandler = (
+  body: string | null,
+  url: URL,
+) => SynchronousCompatibilityResponse;
+
 export class CompatibilityRouter {
   readonly diagnostics: CompatibilityDiagnostics = {
     requests: [],
@@ -19,9 +31,39 @@ export class CompatibilityRouter {
   };
 
   readonly #routes = new Map<string, CompatibilityHandler>();
+  readonly #synchronousRoutes = new Map<string, SynchronousCompatibilityHandler>();
 
   register(method: string, pathname: string, handler: CompatibilityHandler) {
     this.#routes.set(`${method.toUpperCase()} ${pathname}`, handler);
+  }
+
+  registerSync(method: string, pathname: string, handler: SynchronousCompatibilityHandler): void {
+    this.#synchronousRoutes.set(`${method.toUpperCase()} ${pathname}`, handler);
+  }
+
+  hasSync(method: string, pathname: string): boolean {
+    return this.#synchronousRoutes.has(`${method.toUpperCase()} ${pathname}`);
+  }
+
+  dispatchSync(method: string, url: URL, body: string | null): SynchronousCompatibilityResponse {
+    const key = `${method.toUpperCase()} ${url.pathname}`;
+    const handler = this.#synchronousRoutes.get(key);
+    this.diagnostics.requests.push({
+      method: method.toUpperCase(),
+      pathname: url.pathname,
+      handled: Boolean(handler),
+      timestamp: new Date().toISOString(),
+    });
+    if (!handler) {
+      if (!this.diagnostics.unhandledEndpoints.includes(key)) {
+        this.diagnostics.unhandledEndpoints.push(key);
+      }
+      return syncJsonResponse(
+        { error: 'This synchronous Legacy endpoint has not been migrated.', endpoint: key },
+        501,
+      );
+    }
+    return handler(body, url);
   }
 
   async dispatch(request: Request, url: URL): Promise<Response | null> {
@@ -67,6 +109,18 @@ export function jsonResponse(data: unknown, status = 200): Response {
       'X-Pure-Tavern-Hook': '1',
     },
   });
+}
+
+export function syncJsonResponse(data: unknown, status = 200): SynchronousCompatibilityResponse {
+  return {
+    status,
+    statusText: status >= 200 && status < 300 ? 'OK' : 'Error',
+    headers: {
+      'Content-Type': 'application/json; charset=utf-8',
+      'X-Pure-Tavern-Hook': '1',
+    },
+    body: JSON.stringify(data),
+  };
 }
 
 export function textResponse(data: string, status = 200): Response {
@@ -143,6 +197,7 @@ export function installCompatibilityXhr(router: CompatibilityRouter): () => void
     #method = 'GET';
     #url = '';
     #intercept = false;
+    #synchronous = false;
     #aborted = false;
     #readyState = CompatibilityXmlHttpRequest.UNSENT;
     #responseType: XMLHttpRequestResponseType = '';
@@ -233,13 +288,15 @@ export function installCompatibilityXhr(router: CompatibilityRouter): () => void
       const resolvedUrl = new URL(String(url), window.location.href);
       this.#method = method.toUpperCase();
       this.#url = resolvedUrl.href;
-      this.#intercept =
+      const isCompatibilityPath =
         resolvedUrl.origin === window.location.origin &&
         (resolvedUrl.pathname === '/csrf-token' ||
           resolvedUrl.pathname === '/version' ||
           resolvedUrl.pathname.startsWith('/api/'));
-      if (!this.#intercept || !async) {
-        this.#intercept = false;
+      this.#synchronous = !async && router.hasSync(this.#method, resolvedUrl.pathname);
+      this.#intercept = isCompatibilityPath && (async || this.#synchronous);
+      if (!this.#intercept) {
+        this.#synchronous = false;
         this.#native.open(method, resolvedUrl, async, username ?? null, password ?? null);
         return;
       }
@@ -285,7 +342,39 @@ export function installCompatibilityXhr(router: CompatibilityRouter): () => void
         this.#native.send(body);
         return;
       }
+      if (this.#synchronous) {
+        this.#sendSynchronousCompatibilityRequest(body);
+        return;
+      }
       void this.#sendCompatibilityRequest(body);
+    }
+
+    #sendSynchronousCompatibilityRequest(body: Document | XMLHttpRequestBodyInit | null): void {
+      this.#emit('loadstart', new ProgressEvent('loadstart'));
+      try {
+        const textBody = body === null ? null : typeof body === 'string' ? body : String(body);
+        const response = router.dispatchSync(this.#method, new URL(this.#url), textBody);
+        this.#readyState = CompatibilityXmlHttpRequest.HEADERS_RECEIVED;
+        this.#status = response.status;
+        this.#statusText = response.statusText ?? '';
+        this.#responseUrl = this.#url;
+        this.#responseHeaders = new Headers(response.headers);
+        this.#emit('readystatechange', new Event('readystatechange'));
+        this.#readyState = CompatibilityXmlHttpRequest.LOADING;
+        this.#emit('readystatechange', new Event('readystatechange'));
+        this.#responseText = response.body;
+        this.#response =
+          this.#responseType === 'json' ? JSON.parse(response.body || 'null') : response.body;
+        this.#readyState = CompatibilityXmlHttpRequest.DONE;
+        this.#emit('readystatechange', new Event('readystatechange'));
+        this.#emit('load', new ProgressEvent('load', { loaded: response.body.length }));
+        this.#emit('loadend', new ProgressEvent('loadend', { loaded: response.body.length }));
+      } catch {
+        this.#readyState = CompatibilityXmlHttpRequest.DONE;
+        this.#emit('readystatechange', new Event('readystatechange'));
+        this.#emit('error', new ProgressEvent('error'));
+        this.#emit('loadend', new ProgressEvent('loadend'));
+      }
     }
 
     async #sendCompatibilityRequest(body: Document | XMLHttpRequestBodyInit | null): Promise<void> {

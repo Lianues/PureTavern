@@ -8,6 +8,7 @@ import { personasFeature } from './personas/module';
 import { presetsFeature } from './presets/module';
 import { promptPipelineFeature } from './prompt-pipeline/module';
 import { settingsFeature } from './settings/module';
+import { tokenizersFeature } from './tokenizers/module';
 import { worldBooksFeature } from './world-books/module';
 
 export const featureModules: readonly FeatureModule[] = [
@@ -19,5 +20,6 @@ export const featureModules: readonly FeatureModule[] = [
   worldBooksFeature,
   presetsFeature,
   extensionsFeature,
+  tokenizersFeature,
   promptPipelineFeature,
 ];

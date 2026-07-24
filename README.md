@@ -27,6 +27,7 @@ pnpm dev
 - Personas：原版 Persona UI 继续使用 Settings 与头像接口；M08 负责 stable identity、默认/当前选择、角色绑定、opaque descriptor 和删除降级。
 - Extensions：构建从当前 upstream 生成 trusted manifest，原版 loader 可发现和加载 14 个内置扩展；用户包默认使用权限受控的 iframe/Worker sandbox，远程 Git 操作明确需要可选后端。
 - Prompt Pipeline：纯 TypeScript 候选、宏引擎和预算服务已经安装，但仍标记为 `conformance-candidate`；原版 `prepareOpenAIMessages` 暂时保持权威，避免提前破坏生成兼容性。
+- Tokenizers：原版同步/异步 tokenizer 路径统一桥接到 Web Worker/主线程 `tokenx` 近似计数；所有模型故意采用同一估算器，响应明确标记 `approximate`，pseudo token IDs 只用于 UI 兼容。
 - 各模块 IndexedDB 不可用时降级为当前页面会话内存存储，并在 `__PURE_TAVERN__.features.<module>` 下报告诊断状态。
 
 ## 常用命令

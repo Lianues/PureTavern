@@ -311,12 +311,12 @@ features/<module>/
   - 确定性 stage/block 排序，阶段可 disable/delete；opaque message 未来字段不清洗；
   - system、World Before/After、Presets、Character、Instruction、Author Note、History、Extension Before/After、Control 等阶段以 provider 注入，禁止跨模块硬 import；
   - 常用角色/用户/Prompt/Instruct/聊天/变量宏、转义、有界递归与未知宏原文保留已实现；未覆盖宏在 compatibility matrix 中明确列出；
-  - 预算服务优先使用注入 tokenizer；M15 未完成时使用显式 `approximate` estimator，不冒充精确 token；
+  - 预算服务优先使用注入的精确 tokenizer；当前 M15 通过 Capability 提供统一 `tokenx` 近似 estimator，结果始终标记 `approximate`，不冒充模型精确 token；
   - `PromptPipelineRuntimeCapability` 已安装，但 `replacementEnabled=false`，原版 `prepareOpenAIMessages` 继续作为权威实现。
 - **验收**：48 项三模块定向测试中的 M10 15 项覆盖阶段、宏、变量、provider 降级、预算和 canonical fixture；生产 Chrome 验证 candidate 已安装、原版 prepare 函数仍存在且未切换所有权。
-- **未完成所有权切换**：完整 examples 预算竞争、continue/impersonate/quiet/group/tool/media/backend conversion、全部宏和真实 tokenizer 仍需捕获原版 fixture 做 conformance；不满足前不得标记 `completed`。
+- **未完成所有权切换**：完整 examples 预算竞争、continue/impersonate/quiet/group/tool/media/backend conversion、全部宏和模型专用精确 tokenizer 仍需捕获原版 fixture 做 conformance；不满足前不得标记 `completed`。
 - **可选后端**：无必要；只可提供实验性远端模板服务。
-- **依赖**：M03、M04、M05；可选依赖 M07、M09、M11；精确预算依赖 M15。
+- **依赖**：M03、M04、M05；可选依赖 M07、M09、M11；当前近似预算使用 M15，未来精确预算仍需模型专用 tokenizer adapter。
 - **删除影响**：当前删除候选模块不会影响原版生成；切换后各 Pipeline Step 仍应可独立删除。
 
 ## M11 — Extensions / 扩展系统
@@ -411,14 +411,20 @@ features/<module>/
 ## M15 — Tokenizers / Token 计算
 
 - **优先级**：P2
-- **初始状态**：`inventory`（M05 浏览器门禁仅增加 `/api/tokenizers/llama/encode` 四字符粗估计兼容边界；明确不代表 M15 tokenizer 已迁移）
+- **当前状态**：`completed-simplified-tokenx`（纯前端统一近似计数；不宣称等价于各模型原生 tokenizer）
 - **原始前端**：`public/scripts/tokenizers.js`
 - **原始服务端**：`src/endpoints/tokenizers.js`、`src/tokenizers/**`
-- **目标 Port**：`TokenizerPort`。
-- **浏览器实现**：Web Worker + tiktoken/sentencepiece/web-tokenizers；失败时提供估算器。
-- **可选后端**：远端模型特有 tokenizer。
+- **已实现 Port/模块**：`apps/web/src/features/tokenizers/**` 中的 `TokenizerPort`、统一 `tokenx` service、Worker client、同步 Legacy adapter 与 `TokenizerCapability`。
+- **浏览器实现**：
+  - SillyTavern 1.18.0 的 16 个 tokenizer alias、OpenAI count 和 remote Kobold/Text Generation WebUI count 路径统一使用 `tokenx` 近似计数；所有模型故意采用同一套估算语义；
+  - 异步请求优先在模块声明并由构建脚本打包的 Web Worker 中执行；原版同步 jQuery XHR 使用同源主线程 `tokenx` handler，失败时再降级为字符估算；
+  - encode 返回有界 pseudo token IDs/chunks，仅用于原版 UI 兼容；当前页面会话内可 decode 往返，未知或跨会话 pseudo IDs 明确返回不支持，禁止用于模型生成请求；
+  - 所有响应和 diagnostics 均标记 `approximate`、实际 backend 与 fallback 次数，不冒充模型精确 token；
+  - M10 通过 Capability 使用 `tokenx-unified-approximate` estimator，同时继续保持原版 Prompt Pipeline 权威与 `replacementEnabled=false`。
+- **验收**：单元/集成测试覆盖 tokenx、Worker 协议、同步 XHR、全部 alias、OpenAI/remote 路径��fallback 和 M10 装配；生产 Chrome 使用原版同步/异步 `tokenizers.js` 验证统一计数、pseudo decode、Worker 就绪与零未处理请求。
+- **可选后端**：未来可通过同一 Port 增加远端或本地模型专用精确 tokenizer；当前完成状态只表示简化的浏览器近似能力已经闭环。
 - **依赖**：M01；M10、M12 使用其 Capability。
-- **删除影响**：退化为估算，不阻止聊天。
+- **删除影响**：M10 可退回字符估算，聊天不应被阻止；原版 token UI 的精度进一步下降。
 
 ## M16 — Vectors / 向量记忆
 

@@ -71,6 +71,13 @@ export interface LegacyExtensionSettingsCapability {
   applyDisabledLegacyNames(names: readonly string[]): Promise<void>;
 }
 
+export interface TokenizerCapability {
+  readonly id: 'tokenx';
+  readonly precision: 'approximate';
+  countText(text: string): Promise<number>;
+  countMessages(messages: unknown): Promise<number>;
+}
+
 export const characterIdentityCapability =
   defineCapability<CharacterIdentityCapability>('characters.identity.v1');
 
@@ -102,3 +109,7 @@ export const extensionPackageAssetsCapability = defineCapability<ExtensionPackag
 
 export const legacyExtensionSettingsCapability =
   defineCapability<LegacyExtensionSettingsCapability>('extensions.legacy-settings.v1');
+
+export const tokenizerCapability = defineCapability<TokenizerCapability>(
+  'tokenizers.unified-estimator.v1',
+);

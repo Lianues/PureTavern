@@ -1,5 +1,6 @@
 import { defineCapability } from '@/platform/features/capability-registry';
 import type { FeatureModule } from '@/platform/features/feature-module';
+import { tokenizerCapability } from '@/platform/features/standard-capabilities';
 
 import type { MacroVariableStore } from './domain/prompt-pipeline';
 import type { MessageTokenEstimator, MessageTokenizer } from './ports/context-budget-service';
@@ -73,7 +74,18 @@ export function createPromptPipelineFeature(
   return {
     id: 'prompt-pipeline',
     install({ capabilities }) {
-      const pipeline = createPromptPipelineModule(dependencies);
+      const unifiedTokenizer = capabilities.get(tokenizerCapability);
+      const runtimeDependencies: PromptPipelineModuleDependencies =
+        !dependencies.tokenizer && !dependencies.estimator && unifiedTokenizer
+          ? {
+              ...dependencies,
+              estimator: {
+                id: 'tokenx-unified-approximate',
+                estimateMessages: (messages) => unifiedTokenizer.countMessages(messages),
+              },
+            }
+          : dependencies;
+      const pipeline = createPromptPipelineModule(runtimeDependencies);
       const runtime: PromptPipelineRuntimeCapability = {
         ...pipeline,
         ownership: 'legacy',
@@ -85,6 +97,7 @@ export function createPromptPipelineFeature(
           status: 'conformance-candidate',
           ownership: 'legacy',
           tokenizerPrecision: dependencies.tokenizer ? 'exact' : 'approximate',
+          estimator: runtimeDependencies.estimator?.id ?? 'character-ratio',
           replacementEnabled: false,
           message:
             'The original SillyTavern prompt pipeline remains authoritative until full conformance passes.',

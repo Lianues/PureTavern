@@ -1,0 +1,255 @@
+{
+  "module": "tokenizers",
+  "legacyRequests": [
+    {
+      "method": "POST",
+      "pathname": "/api/tokenizers/gpt2/encode",
+      "category": "browser-data-capability",
+      "responseKind": "tokenx-approximate-encode-json",
+      "migrationStatus": "browser-ready-simplified-tokenx"
+    },
+    {
+      "method": "POST",
+      "pathname": "/api/tokenizers/gpt2/decode",
+      "category": "browser-data-capability",
+      "responseKind": "tokenx-session-pseudo-decode-json",
+      "migrationStatus": "browser-ready-simplified-tokenx"
+    },
+    {
+      "method": "POST",
+      "pathname": "/api/tokenizers/openai/encode",
+      "category": "browser-data-capability",
+      "responseKind": "tokenx-approximate-encode-json",
+      "migrationStatus": "browser-ready-simplified-tokenx"
+    },
+    {
+      "method": "POST",
+      "pathname": "/api/tokenizers/openai/decode",
+      "category": "browser-data-capability",
+      "responseKind": "tokenx-session-pseudo-decode-json",
+      "migrationStatus": "browser-ready-simplified-tokenx"
+    },
+    {
+      "method": "POST",
+      "pathname": "/api/tokenizers/llama/encode",
+      "category": "browser-data-capability",
+      "responseKind": "tokenx-approximate-encode-json",
+      "migrationStatus": "browser-ready-simplified-tokenx"
+    },
+    {
+      "method": "POST",
+      "pathname": "/api/tokenizers/llama/decode",
+      "category": "browser-data-capability",
+      "responseKind": "tokenx-session-pseudo-decode-json",
+      "migrationStatus": "browser-ready-simplified-tokenx"
+    },
+    {
+      "method": "POST",
+      "pathname": "/api/tokenizers/nerdstash/encode",
+      "category": "browser-data-capability",
+      "responseKind": "tokenx-approximate-encode-json",
+      "migrationStatus": "browser-ready-simplified-tokenx"
+    },
+    {
+      "method": "POST",
+      "pathname": "/api/tokenizers/nerdstash/decode",
+      "category": "browser-data-capability",
+      "responseKind": "tokenx-session-pseudo-decode-json",
+      "migrationStatus": "browser-ready-simplified-tokenx"
+    },
+    {
+      "method": "POST",
+      "pathname": "/api/tokenizers/nerdstash_v2/encode",
+      "category": "browser-data-capability",
+      "responseKind": "tokenx-approximate-encode-json",
+      "migrationStatus": "browser-ready-simplified-tokenx"
+    },
+    {
+      "method": "POST",
+      "pathname": "/api/tokenizers/nerdstash_v2/decode",
+      "category": "browser-data-capability",
+      "responseKind": "tokenx-session-pseudo-decode-json",
+      "migrationStatus": "browser-ready-simplified-tokenx"
+    },
+    {
+      "method": "POST",
+      "pathname": "/api/tokenizers/mistral/encode",
+      "category": "browser-data-capability",
+      "responseKind": "tokenx-approximate-encode-json",
+      "migrationStatus": "browser-ready-simplified-tokenx"
+    },
+    {
+      "method": "POST",
+      "pathname": "/api/tokenizers/mistral/decode",
+      "category": "browser-data-capability",
+      "responseKind": "tokenx-session-pseudo-decode-json",
+      "migrationStatus": "browser-ready-simplified-tokenx"
+    },
+    {
+      "method": "POST",
+      "pathname": "/api/tokenizers/yi/encode",
+      "category": "browser-data-capability",
+      "responseKind": "tokenx-approximate-encode-json",
+      "migrationStatus": "browser-ready-simplified-tokenx"
+    },
+    {
+      "method": "POST",
+      "pathname": "/api/tokenizers/yi/decode",
+      "category": "browser-data-capability",
+      "responseKind": "tokenx-session-pseudo-decode-json",
+      "migrationStatus": "browser-ready-simplified-tokenx"
+    },
+    {
+      "method": "POST",
+      "pathname": "/api/tokenizers/claude/encode",
+      "category": "browser-data-capability",
+      "responseKind": "tokenx-approximate-encode-json",
+      "migrationStatus": "browser-ready-simplified-tokenx"
+    },
+    {
+      "method": "POST",
+      "pathname": "/api/tokenizers/claude/decode",
+      "category": "browser-data-capability",
+      "responseKind": "tokenx-session-pseudo-decode-json",
+      "migrationStatus": "browser-ready-simplified-tokenx"
+    },
+    {
+      "method": "POST",
+      "pathname": "/api/tokenizers/llama3/encode",
+      "category": "browser-data-capability",
+      "responseKind": "tokenx-approximate-encode-json",
+      "migrationStatus": "browser-ready-simplified-tokenx"
+    },
+    {
+      "method": "POST",
+      "pathname": "/api/tokenizers/llama3/decode",
+      "category": "browser-data-capability",
+      "responseKind": "tokenx-session-pseudo-decode-json",
+      "migrationStatus": "browser-ready-simplified-tokenx"
+    },
+    {
+      "method": "POST",
+      "pathname": "/api/tokenizers/gemma/encode",
+      "category": "browser-data-capability",
+      "responseKind": "tokenx-approximate-encode-json",
+      "migrationStatus": "browser-ready-simplified-tokenx"
+    },
+    {
+      "method": "POST",
+      "pathname": "/api/tokenizers/gemma/decode",
+      "category": "browser-data-capability",
+      "responseKind": "tokenx-session-pseudo-decode-json",
+      "migrationStatus": "browser-ready-simplified-tokenx"
+    },
+    {
+      "method": "POST",
+      "pathname": "/api/tokenizers/jamba/encode",
+      "category": "browser-data-capability",
+      "responseKind": "tokenx-approximate-encode-json",
+      "migrationStatus": "browser-ready-simplified-tokenx"
+    },
+    {
+      "method": "POST",
+      "pathname": "/api/tokenizers/jamba/decode",
+      "category": "browser-data-capability",
+      "responseKind": "tokenx-session-pseudo-decode-json",
+      "migrationStatus": "browser-ready-simplified-tokenx"
+    },
+    {
+      "method": "POST",
+      "pathname": "/api/tokenizers/qwen2/encode",
+      "category": "browser-data-capability",
+      "responseKind": "tokenx-approximate-encode-json",
+      "migrationStatus": "browser-ready-simplified-tokenx"
+    },
+    {
+      "method": "POST",
+      "pathname": "/api/tokenizers/qwen2/decode",
+      "category": "browser-data-capability",
+      "responseKind": "tokenx-session-pseudo-decode-json",
+      "migrationStatus": "browser-ready-simplified-tokenx"
+    },
+    {
+      "method": "POST",
+      "pathname": "/api/tokenizers/command-r/encode",
+      "category": "browser-data-capability",
+      "responseKind": "tokenx-approximate-encode-json",
+      "migrationStatus": "browser-ready-simplified-tokenx"
+    },
+    {
+      "method": "POST",
+      "pathname": "/api/tokenizers/command-r/decode",
+      "category": "browser-data-capability",
+      "responseKind": "tokenx-session-pseudo-decode-json",
+      "migrationStatus": "browser-ready-simplified-tokenx"
+    },
+    {
+      "method": "POST",
+      "pathname": "/api/tokenizers/command-a/encode",
+      "category": "browser-data-capability",
+      "responseKind": "tokenx-approximate-encode-json",
+      "migrationStatus": "browser-ready-simplified-tokenx"
+    },
+    {
+      "method": "POST",
+      "pathname": "/api/tokenizers/command-a/decode",
+      "category": "browser-data-capability",
+      "responseKind": "tokenx-session-pseudo-decode-json",
+      "migrationStatus": "browser-ready-simplified-tokenx"
+    },
+    {
+      "method": "POST",
+      "pathname": "/api/tokenizers/nemo/encode",
+      "category": "browser-data-capability",
+      "responseKind": "tokenx-approximate-encode-json",
+      "migrationStatus": "browser-ready-simplified-tokenx"
+    },
+    {
+      "method": "POST",
+      "pathname": "/api/tokenizers/nemo/decode",
+      "category": "browser-data-capability",
+      "responseKind": "tokenx-session-pseudo-decode-json",
+      "migrationStatus": "browser-ready-simplified-tokenx"
+    },
+    {
+      "method": "POST",
+      "pathname": "/api/tokenizers/deepseek/encode",
+      "category": "browser-data-capability",
+      "responseKind": "tokenx-approximate-encode-json",
+      "migrationStatus": "browser-ready-simplified-tokenx"
+    },
+    {
+      "method": "POST",
+      "pathname": "/api/tokenizers/deepseek/decode",
+      "category": "browser-data-capability",
+      "responseKind": "tokenx-session-pseudo-decode-json",
+      "migrationStatus": "browser-ready-simplified-tokenx"
+    },
+    {
+      "method": "POST",
+      "pathname": "/api/tokenizers/openai/count",
+      "category": "browser-data-capability",
+      "responseKind": "tokenx-approximate-message-count-json",
+      "migrationStatus": "browser-ready-simplified-tokenx"
+    },
+    {
+      "method": "POST",
+      "pathname": "/api/tokenizers/remote/kobold/count",
+      "category": "browser-data-capability",
+      "responseKind": "tokenx-local-approximate-encode-json",
+      "migrationStatus": "browser-ready-simplified-tokenx"
+    },
+    {
+      "method": "POST",
+      "pathname": "/api/tokenizers/remote/textgenerationwebui/encode",
+      "category": "browser-data-capability",
+      "responseKind": "tokenx-local-approximate-encode-json",
+      "migrationStatus": "browser-ready-simplified-tokenx"
+    }
+  ],
+  "notes": [
+    "All model aliases intentionally use one tokenx estimator.",
+    "Counts are approximate and pseudo token ids must never be sent to a model provider.",
+    "Decode only restores pseudo ids created in the current page session."
+  ]
+}

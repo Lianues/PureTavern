@@ -1,0 +1,9 @@
+{
+  "assets": [
+    {
+      "source": "worker/tokenizer-worker.ts",
+      "publicPath": "__pure_tavern/tokenizer-worker.js",
+      "bundle": true
+    }
+  ]
+}

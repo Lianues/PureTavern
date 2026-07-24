@@ -39,7 +39,7 @@ World Books, Presets and Extensions are optional provider slots. This module imp
 
 ## Budget truthfulness
 
-`MessageTokenizer` produces `precision: "exact"`. Without it (M15 unavailable), `CharacterRatioTokenEstimator` is selected and the result is always marked `precision: "approximate"` with `budget.approximate-estimator`. A tokenizer failure also falls back with diagnostics. The fallback is never presented as an exact token count.
+`MessageTokenizer` produces `precision: "exact"`. Without an exact tokenizer, the module first consumes M15's `TokenizerCapability` as `tokenx-unified-approximate`; if that capability is unavailable or fails, `CharacterRatioTokenEstimator` is selected. Both paths are always marked `precision: "approximate"` with `budget.approximate-estimator` and are never presented as model-exact token counts.
 
 Optional candidates are removed by ascending priority/order until the prompt fits. History uses priority `0` and chronological order, so oldest history is removed first under the normal defaults. Required overflow remains in output and is reported as `budget.required-overflow` rather than silently deleting mandatory prompts.
 

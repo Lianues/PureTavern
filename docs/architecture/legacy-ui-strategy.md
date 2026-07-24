@@ -95,20 +95,20 @@ Hook 必须在原版主模块执行前安装。当前职责仅有：
 
 - 初始化固定的 records/blobs IndexedDB 存储平台；
 - 包装同源 `fetch`；
-- 通过 Feature Registry 安装 Settings、Characters、Chats、Personas、World Books、Presets、Assets、Extensions 与 Prompt Pipeline candidate，并将对应 Legacy 路径或 capability 桥接到浏览器 Use Case；
+- 通过 Feature Registry 安装 Settings、Characters、Chats、Personas、World Books、Presets、Assets、Extensions、Tokenizers 与 Prompt Pipeline candidate，并将对应 Legacy 路径或 capability 桥接到浏览器 Use Case；
 - 通过类型化 Capability Registry 连接模块间的可选能力，而不是互相 import Repository；
 - 对尚未迁移但启动阶段必需的路径返回固定空数据或安全默认值；
 - 记录已处理请求和未处理路径；
 - 暴露 `globalThis.__PURE_TAVERN__` 诊断信息；
 - 读取同步工具生成的上游版本元数据。
 
-当前浏览器模块已经接管 Settings/Snapshots、Characters、单角色 Chats、Personas、World Books、Presets、本地 Assets 与 trusted built-in Extensions。Prompt Pipeline 已安装纯 TypeScript candidate，但原版 Pipeline 仍持有所有权。模块只使用固定 `records` / `blobs` Object Store；新增 feature 或 collection 不递增数据库业务版本。IndexedDB 不可用时各 Repository 可降级为页面会话内存，并在模块 diagnostics 中明确报告。
+当前浏览器模块已经接管 Settings/Snapshots、Characters、单角色 Chats、Personas、World Books、Presets、本地 Assets、trusted built-in Extensions 与统一近似 Tokenizers。Prompt Pipeline 已安装纯 TypeScript candidate，但原版 Pipeline 仍持有所有权。模块只使用固定 `records` / `blobs` Object Store；新增 feature 或 collection 不递增数据库业务版本。IndexedDB 不可用时各 Repository 可降级为页面会话内存，并在模块 diagnostics 中明确报告。
 
-空群组、离线 Horde、远程扩展 Git 操作、近似 tokenizer 和丢弃式 stats 等仍属于 **Bootstrap Compatibility Contract** 或显式浏览器限制，不代表相应业务已经迁移：
+空群组、离线 Horde、远程扩展 Git 操作和丢弃式 stats 等仍属于 **Bootstrap Compatibility Contract** 或显式浏览器限制，不代表相应业务已经迁移：
 
 - 不实现群组聊天或模型请求；
 - trusted built-ins 可由原版 loader 运行，但用户第三方包只能进入 sandbox；不实现浏览器无法保证的 Git/Node plugins；
-- tokenizer 估算不能用于真实模型上下文预算；
+- M15 `tokenx` 结果是统一近似值，pseudo token IDs 只服务原版 UI；模型生成和精确上下文预算仍需对应模型的精确 tokenizer adapter；
 - 不把旧 `/api` 当成新架构的内部正式接口；
 - 不让新 Vue 代码依赖这些兼容 HTTP 路径。
 

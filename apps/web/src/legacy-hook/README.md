@@ -21,6 +21,7 @@ globalThis.__PURE_TAVERN__.features.chats;
 globalThis.__PURE_TAVERN__.features['world-books'];
 globalThis.__PURE_TAVERN__.features.presets;
 globalThis.__PURE_TAVERN__.features.extensions;
+globalThis.__PURE_TAVERN__.features.tokenizers;
 globalThis.__PURE_TAVERN__.features['prompt-pipeline'];
 ```
 
