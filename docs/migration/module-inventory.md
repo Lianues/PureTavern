@@ -298,26 +298,26 @@ features/<module>/
 ## M10 — Prompt Pipeline / 提示词装配
 
 - **优先级**：P2
-- **当前状态**：`browser-ready-candidate`（纯 TypeScript 候选已完成；所有权仍为 Legacy，尚未全量替换原版 Pipeline）
-- **原始前端**：
+- **当前状态**：`completed-legacy-owned`（原版浏览器 Pipeline 是唯一权威实现；不再维护 TypeScript 副本）
+- **原始且正式保留的前端实现**：
   - `public/scripts/openai.js`
   - `public/scripts/PromptManager.js`
   - `public/scripts/instruct-mode.js`
   - `public/scripts/authors-note.js`
   - `public/scripts/macros/**`
   - `public/scripts/variables.js`
-- **已实现 Port/模块**：`apps/web/src/features/prompt-pipeline/**` 中的 `PromptAssembler`、`MacroEngine`、`ContextBudgetService`、可选 step provider 与 conformance adapter。
-- **浏览器候选实现**：
-  - 确定性 stage/block 排序，阶段可 disable/delete；opaque message 未来字段不清洗；
-  - system、World Before/After、Presets、Character、Instruction、Author Note、History、Extension Before/After、Control 等阶段以 provider 注入，禁止跨模块硬 import；
-  - 常用角色/用户/Prompt/Instruct/聊天/变量宏、转义、有界递归与未知宏原文保留已实现；未覆盖宏在 compatibility matrix 中明确列出；
-  - 预算服务优先使用注入的精确 tokenizer；当前 M15 通过 Capability 提供统一 `tokenx` 近似 estimator，结果始终标记 `approximate`，不冒充模型精确 token；
-  - `PromptPipelineRuntimeCapability` 已安装，但 `replacementEnabled=false`，原版 `prepareOpenAIMessages` 继续作为权威实现。
-- **验收**：48 项三模块定向测试中的 M10 15 项覆盖阶段、宏、变量、provider 降级、预算和 canonical fixture；生产 Chrome 验证 candidate 已安装、原版 prepare 函数仍存在且未切换所有权。
-- **未完成所有权切换**：完整 examples 预算竞争、continue/impersonate/quiet/group/tool/media/backend conversion、全部宏和模型专用精确 tokenizer 仍需捕获原版 fixture 做 conformance；不满足前不得标记 `completed`。
-- **可选后端**：无必要；只可提供实验性远端模板服务。
-- **依赖**：M03、M04、M05；可选依赖 M07、M09、M11；当前近似预算使用 M15，未来精确预算仍需模型专用 tokenizer adapter。
-- **删除影响**：当前删除候选模块不会影响原版生成；切换后各 Pipeline Step 仍应可独立删除。
+  - `public/scripts/world-info.js`
+- **架构决策**：
+  - Prompt Pipeline 本身已经是纯前端能力，不需要替换服务端 API 或本地持久化；
+  - 原版 PromptManager、宏、变量、作者注、世界书、Persona、examples、history、tools/media 和 generation mode 逻辑随 upstream 一起保留和升级；
+  - 不复制原版文件到我方 feature，也不使用 TypeScript 重写第二套 `PromptAssembler`/`MacroEngine`/预算引擎；已删除未参与生产的重复实现及其 Capability；
+  - 原版 `prepareOpenAIMessages` 继续生成统一 `generate_data`，M12 只维护该 DTO 到浏览器 Provider 的 transport/adapter 边界；
+  - 原版 Pipeline 通过 M15 Legacy tokenizer routes 获得统一近似计数，不宣称模型精确预算。
+- **验收**：生产 Chrome 验证原版 `prepareOpenAIMessages` 仍可导入、自维护重复 Feature 不存在，并完成 M12 模型目录、非流式、SSE 与 native adapters 闭环。
+- **升级策略**：上游升级时同步原版 Pipeline；若 `generate_data` DTO 变化，只调整 M12 Legacy adapter 和契约测试，不自行追踪宏/PromptManager 内部实现。
+- **可选后端**：无必要。
+- **依赖**：原版 Pipeline 读取 M03/M04/M05/M07/M09/M11 浏览器状态，使用 M15 近似 tokenizer，并将结果交给 M12。
+- **删除影响**：不能删除 upstream Prompt Pipeline，否则核心 Chat Completion 失去提示词装配；项目内不存在可删除的重复候选模块。
 
 ## M11 — Extensions / 扩展系统
 
@@ -437,11 +437,11 @@ features/<module>/
   - 异步请求优先在模块声明并由构建脚本打包的 Web Worker 中执行；原版同步 jQuery XHR 使用同源主线程 `tokenx` handler，失败时再降级为字符估算；
   - encode 返回有界 pseudo token IDs/chunks，仅用于原版 UI 兼容；当前页面会话内可 decode 往返，未知或跨会话 pseudo IDs 明确返回不支持，禁止用于模型生成请求；
   - 所有响应和 diagnostics 均标记 `approximate`、实际 backend 与 fallback 次数，不冒充模型精确 token；
-  - M10 通过 Capability 使用 `tokenx-unified-approximate` estimator，同时继续保持原版 Prompt Pipeline 权威与 `replacementEnabled=false`。
-- **验收**：单元/集成测试覆盖 tokenx、Worker 协议、同步 XHR、全部 alias、OpenAI/remote 路径��fallback 和 M10 装配；生产 Chrome 使用原版同步/异步 `tokenizers.js` 验证统一计数、pseudo decode、Worker 就绪与零未处理请求。
+  - 原版 M10 Pipeline 继续调用未修改的 `tokenizers.js`，其同步/异步 Legacy 路径由 M15 提供统一近似计数。
+- **验收**：单元/集成测试覆盖 tokenx、Worker 协议、同步 XHR、全部 alias、OpenAI/remote 路径与 fallback；生产 Chrome 使用原版同步/异步 `tokenizers.js` 验证统一计数、pseudo decode、Worker 就绪与零未处理请求。
 - **可选后端**：未来可通过同一 Port 增加远端或本地模型专用精确 tokenizer；当前完成状态只表示简化的浏览器近似能力已经闭环。
-- **依赖**：M01；M10、M12 使用其 Capability。
-- **删除影响**：M10 可退回字符估算，聊天不应被阻止；原版 token UI 的精度进一步下降。
+- **依赖**：M01；原版 M10 通过 Legacy routes 使用，其他现代模块可选使用其 Capability。
+- **删除影响**：原版 Pipeline 可退回自身降级逻辑，聊天不应被阻止；token UI 与预算精度进一步下降。
 
 ## M16 — Vectors / 向量记忆
 

@@ -781,25 +781,6 @@ try {
   });
   const extensionWorkflow = extensionWorkflowEvaluation.result?.value;
 
-  const promptPipelineWorkflowEvaluation = await client.send('Runtime.evaluate', {
-    expression: `(async () => {
-      const openAiModule = await import('/scripts/openai.js');
-      const diagnostics = globalThis.__PURE_TAVERN__?.features?.['prompt-pipeline'];
-      return {
-        available: Boolean(diagnostics),
-        status: diagnostics?.status ?? null,
-        ownership: diagnostics?.ownership ?? null,
-        tokenizerPrecision: diagnostics?.tokenizerPrecision ?? null,
-        estimator: diagnostics?.estimator ?? null,
-        replacementEnabled: diagnostics?.replacementEnabled ?? null,
-        originalPrepareFunction: typeof openAiModule.prepareOpenAIMessages === 'function',
-      };
-    })()`,
-    awaitPromise: true,
-    returnByValue: true,
-  });
-  const promptPipelineWorkflow = promptPipelineWorkflowEvaluation.result?.value;
-
   const tokenizerWorkflowEvaluation = await client.send('Runtime.evaluate', {
     expression: `(async () => {
       const tokenizerModule = await import('/scripts/tokenizers.js');
@@ -1058,6 +1039,9 @@ try {
         scope: feature?.scope ?? null,
         directBrowserRequests: feature?.directBrowserRequests ?? null,
         optionalBackend: feature?.optionalBackend ?? null,
+        originalPrepareFunction: typeof openAiModule.prepareOpenAIMessages === 'function',
+        duplicatePromptFeatureAbsent:
+          globalThis.__PURE_TAVERN__?.features?.['prompt-pipeline'] === undefined,
         routesHandled: {
           status: routeHandled('/api/backends/chat-completions/status'),
           generate: routeHandled('/api/backends/chat-completions/generate'),
@@ -2489,14 +2473,9 @@ try {
       extensionWorkflow?.disabledPersisted === true &&
       extensionWorkflow?.enabledPersisted === true &&
       Object.values(extensionWorkflow?.routesHandled ?? {}).every(Boolean),
-    promptPipelineCandidateReady:
-      promptPipelineWorkflow?.available === true &&
-      promptPipelineWorkflow?.status === 'conformance-candidate' &&
-      promptPipelineWorkflow?.ownership === 'legacy' &&
-      promptPipelineWorkflow?.tokenizerPrecision === 'approximate' &&
-      promptPipelineWorkflow?.estimator === 'tokenx-unified-approximate' &&
-      promptPipelineWorkflow?.replacementEnabled === false &&
-      promptPipelineWorkflow?.originalPrepareFunction === true,
+    legacyPromptPipelineAuthoritative:
+      generationWorkflow?.originalPrepareFunction === true &&
+      generationWorkflow?.duplicatePromptFeatureAbsent === true,
     tokenizerWorkerReady:
       tokenizerWorkflow?.available === true &&
       tokenizerWorkflow?.engine?.status === 'ready' &&
@@ -2721,7 +2700,6 @@ try {
     settingsPersistence,
     settingsSnapshotWorkflow,
     extensionWorkflow,
-    promptPipelineWorkflow,
     tokenizerWorkflow,
     secretWorkflow,
     generationWorkflow,

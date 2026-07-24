@@ -54,7 +54,7 @@ Pure Tavern 将 SillyTavern 原版 UI/交互作为长期保留的上游兼容层
 - Settings 文档与快照标记为浏览器就绪，并保持原版完整文档/快照 DTO；
 - Characters、单角色 Chats、World Books、Presets、Assets 与 trusted Extensions 的路径由各模块 manifest 覆盖 core placeholder，标记对应 browser-ready 状态；
 - Personas 没有专属 API，通过 Settings provider/composer 和 Assets capability 接入，因此模块 contract 记录 bridge 而非伪造请求；
-- Prompt Pipeline candidate 没有 Legacy API，当前保持 `ownership=legacy` 与 `replacementEnabled=false`；
+- Prompt Pipeline 有意长期保留原版实现，不注册我方重复 Feature；`prepareOpenAIMessages` 生成的 `generate_data` 是 M12 的正式兼容边界；
 - Tokenizers 的 35 条 Legacy 路径由 M15 feature manifest 覆盖，使用统一 `tokenx` 近似计数并明确报告 `approximate`，不等价于模型专用 tokenizer；
 - Secrets 的 8 条 Legacy 路径由 M14 feature manifest 覆盖，使用本地明文 IndexedDB、多值 active 语义和窄 CredentialResolver；该状态不代表加密或 Vault 安全性；
 - Generation 的 status/generate/bias 由 M12 manifest 覆盖，仅声明 Chat Completion 浏览器直连；26 个 source 有 Adapter，但实际可达性仍取决于厂商 CORS/TLS，非聊天主 API未迁移；
@@ -102,8 +102,8 @@ pnpm legacy:contracts:check --source "F:\path\SillyTavern-1.19.0" --version 1.19
 - Assets 完成背景、文件夹、附件、用户图片/persona、sprites、library、extension package 与共享 Worker 直接 URL；
 - Personas 完成原版头像上传、创建、选择、默认、角色绑定、刷新恢复、删除和本地身份降级；
 - Extensions 完成 trusted discover/manifest/script/style、version 与原版 disable/enable 的 Settings/registry 同步；
-- Prompt Pipeline candidate 就绪，但真实 Chrome 明确验证原版 prepare 函数仍为权威且替换关闭；
-- Tokenizers 通过原版同步/异步调用验证全部 alias 的统一计数、OpenAI/remote count、Worker backend、pseudo decode 往返以及 M10 approximate estimator；
+- Prompt Pipeline 验证原版 prepare 函数仍为唯一权威，项目内不存在重复实现，并由 M12 完成生成 transport 闭环；
+- Tokenizers 通过原版同步/异步调用验证全部 alias 的统一计数、OpenAI/remote count、Worker backend、pseudo decode 往返，以及原版 M10 对这些 Legacy 路径的消费；
 - Secrets 通过原版 `scripts/secrets.js` 验证多值保存、掩码、find/view、轮换、重命名、跨刷新持久化、删除回退和明文 diagnostics 声明；
 - Generation 使用本机 CORS Mock Provider 验证模型目录、OpenAI-compatible 非流式/SSE、Anthropic、Google、Cohere、M14 凭据和精确 ID bias 降级，不访问真实厂商；
 - 本地资源无 404、运行时无异常、控制台无错误、启动兼容请求不进入网络。

@@ -7,7 +7,6 @@ import { extensionsFeature } from './extensions/module';
 import { generationFeature } from './generation/module';
 import { personasFeature } from './personas/module';
 import { presetsFeature } from './presets/module';
-import { promptPipelineFeature } from './prompt-pipeline/module';
 import { secretsFeature } from './secrets/module';
 import { settingsFeature } from './settings/module';
 import { tokenizersFeature } from './tokenizers/module';
@@ -25,5 +24,4 @@ export const featureModules: readonly FeatureModule[] = [
   presetsFeature,
   extensionsFeature,
   tokenizersFeature,
-  promptPipelineFeature,
 ];

@@ -26,7 +26,7 @@ pnpm dev
 - Assets：附件、用户图片、背景、persona 头像、sprites 与扩展资产使用通用 Blob/索引模块；共享 Service Worker 为原版 URL 提供本地资源响应。
 - Personas：原版 Persona UI 继续使用 Settings 与头像接口；M08 负责 stable identity、默认/当前选择、角色绑定、opaque descriptor 和删除降级。
 - Extensions：构建从当前 upstream 生成 trusted manifest，原版 loader 可发现和加载 14 个内置扩展；用户包默认使用权限受控的 iframe/Worker sandbox，远程 Git 操作明确需要可选后端。
-- Prompt Pipeline：纯 TypeScript 候选、宏引擎和预算服务已经安装，但仍标记为 `conformance-candidate`；原版 `prepareOpenAIMessages` 暂时保持权威，避免提前破坏生成兼容性。
+- Prompt Pipeline：原版 `openai.js`、PromptManager、宏、作者注和世界书注入作为唯一权威实现长期保留；不维护功能重复的 TypeScript 副本，生成后的 `generate_data` 直接交给 M12。
 - Tokenizers：原版同步/异步 tokenizer 路径统一桥接到 Web Worker/主线程 `tokenx` 近似计数；所有模型故意采用同一估算器，响应明确标记 `approximate`，pseudo token IDs 只用于 UI 兼容。
 - Secrets：原版密钥管理器的多值保存、查看、查找、轮换、重命名和删除已桥接到 IndexedDB，并通过 CredentialResolver 为 M12 预留入口；密钥按产品决策明文保存，不是安全 Vault。
 - Generation：仅迁移原版 Chat Completion，26 个 source 由 OpenAI-compatible、Anthropic、Google、Cohere 四类浏览器直连 Adapter 提供模型目录、非流式和 SSE；Provider 是否可达仍取决于其 CORS/TLS 策略。
