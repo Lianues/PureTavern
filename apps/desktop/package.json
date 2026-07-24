@@ -1,0 +1,12 @@
+{
+  "name": "@pure-tavern/desktop",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev:desktop": "pnpm --dir ../.. build && tauri dev --ci",
+    "build:desktop": "pnpm --dir ../.. build && tauri build --ci"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "2.11.4"
+  }
+}
