@@ -65,7 +65,11 @@ describe('manual test release workflow', () => {
     expect(source).toContain('--prerelease');
     expect(source).toContain('--notes-file release-notes.txt');
     for (const workflowSource of [source, desktopSource]) {
-      expect(workflowSource).toContain('stage-desktop-release.mjs');
+      const stageCommand = workflowSource
+        .split('\n')
+        .find((line) => line.includes('node scripts/stage-desktop-release.mjs'));
+      expect(stageCommand).toContain('"${{ env.RELEASE_VERSION }}"');
+      expect(stageCommand).not.toContain('"$RELEASE_VERSION"');
       expect(workflowSource).toContain('x86_64-apple-darwin');
       expect(workflowSource).toContain('aarch64-apple-darwin');
       expect(workflowSource).toContain('appimage,deb,rpm');

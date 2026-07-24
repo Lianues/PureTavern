@@ -95,7 +95,7 @@ jobs:
         run: pnpm --filter @pure-tavern/desktop exec tauri build --ci --no-sign --bundles "${{ matrix.bundles }}" ${{ matrix.target_args }}
 
       - name: Stage normalized desktop assets
-        run: node scripts/stage-desktop-release.mjs "${{ matrix.platform }}" "${{ matrix.arch }}" "$RELEASE_VERSION" "${{ matrix.release_root }}" release
+        run: node scripts/stage-desktop-release.mjs "${{ matrix.platform }}" "${{ matrix.arch }}" "${{ env.RELEASE_VERSION }}" "${{ matrix.release_root }}" release
 
       - name: Upload desktop bundle
         uses: actions/upload-artifact@v4
