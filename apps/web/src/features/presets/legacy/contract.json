@@ -1,0 +1,61 @@
+{
+  "module": "presets",
+  "legacyRequests": [
+    {
+      "method": "POST",
+      "pathname": "/api/presets/save",
+      "category": "browser-data-capability",
+      "responseKind": "indexeddb-preset-name-json",
+      "migrationStatus": "browser-ready-presets"
+    },
+    {
+      "method": "POST",
+      "pathname": "/api/presets/delete",
+      "category": "browser-data-capability",
+      "responseKind": "indexeddb-preset-delete-ok",
+      "migrationStatus": "browser-ready-presets"
+    },
+    {
+      "method": "POST",
+      "pathname": "/api/presets/restore",
+      "category": "browser-data-capability",
+      "responseKind": "upstream-default-preset-json",
+      "migrationStatus": "browser-ready-presets"
+    },
+    {
+      "method": "POST",
+      "pathname": "/api/themes/save",
+      "category": "browser-data-capability",
+      "responseKind": "indexeddb-theme-save-ok",
+      "migrationStatus": "browser-ready-presets"
+    },
+    {
+      "method": "POST",
+      "pathname": "/api/themes/delete",
+      "category": "browser-data-capability",
+      "responseKind": "indexeddb-theme-delete-ok",
+      "migrationStatus": "browser-ready-presets"
+    },
+    {
+      "method": "POST",
+      "pathname": "/api/quick-replies/save",
+      "category": "browser-data-capability",
+      "responseKind": "indexeddb-quick-reply-save-ok",
+      "migrationStatus": "browser-ready-presets"
+    },
+    {
+      "method": "POST",
+      "pathname": "/api/quick-replies/delete",
+      "category": "browser-data-capability",
+      "responseKind": "indexeddb-quick-reply-idempotent-delete-ok",
+      "migrationStatus": "browser-ready-presets"
+    },
+    {
+      "method": "POST",
+      "pathname": "/api/moving-ui/save",
+      "category": "browser-data-capability",
+      "responseKind": "indexeddb-moving-ui-save-ok",
+      "migrationStatus": "browser-ready-presets"
+    }
+  ]
+}

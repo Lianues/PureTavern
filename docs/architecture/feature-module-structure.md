@@ -28,6 +28,8 @@ apps/web/src/features/<module>/
 4. 所有 Legacy 路径放进本模块 `legacy/register-routes.ts`。
 5. 同一批路径在 `legacy/contract.json` 声明；契约工具会自动扫描聚合。
 6. Repository 只使用当前模块已经限定命名空间的 `records` / `blobs`，不修改中央数据库。
+7. 跨模块协作只注册/消费 `platform/features/standard-capabilities.ts` 中的类型化 Capability；禁止直接 import 另一模块的 Repository。
+8. 必需的 Worker/静态文件由本模块 `runtime-assets.json` 声明；构建脚本统一扫描，避免为每个模块修改中央复制逻辑。
 
 除此之外，正常情况下不需要修改 `legacy-hook/bootstrap.ts`、`platform/storage/app-database.ts` 或中央契约请求数组。
 
@@ -84,6 +86,8 @@ IndexedDB 标准仍要求首次创建时有一个物理格式编号；平台内�
 ## 核心与模块边界
 
 `platform/legacy/register-core-routes.ts` 提供尚未迁移能力的启动默认响应。Feature 在 core 之后安装，因此注册同一个 method/path 时会自动覆盖默认 handler；契约聚合也由 feature manifest 覆盖同 key 的 core 声明，不产生重复项。
+
+当前跨模块示例：Settings 动态读取 World Names 与 Preset Bootstrap capability；Characters 与 Chats 通过 stable identity / owner lifecycle capability 协作；Characters 复用 Assets 提供的共享 Service Worker capability。Capability 必须可选查询，并在 provider 缺失时提供明确降级。
 
 某项能力开始迁移时只需：
 

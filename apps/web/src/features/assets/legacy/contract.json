@@ -1,0 +1,250 @@
+{
+  "module": "assets",
+  "legacyRequests": [
+    {
+      "method": "POST",
+      "pathname": "/api/files/sanitize-filename",
+      "category": "browser-data-capability",
+      "responseKind": "sanitized-filename-json",
+      "migrationStatus": "browser-ready-assets"
+    },
+    {
+      "method": "POST",
+      "pathname": "/api/files/upload",
+      "category": "browser-data-capability",
+      "responseKind": "indexeddb-attachment-path-json",
+      "migrationStatus": "browser-ready-assets"
+    },
+    {
+      "method": "POST",
+      "pathname": "/api/files/delete",
+      "category": "browser-data-capability",
+      "responseKind": "indexeddb-attachment-delete-empty",
+      "migrationStatus": "browser-ready-assets"
+    },
+    {
+      "method": "POST",
+      "pathname": "/api/files/verify",
+      "category": "browser-data-capability",
+      "responseKind": "attachment-url-verification-map-json",
+      "migrationStatus": "browser-ready-assets"
+    },
+    {
+      "method": "POST",
+      "pathname": "/api/images/upload",
+      "category": "browser-data-capability",
+      "responseKind": "indexeddb-user-image-path-json",
+      "migrationStatus": "browser-ready-assets"
+    },
+    {
+      "method": "POST",
+      "pathname": "/api/images/list",
+      "category": "browser-data-capability",
+      "responseKind": "indexeddb-user-image-filenames-json",
+      "migrationStatus": "browser-ready-assets"
+    },
+    {
+      "method": "POST",
+      "pathname": "/api/images/folders",
+      "category": "browser-data-capability",
+      "responseKind": "indexeddb-user-image-folders-json",
+      "migrationStatus": "browser-ready-assets"
+    },
+    {
+      "method": "POST",
+      "pathname": "/api/images/delete",
+      "category": "browser-data-capability",
+      "responseKind": "indexeddb-user-image-delete-empty",
+      "migrationStatus": "browser-ready-assets"
+    },
+    {
+      "method": "POST",
+      "pathname": "/api/backgrounds/all",
+      "category": "ui-required",
+      "responseKind": "indexeddb-background-list-and-thumbnail-config-json",
+      "migrationStatus": "browser-ready-assets"
+    },
+    {
+      "method": "POST",
+      "pathname": "/api/backgrounds/folders",
+      "category": "ui-required",
+      "responseKind": "indexeddb-background-folder-map-json",
+      "migrationStatus": "browser-ready-assets"
+    },
+    {
+      "method": "POST",
+      "pathname": "/api/backgrounds/upload",
+      "category": "ui-required",
+      "responseKind": "indexeddb-background-filename-text",
+      "migrationStatus": "browser-ready-assets"
+    },
+    {
+      "method": "POST",
+      "pathname": "/api/backgrounds/rename",
+      "category": "ui-required",
+      "responseKind": "indexeddb-background-alias-rename-empty",
+      "migrationStatus": "browser-ready-assets"
+    },
+    {
+      "method": "POST",
+      "pathname": "/api/backgrounds/delete",
+      "category": "ui-required",
+      "responseKind": "indexeddb-background-delete-empty",
+      "migrationStatus": "browser-ready-assets"
+    },
+    {
+      "method": "POST",
+      "pathname": "/api/image-metadata/",
+      "category": "browser-data-capability",
+      "responseKind": "indexeddb-image-metadata-json",
+      "migrationStatus": "browser-ready-assets"
+    },
+    {
+      "method": "POST",
+      "pathname": "/api/image-metadata/all",
+      "category": "browser-data-capability",
+      "responseKind": "indexeddb-image-metadata-map-json",
+      "migrationStatus": "browser-ready-assets"
+    },
+    {
+      "method": "POST",
+      "pathname": "/api/image-metadata/cleanup",
+      "category": "browser-data-capability",
+      "responseKind": "indexeddb-image-metadata-cleanup-json",
+      "migrationStatus": "browser-ready-assets"
+    },
+    {
+      "method": "POST",
+      "pathname": "/api/image-metadata/folders/get",
+      "category": "browser-data-capability",
+      "responseKind": "indexeddb-background-folder-map-json",
+      "migrationStatus": "browser-ready-assets"
+    },
+    {
+      "method": "POST",
+      "pathname": "/api/image-metadata/folders/create",
+      "category": "browser-data-capability",
+      "responseKind": "indexeddb-background-folder-json",
+      "migrationStatus": "browser-ready-assets"
+    },
+    {
+      "method": "POST",
+      "pathname": "/api/image-metadata/folders/set-thumbnail",
+      "category": "browser-data-capability",
+      "responseKind": "indexeddb-background-folder-json",
+      "migrationStatus": "browser-ready-assets"
+    },
+    {
+      "method": "POST",
+      "pathname": "/api/image-metadata/folders/set-thumbnails",
+      "category": "browser-data-capability",
+      "responseKind": "indexeddb-background-folder-batch-json",
+      "migrationStatus": "browser-ready-assets"
+    },
+    {
+      "method": "POST",
+      "pathname": "/api/image-metadata/folders/update",
+      "category": "browser-data-capability",
+      "responseKind": "indexeddb-background-folder-json",
+      "migrationStatus": "browser-ready-assets"
+    },
+    {
+      "method": "POST",
+      "pathname": "/api/image-metadata/folders/delete",
+      "category": "browser-data-capability",
+      "responseKind": "indexeddb-background-folder-delete-empty",
+      "migrationStatus": "browser-ready-assets"
+    },
+    {
+      "method": "POST",
+      "pathname": "/api/image-metadata/folders/assign",
+      "category": "browser-data-capability",
+      "responseKind": "indexeddb-background-folder-assign-empty",
+      "migrationStatus": "browser-ready-assets"
+    },
+    {
+      "method": "POST",
+      "pathname": "/api/image-metadata/folders/unassign",
+      "category": "browser-data-capability",
+      "responseKind": "indexeddb-background-folder-unassign-empty",
+      "migrationStatus": "browser-ready-assets"
+    },
+    {
+      "method": "POST",
+      "pathname": "/api/avatars/get",
+      "category": "ui-required",
+      "responseKind": "indexeddb-user-avatar-list-json",
+      "migrationStatus": "browser-ready-assets"
+    },
+    {
+      "method": "POST",
+      "pathname": "/api/avatars/upload",
+      "category": "ui-required",
+      "responseKind": "indexeddb-user-avatar-path-json",
+      "migrationStatus": "browser-ready-assets"
+    },
+    {
+      "method": "POST",
+      "pathname": "/api/avatars/delete",
+      "category": "ui-required",
+      "responseKind": "indexeddb-user-avatar-delete-empty",
+      "migrationStatus": "browser-ready-assets"
+    },
+    {
+      "method": "GET",
+      "pathname": "/api/sprites/get",
+      "category": "browser-data-capability",
+      "responseKind": "indexeddb-sprite-label-path-list-json",
+      "migrationStatus": "browser-ready-assets"
+    },
+    {
+      "method": "POST",
+      "pathname": "/api/sprites/upload",
+      "category": "browser-data-capability",
+      "responseKind": "indexeddb-sprite-label-path-json",
+      "migrationStatus": "browser-ready-assets"
+    },
+    {
+      "method": "POST",
+      "pathname": "/api/sprites/upload-zip",
+      "category": "browser-data-capability",
+      "responseKind": "indexeddb-sprite-zip-count-json",
+      "migrationStatus": "browser-ready-assets"
+    },
+    {
+      "method": "POST",
+      "pathname": "/api/sprites/delete",
+      "category": "browser-data-capability",
+      "responseKind": "indexeddb-sprite-delete-empty",
+      "migrationStatus": "browser-ready-assets"
+    },
+    {
+      "method": "POST",
+      "pathname": "/api/assets/get",
+      "category": "browser-data-capability",
+      "responseKind": "indexeddb-extension-assets-by-category-json",
+      "migrationStatus": "browser-ready-assets-cors-limited"
+    },
+    {
+      "method": "POST",
+      "pathname": "/api/assets/download",
+      "category": "browser-data-capability",
+      "responseKind": "native-fetch-blob-or-indexeddb-path-json",
+      "migrationStatus": "browser-ready-assets-cors-limited"
+    },
+    {
+      "method": "POST",
+      "pathname": "/api/assets/delete",
+      "category": "browser-data-capability",
+      "responseKind": "indexeddb-extension-asset-delete-empty",
+      "migrationStatus": "browser-ready-assets"
+    },
+    {
+      "method": "POST",
+      "pathname": "/api/assets/character",
+      "category": "browser-data-capability",
+      "responseKind": "native-fetch-character-blob",
+      "migrationStatus": "browser-ready-assets-cors-limited"
+    }
+  ]
+}

@@ -1,0 +1,68 @@
+{
+  "module": "chats",
+  "legacyRequests": [
+    {
+      "method": "POST",
+      "pathname": "/api/chats/save",
+      "category": "browser-data-capability",
+      "responseKind": "indexeddb-chat-save-json",
+      "migrationStatus": "browser-ready-single-character-chats"
+    },
+    {
+      "method": "POST",
+      "pathname": "/api/chats/get",
+      "category": "browser-data-capability",
+      "responseKind": "indexeddb-chat-document-json",
+      "migrationStatus": "browser-ready-single-character-chats"
+    },
+    {
+      "method": "POST",
+      "pathname": "/api/chats/rename",
+      "category": "browser-data-capability",
+      "responseKind": "indexeddb-chat-rename-json",
+      "migrationStatus": "browser-ready-single-character-chats"
+    },
+    {
+      "method": "POST",
+      "pathname": "/api/chats/delete",
+      "category": "browser-data-capability",
+      "responseKind": "indexeddb-chat-delete-json",
+      "migrationStatus": "browser-ready-single-character-chats"
+    },
+    {
+      "method": "POST",
+      "pathname": "/api/chats/export",
+      "category": "browser-data-capability",
+      "responseKind": "jsonl-or-text-export-json",
+      "migrationStatus": "browser-ready-single-character-chats"
+    },
+    {
+      "method": "POST",
+      "pathname": "/api/chats/import",
+      "category": "browser-data-capability",
+      "responseKind": "jsonl-json-chat-import-json",
+      "migrationStatus": "browser-ready-single-character-chats"
+    },
+    {
+      "method": "POST",
+      "pathname": "/api/chats/search",
+      "category": "browser-data-capability",
+      "responseKind": "indexeddb-chat-search-json",
+      "migrationStatus": "browser-ready-single-character-chats"
+    },
+    {
+      "method": "POST",
+      "pathname": "/api/chats/recent",
+      "category": "browser-data-capability",
+      "responseKind": "indexeddb-recent-single-chat-list-json",
+      "migrationStatus": "browser-ready-single-character-chats"
+    },
+    {
+      "method": "POST",
+      "pathname": "/api/characters/chats",
+      "category": "browser-data-capability",
+      "responseKind": "indexeddb-character-chat-list-json",
+      "migrationStatus": "browser-ready-single-character-chats"
+    }
+  ]
+}

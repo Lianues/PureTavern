@@ -2,7 +2,7 @@
 
 一个以浏览器本地能力为默认实现、可选连接后端增强能力的酒馆项目。
 
-当前阶段采用 **Legacy-first**：根页面长期运行原版 SillyTavern UI、CSS 和交互脚本，我方 Hook 将原版能力桥接到浏览器实现。M03 Settings 的核心文档和设置快照已经通过 IndexedDB 本地持久化；角色、聊天、模型等能力仍使用启动空数据且尚未迁移。Vue 仅用于隔离的新页面或完成所有权切换的新能力。
+当前阶段采用 **Legacy-first**：根页面长期运行原版 SillyTavern UI、CSS 和交互脚本，我方 Hook 将原版能力桥接到浏览器实现。Settings、角色卡、单角色聊天、世界书、预设和本地 Assets 已由浏览器模块接管；群聊、模型生成、密钥与扩展安装等能力仍待迁移。Vue 仅用于隔离的新页面或完成所有权切换的新能力。
 
 ## 开发
 
@@ -18,11 +18,13 @@ pnpm dev
 
 ## 当前浏览器能力
 
-- 原版 `/api/settings/get` 与 `/api/settings/save` 已桥接到 IndexedDB；原版设置 UI 无需修改。
-- 原版设置快照列表、创建、内容预览和恢复流程已经接入 Settings 模块的 `snapshots` records collection。
-- 首次启动从上游默认设置初始化，之后保存完整 Legacy settings 文档。
-- IndexedDB 不可用时退化为当前页面会话内存存储，并在 `__PURE_TAVERN__.features.settings` 下报告 `degraded`。
-- 主题与提示词预设 CRUD 属于 M09；角色、聊天和世界书仍未迁移。
+- Settings 与快照：原版 `/api/settings/*` 已桥接到 IndexedDB，首次从上游默认设置初始化，之后按完整 Legacy 文档语义保存和恢复。
+- Characters：角色 CRUD、头像、重命名、复制以及 JSON/PNG Character Card V2/V3 导入导出已接入原版 UI。
+- Chats：单角色聊天、消息、搜索、recent、重命名、删除和 JSONL/多格式导入导出已本地持久化；群聊仍属 M06。
+- World Books：原版编辑器、导入、角色卡嵌入 lore 和原版匹配算法继续运行，文档由 M07 IndexedDB 模块提供。
+- Presets：11 类提示词预设、主题、Moving UI 与快捷回复由独立 M09 模块管理，默认内容通过构建清单增量初始化，不再由 Settings 存储拥有。
+- Assets：附件、用户图片、背景、persona 头像、sprites 与扩展资产使用通用 Blob/索引模块；共享 Service Worker 为原版 URL 提供本地资源响应。
+- 各模块 IndexedDB 不可用时降级为当前页面会话内存存储，并在 `__PURE_TAVERN__.features.<module>` 下报告诊断状态。
 
 ## 常用命令
 

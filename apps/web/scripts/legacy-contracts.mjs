@@ -231,6 +231,20 @@ export const CORE_COMPATIBILITY_REQUESTS = Object.freeze([
     responseKind: 'empty-object-json',
     migrationStatus: 'bootstrap-empty-response-not-migrated',
   },
+  {
+    method: 'POST',
+    pathname: '/api/stats/update',
+    category: 'ui-required-compatibility-boundary',
+    responseKind: 'discarded-empty-200',
+    migrationStatus: 'm23-not-migrated-discard-only',
+  },
+  {
+    method: 'POST',
+    pathname: '/api/tokenizers/llama/encode',
+    category: 'ui-required-compatibility-boundary',
+    responseKind: 'rough-character-estimate-json',
+    migrationStatus: 'm15-not-migrated-approximation-only',
+  },
 ]);
 
 function uniqueSorted(values) {

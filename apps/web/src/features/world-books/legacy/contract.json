@@ -1,0 +1,40 @@
+{
+  "module": "world-books",
+  "legacyRequests": [
+    {
+      "method": "POST",
+      "pathname": "/api/worldinfo/list",
+      "category": "browser-data-capability",
+      "responseKind": "indexeddb-world-book-summary-list-json",
+      "migrationStatus": "browser-ready-world-books"
+    },
+    {
+      "method": "POST",
+      "pathname": "/api/worldinfo/get",
+      "category": "browser-data-capability",
+      "responseKind": "indexeddb-world-book-document-or-dummy-json",
+      "migrationStatus": "browser-ready-world-books"
+    },
+    {
+      "method": "POST",
+      "pathname": "/api/worldinfo/edit",
+      "category": "browser-data-capability",
+      "responseKind": "indexeddb-world-book-edit-json",
+      "migrationStatus": "browser-ready-world-books"
+    },
+    {
+      "method": "POST",
+      "pathname": "/api/worldinfo/delete",
+      "category": "browser-data-capability",
+      "responseKind": "indexeddb-world-book-delete-ok",
+      "migrationStatus": "browser-ready-world-books"
+    },
+    {
+      "method": "POST",
+      "pathname": "/api/worldinfo/import",
+      "category": "browser-data-capability",
+      "responseKind": "json-or-converted-world-book-import-json",
+      "migrationStatus": "browser-ready-world-books"
+    }
+  ]
+}

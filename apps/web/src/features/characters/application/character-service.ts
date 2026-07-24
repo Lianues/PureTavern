@@ -40,6 +40,12 @@ export interface CharacterServiceDiagnostics {
 }
 
 export type DefaultAvatarLoader = () => Promise<Blob>;
+export type DeleteOwnerChats = (ownerId: string) => Promise<void>;
+
+export interface StableCharacterIdentity {
+  ownerId: string;
+  avatarUrl: string;
+}
 
 export interface MergeBulkResult {
   updated: string[];
@@ -66,6 +72,7 @@ export class CharacterService {
   readonly #codec: CharacterCardCodec;
   readonly #loadDefaultAvatar: DefaultAvatarLoader;
   readonly #avatarWorkerReady: Promise<unknown>;
+  readonly #deleteOwnerChats: DeleteOwnerChats | null;
 
   constructor(
     repository: CharacterRepository,
@@ -73,6 +80,7 @@ export class CharacterService {
     loadDefaultAvatar: DefaultAvatarLoader,
     avatarWorkerReady: Promise<unknown> = Promise.resolve('skipped'),
     codec = new CharacterCardCodec(),
+    deleteOwnerChats: DeleteOwnerChats | null = null,
   ) {
     this.#repository = repository;
     this.#assets = assets;
@@ -89,6 +97,7 @@ export class CharacterService {
           error instanceof Error ? error.message : String(error);
       });
     this.#codec = codec;
+    this.#deleteOwnerChats = deleteOwnerChats;
   }
 
   async listCharacters(): Promise<LegacyCharacterDto[]> {
@@ -111,6 +120,17 @@ export class CharacterService {
       createdAt: character.createdAt,
       updatedAt: character.updatedAt,
     });
+  }
+
+  async resolveStableIdentity(avatarFileInput: unknown): Promise<StableCharacterIdentity | null> {
+    const avatarFile = normalizeAvatarFile(avatarFileInput);
+    const character = await this.#repository.findByAvatar(avatarFile);
+    return character ? { ownerId: character.id, avatarUrl: character.avatarFile } : null;
+  }
+
+  async getAvatarForStableIdentity(ownerId: string): Promise<string | null> {
+    if (!ownerId) return null;
+    return (await this.#repository.get(ownerId))?.avatarFile ?? null;
   }
 
   async createCharacter(input: Record<string, unknown>, avatarBlob?: Blob | null): Promise<string> {
@@ -272,9 +292,10 @@ export class CharacterService {
     return { updated, skipped, failed };
   }
 
-  async deleteCharacter(avatarFileInput: unknown): Promise<void> {
+  async deleteCharacter(avatarFileInput: unknown, deleteChats = false): Promise<void> {
     const avatarFile = normalizeAvatarFile(avatarFileInput);
     const character = await this.#requireByAvatar(avatarFile);
+    if (deleteChats) await this.#deleteOwnerChats?.(character.id);
     await this.#repository.delete(character.id);
     await this.#assets.deleteAvatar(avatarFile);
   }

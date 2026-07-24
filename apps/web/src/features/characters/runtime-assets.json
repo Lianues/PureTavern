@@ -1,8 +1,0 @@
-{
-  "assets": [
-    {
-      "source": "infrastructure/characters-service-worker.js",
-      "publicPath": "characters-service-worker.js"
-    }
-  ]
-}

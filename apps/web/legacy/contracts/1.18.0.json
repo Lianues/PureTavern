@@ -2,7 +2,7 @@
   "schemaVersion": 2,
   "project": "SillyTavern",
   "version": "1.18.0",
-  "generatedAt": "2026-07-23T21:42:00.738Z",
+  "generatedAt": "2026-07-24T04:40:32.071Z",
   "source": {
     "publicRoot": "legacy/upstream/public",
     "repositoryRoot": "legacy/upstream"
@@ -4471,9 +4471,9 @@
         {
           "method": "POST",
           "pathname": "/api/chats/recent",
-          "category": "data-capability-pending-migration",
-          "responseKind": "empty-array-json",
-          "migrationStatus": "bootstrap-empty-response-not-migrated"
+          "category": "browser-data-capability",
+          "responseKind": "indexeddb-recent-single-chat-list-json",
+          "migrationStatus": "browser-ready-single-character-chats"
         },
         {
           "method": "POST",
@@ -4493,36 +4493,36 @@
           "method": "POST",
           "pathname": "/api/avatars/get",
           "category": "ui-required",
-          "responseKind": "default-avatar-list-json",
-          "migrationStatus": "bootstrap-compatibility-only"
+          "responseKind": "indexeddb-user-avatar-list-json",
+          "migrationStatus": "browser-ready-assets"
         },
         {
           "method": "POST",
           "pathname": "/api/worldinfo/list",
-          "category": "data-capability-pending-migration",
-          "responseKind": "empty-array-json",
-          "migrationStatus": "bootstrap-empty-response-not-migrated"
+          "category": "browser-data-capability",
+          "responseKind": "indexeddb-world-book-summary-list-json",
+          "migrationStatus": "browser-ready-world-books"
         },
         {
           "method": "POST",
           "pathname": "/api/backgrounds/all",
           "category": "ui-required",
-          "responseKind": "empty-backgrounds-json",
-          "migrationStatus": "bootstrap-compatibility-only"
+          "responseKind": "indexeddb-background-list-and-thumbnail-config-json",
+          "migrationStatus": "browser-ready-assets"
         },
         {
           "method": "POST",
           "pathname": "/api/backgrounds/folders",
           "category": "ui-required",
-          "responseKind": "empty-background-folders-json",
-          "migrationStatus": "bootstrap-compatibility-only"
+          "responseKind": "indexeddb-background-folder-map-json",
+          "migrationStatus": "browser-ready-assets"
         },
         {
           "method": "POST",
           "pathname": "/api/image-metadata/all",
-          "category": "data-capability-pending-migration",
-          "responseKind": "empty-image-metadata-json",
-          "migrationStatus": "bootstrap-empty-response-not-migrated"
+          "category": "browser-data-capability",
+          "responseKind": "indexeddb-image-metadata-map-json",
+          "migrationStatus": "browser-ready-assets"
         },
         {
           "method": "POST",
@@ -4530,6 +4530,237 @@
           "category": "data-capability-pending-migration",
           "responseKind": "empty-object-json",
           "migrationStatus": "bootstrap-empty-response-not-migrated"
+        },
+        {
+          "method": "POST",
+          "pathname": "/api/stats/update",
+          "category": "ui-required-compatibility-boundary",
+          "responseKind": "discarded-empty-200",
+          "migrationStatus": "m23-not-migrated-discard-only"
+        },
+        {
+          "method": "POST",
+          "pathname": "/api/tokenizers/llama/encode",
+          "category": "ui-required-compatibility-boundary",
+          "responseKind": "rough-character-estimate-json",
+          "migrationStatus": "m15-not-migrated-approximation-only"
+        },
+        {
+          "method": "POST",
+          "pathname": "/api/files/sanitize-filename",
+          "category": "browser-data-capability",
+          "responseKind": "sanitized-filename-json",
+          "migrationStatus": "browser-ready-assets"
+        },
+        {
+          "method": "POST",
+          "pathname": "/api/files/upload",
+          "category": "browser-data-capability",
+          "responseKind": "indexeddb-attachment-path-json",
+          "migrationStatus": "browser-ready-assets"
+        },
+        {
+          "method": "POST",
+          "pathname": "/api/files/delete",
+          "category": "browser-data-capability",
+          "responseKind": "indexeddb-attachment-delete-empty",
+          "migrationStatus": "browser-ready-assets"
+        },
+        {
+          "method": "POST",
+          "pathname": "/api/files/verify",
+          "category": "browser-data-capability",
+          "responseKind": "attachment-url-verification-map-json",
+          "migrationStatus": "browser-ready-assets"
+        },
+        {
+          "method": "POST",
+          "pathname": "/api/images/upload",
+          "category": "browser-data-capability",
+          "responseKind": "indexeddb-user-image-path-json",
+          "migrationStatus": "browser-ready-assets"
+        },
+        {
+          "method": "POST",
+          "pathname": "/api/images/list",
+          "category": "browser-data-capability",
+          "responseKind": "indexeddb-user-image-filenames-json",
+          "migrationStatus": "browser-ready-assets"
+        },
+        {
+          "method": "POST",
+          "pathname": "/api/images/folders",
+          "category": "browser-data-capability",
+          "responseKind": "indexeddb-user-image-folders-json",
+          "migrationStatus": "browser-ready-assets"
+        },
+        {
+          "method": "POST",
+          "pathname": "/api/images/delete",
+          "category": "browser-data-capability",
+          "responseKind": "indexeddb-user-image-delete-empty",
+          "migrationStatus": "browser-ready-assets"
+        },
+        {
+          "method": "POST",
+          "pathname": "/api/backgrounds/upload",
+          "category": "ui-required",
+          "responseKind": "indexeddb-background-filename-text",
+          "migrationStatus": "browser-ready-assets"
+        },
+        {
+          "method": "POST",
+          "pathname": "/api/backgrounds/rename",
+          "category": "ui-required",
+          "responseKind": "indexeddb-background-alias-rename-empty",
+          "migrationStatus": "browser-ready-assets"
+        },
+        {
+          "method": "POST",
+          "pathname": "/api/backgrounds/delete",
+          "category": "ui-required",
+          "responseKind": "indexeddb-background-delete-empty",
+          "migrationStatus": "browser-ready-assets"
+        },
+        {
+          "method": "POST",
+          "pathname": "/api/image-metadata/",
+          "category": "browser-data-capability",
+          "responseKind": "indexeddb-image-metadata-json",
+          "migrationStatus": "browser-ready-assets"
+        },
+        {
+          "method": "POST",
+          "pathname": "/api/image-metadata/cleanup",
+          "category": "browser-data-capability",
+          "responseKind": "indexeddb-image-metadata-cleanup-json",
+          "migrationStatus": "browser-ready-assets"
+        },
+        {
+          "method": "POST",
+          "pathname": "/api/image-metadata/folders/get",
+          "category": "browser-data-capability",
+          "responseKind": "indexeddb-background-folder-map-json",
+          "migrationStatus": "browser-ready-assets"
+        },
+        {
+          "method": "POST",
+          "pathname": "/api/image-metadata/folders/create",
+          "category": "browser-data-capability",
+          "responseKind": "indexeddb-background-folder-json",
+          "migrationStatus": "browser-ready-assets"
+        },
+        {
+          "method": "POST",
+          "pathname": "/api/image-metadata/folders/set-thumbnail",
+          "category": "browser-data-capability",
+          "responseKind": "indexeddb-background-folder-json",
+          "migrationStatus": "browser-ready-assets"
+        },
+        {
+          "method": "POST",
+          "pathname": "/api/image-metadata/folders/set-thumbnails",
+          "category": "browser-data-capability",
+          "responseKind": "indexeddb-background-folder-batch-json",
+          "migrationStatus": "browser-ready-assets"
+        },
+        {
+          "method": "POST",
+          "pathname": "/api/image-metadata/folders/update",
+          "category": "browser-data-capability",
+          "responseKind": "indexeddb-background-folder-json",
+          "migrationStatus": "browser-ready-assets"
+        },
+        {
+          "method": "POST",
+          "pathname": "/api/image-metadata/folders/delete",
+          "category": "browser-data-capability",
+          "responseKind": "indexeddb-background-folder-delete-empty",
+          "migrationStatus": "browser-ready-assets"
+        },
+        {
+          "method": "POST",
+          "pathname": "/api/image-metadata/folders/assign",
+          "category": "browser-data-capability",
+          "responseKind": "indexeddb-background-folder-assign-empty",
+          "migrationStatus": "browser-ready-assets"
+        },
+        {
+          "method": "POST",
+          "pathname": "/api/image-metadata/folders/unassign",
+          "category": "browser-data-capability",
+          "responseKind": "indexeddb-background-folder-unassign-empty",
+          "migrationStatus": "browser-ready-assets"
+        },
+        {
+          "method": "POST",
+          "pathname": "/api/avatars/upload",
+          "category": "ui-required",
+          "responseKind": "indexeddb-user-avatar-path-json",
+          "migrationStatus": "browser-ready-assets"
+        },
+        {
+          "method": "POST",
+          "pathname": "/api/avatars/delete",
+          "category": "ui-required",
+          "responseKind": "indexeddb-user-avatar-delete-empty",
+          "migrationStatus": "browser-ready-assets"
+        },
+        {
+          "method": "GET",
+          "pathname": "/api/sprites/get",
+          "category": "browser-data-capability",
+          "responseKind": "indexeddb-sprite-label-path-list-json",
+          "migrationStatus": "browser-ready-assets"
+        },
+        {
+          "method": "POST",
+          "pathname": "/api/sprites/upload",
+          "category": "browser-data-capability",
+          "responseKind": "indexeddb-sprite-label-path-json",
+          "migrationStatus": "browser-ready-assets"
+        },
+        {
+          "method": "POST",
+          "pathname": "/api/sprites/upload-zip",
+          "category": "browser-data-capability",
+          "responseKind": "indexeddb-sprite-zip-count-json",
+          "migrationStatus": "browser-ready-assets"
+        },
+        {
+          "method": "POST",
+          "pathname": "/api/sprites/delete",
+          "category": "browser-data-capability",
+          "responseKind": "indexeddb-sprite-delete-empty",
+          "migrationStatus": "browser-ready-assets"
+        },
+        {
+          "method": "POST",
+          "pathname": "/api/assets/get",
+          "category": "browser-data-capability",
+          "responseKind": "indexeddb-extension-assets-by-category-json",
+          "migrationStatus": "browser-ready-assets-cors-limited"
+        },
+        {
+          "method": "POST",
+          "pathname": "/api/assets/download",
+          "category": "browser-data-capability",
+          "responseKind": "native-fetch-blob-or-indexeddb-path-json",
+          "migrationStatus": "browser-ready-assets-cors-limited"
+        },
+        {
+          "method": "POST",
+          "pathname": "/api/assets/delete",
+          "category": "browser-data-capability",
+          "responseKind": "indexeddb-extension-asset-delete-empty",
+          "migrationStatus": "browser-ready-assets"
+        },
+        {
+          "method": "POST",
+          "pathname": "/api/assets/character",
+          "category": "browser-data-capability",
+          "responseKind": "native-fetch-character-blob",
+          "migrationStatus": "browser-ready-assets-cors-limited"
         },
         {
           "method": "POST",
@@ -4590,9 +4821,9 @@
         {
           "method": "POST",
           "pathname": "/api/characters/chats",
-          "category": "data-capability-pending-migration",
-          "responseKind": "empty-chat-list-json",
-          "migrationStatus": "m05-pending-empty-compatibility"
+          "category": "browser-data-capability",
+          "responseKind": "indexeddb-character-chat-list-json",
+          "migrationStatus": "browser-ready-single-character-chats"
         },
         {
           "method": "POST",
@@ -4614,6 +4845,111 @@
           "category": "browser-data-capability",
           "responseKind": "json-png-character-export-blob",
           "migrationStatus": "browser-ready-characters"
+        },
+        {
+          "method": "POST",
+          "pathname": "/api/chats/save",
+          "category": "browser-data-capability",
+          "responseKind": "indexeddb-chat-save-json",
+          "migrationStatus": "browser-ready-single-character-chats"
+        },
+        {
+          "method": "POST",
+          "pathname": "/api/chats/get",
+          "category": "browser-data-capability",
+          "responseKind": "indexeddb-chat-document-json",
+          "migrationStatus": "browser-ready-single-character-chats"
+        },
+        {
+          "method": "POST",
+          "pathname": "/api/chats/rename",
+          "category": "browser-data-capability",
+          "responseKind": "indexeddb-chat-rename-json",
+          "migrationStatus": "browser-ready-single-character-chats"
+        },
+        {
+          "method": "POST",
+          "pathname": "/api/chats/delete",
+          "category": "browser-data-capability",
+          "responseKind": "indexeddb-chat-delete-json",
+          "migrationStatus": "browser-ready-single-character-chats"
+        },
+        {
+          "method": "POST",
+          "pathname": "/api/chats/export",
+          "category": "browser-data-capability",
+          "responseKind": "jsonl-or-text-export-json",
+          "migrationStatus": "browser-ready-single-character-chats"
+        },
+        {
+          "method": "POST",
+          "pathname": "/api/chats/import",
+          "category": "browser-data-capability",
+          "responseKind": "jsonl-json-chat-import-json",
+          "migrationStatus": "browser-ready-single-character-chats"
+        },
+        {
+          "method": "POST",
+          "pathname": "/api/chats/search",
+          "category": "browser-data-capability",
+          "responseKind": "indexeddb-chat-search-json",
+          "migrationStatus": "browser-ready-single-character-chats"
+        },
+        {
+          "method": "POST",
+          "pathname": "/api/presets/save",
+          "category": "browser-data-capability",
+          "responseKind": "indexeddb-preset-name-json",
+          "migrationStatus": "browser-ready-presets"
+        },
+        {
+          "method": "POST",
+          "pathname": "/api/presets/delete",
+          "category": "browser-data-capability",
+          "responseKind": "indexeddb-preset-delete-ok",
+          "migrationStatus": "browser-ready-presets"
+        },
+        {
+          "method": "POST",
+          "pathname": "/api/presets/restore",
+          "category": "browser-data-capability",
+          "responseKind": "upstream-default-preset-json",
+          "migrationStatus": "browser-ready-presets"
+        },
+        {
+          "method": "POST",
+          "pathname": "/api/themes/save",
+          "category": "browser-data-capability",
+          "responseKind": "indexeddb-theme-save-ok",
+          "migrationStatus": "browser-ready-presets"
+        },
+        {
+          "method": "POST",
+          "pathname": "/api/themes/delete",
+          "category": "browser-data-capability",
+          "responseKind": "indexeddb-theme-delete-ok",
+          "migrationStatus": "browser-ready-presets"
+        },
+        {
+          "method": "POST",
+          "pathname": "/api/quick-replies/save",
+          "category": "browser-data-capability",
+          "responseKind": "indexeddb-quick-reply-save-ok",
+          "migrationStatus": "browser-ready-presets"
+        },
+        {
+          "method": "POST",
+          "pathname": "/api/quick-replies/delete",
+          "category": "browser-data-capability",
+          "responseKind": "indexeddb-quick-reply-idempotent-delete-ok",
+          "migrationStatus": "browser-ready-presets"
+        },
+        {
+          "method": "POST",
+          "pathname": "/api/moving-ui/save",
+          "category": "browser-data-capability",
+          "responseKind": "indexeddb-moving-ui-save-ok",
+          "migrationStatus": "browser-ready-presets"
         },
         {
           "method": "POST",
@@ -4656,6 +4992,34 @@
           "category": "browser-data-capability",
           "responseKind": "indexeddb-snapshot-restore-empty-204",
           "migrationStatus": "browser-ready-settings-snapshots"
+        },
+        {
+          "method": "POST",
+          "pathname": "/api/worldinfo/get",
+          "category": "browser-data-capability",
+          "responseKind": "indexeddb-world-book-document-or-dummy-json",
+          "migrationStatus": "browser-ready-world-books"
+        },
+        {
+          "method": "POST",
+          "pathname": "/api/worldinfo/edit",
+          "category": "browser-data-capability",
+          "responseKind": "indexeddb-world-book-edit-json",
+          "migrationStatus": "browser-ready-world-books"
+        },
+        {
+          "method": "POST",
+          "pathname": "/api/worldinfo/delete",
+          "category": "browser-data-capability",
+          "responseKind": "indexeddb-world-book-delete-ok",
+          "migrationStatus": "browser-ready-world-books"
+        },
+        {
+          "method": "POST",
+          "pathname": "/api/worldinfo/import",
+          "category": "browser-data-capability",
+          "responseKind": "json-or-converted-world-book-import-json",
+          "migrationStatus": "browser-ready-world-books"
         }
       ]
     }

@@ -1,3 +1,8 @@
+import type { CapabilityRegistry } from '@/platform/features/capability-registry';
+import {
+  legacyPresetBootstrapCapability,
+  worldNamesCapability,
+} from '@/platform/features/standard-capabilities';
 import type { CompatibilityRouter } from '@/platform/legacy/compatibility-router';
 import { emptyResponse, jsonResponse, textResponse } from '@/platform/legacy/compatibility-router';
 
@@ -8,34 +13,21 @@ import {
 } from '../application/settings-snapshot-service';
 import type { SettingsService } from '../application/settings-service';
 
-const EMPTY_PRESET_DATA = {
-  koboldai_settings: [],
-  koboldai_setting_names: [],
-  world_names: [],
-  novelai_settings: [],
-  novelai_setting_names: [],
-  openai_settings: [],
-  openai_setting_names: [],
-  textgenerationwebui_presets: [],
-  textgenerationwebui_preset_names: [],
-  themes: [],
-  movingUIPresets: [],
-  quickReplyPresets: [],
-  instruct: [],
-  context: [],
-  sysprompt: [],
-  reasoning: [],
-};
-
 export function registerSettingsLegacyRoutes(
   router: CompatibilityRouter,
   settings: SettingsService,
   snapshots: SettingsSnapshotService,
+  capabilities: CapabilityRegistry,
 ) {
-  router.register('POST', '/api/settings/get', async () =>
-    jsonResponse({
+  router.register('POST', '/api/settings/get', async () => {
+    const [presetData, worldNames] = await Promise.all([
+      loadPresetBootstrapData(capabilities),
+      loadWorldNames(capabilities),
+    ]);
+    return jsonResponse({
       settings: JSON.stringify(await settings.getSettings()),
-      ...EMPTY_PRESET_DATA,
+      ...presetData,
+      world_names: worldNames,
       enable_extensions: false,
       enable_extensions_auto_update: false,
       enable_accounts: false,
@@ -45,8 +37,8 @@ export function registerSettingsLegacyRoutes(
         maxPayloadSize: 0,
         timeout: 0,
       },
-    }),
-  );
+    });
+  });
 
   router.register('POST', '/api/settings/save', async (request) => {
     try {
@@ -91,6 +83,30 @@ export function registerSettingsLegacyRoutes(
       return settingsSnapshotErrorResponse(error);
     }
   });
+}
+
+async function loadPresetBootstrapData(
+  capabilities: CapabilityRegistry,
+): Promise<Record<string, unknown>> {
+  const provider = capabilities.get(legacyPresetBootstrapCapability);
+  if (!provider) return {};
+  try {
+    return await provider.getLegacyBootstrapData();
+  } catch (error) {
+    console.warn('[PureTavern Settings] Preset bootstrap data is unavailable.', error);
+    return {};
+  }
+}
+
+async function loadWorldNames(capabilities: CapabilityRegistry): Promise<string[]> {
+  const provider = capabilities.get(worldNamesCapability);
+  if (!provider) return [];
+  try {
+    return await provider.listWorldNames();
+  } catch (error) {
+    console.warn('[PureTavern Settings] World Book names are unavailable.', error);
+    return [];
+  }
 }
 
 function settingsSnapshotErrorResponse(error: unknown): Response {

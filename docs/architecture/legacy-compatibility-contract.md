@@ -51,13 +51,12 @@ Pure Tavern 将 SillyTavern 原版 UI/交互作为长期保留的上游兼容层
 
 记录 Hook 当前处理的 Legacy 请求，并明确区分已实现与待迁移能力：
 
-- `/api/settings/get`、`/api/settings/save` 标记为 `browser-ready-core-settings`，通过 Settings Port 在 IndexedDB 中持久化完整 settings 文档；
-- 四条 `/api/settings/*-snapshot*` 路径标记为 `browser-ready-settings-snapshots`，支持原版快照列表、创建、文本预览与恢复；
+- Settings 文档与快照标记为浏览器就绪，并保持原版完整文档/快照 DTO；
+- Characters、单角色 Chats、World Books、Presets 与 Assets 的路径由各模块 manifest 覆盖 core placeholder，标记对应 browser-ready 状态；
 - `/csrf-token`、`/version`、`/api/users/me` 等仍是 UI 启动固定兼容响应；
-- `/api/characters/all`、`/api/chats/recent`、`/api/worldinfo/list` 等仍是空数据响应；
-- 扩展相关的 `/api/extensions/discover`、`/api/secrets/*` 仍为空或安全默认响应。
+- 群组、Horde、扩展发现、Secrets、近似 tokenizer 与丢弃式 stats 等仍是空数据、安全默认或明确降级响应。
 
-契约 schema v2 使用 `dataCapabilities` 分类。除 Settings 核心文档与快照外，标记为 `bootstrap-compatibility-only`、`bootstrap-empty-response-not-migrated` 或 `extension-loading-disabled` 的路径都不是已完成业务能力。
+契约 schema v2 使用 `dataCapabilities` 分类。标记为 `bootstrap-compatibility-only`、`bootstrap-empty-response-not-migrated`、`extension-loading-disabled` 或其他明确降级状态的路径都不是已完成业务能力；是否迁移以 feature manifest 的 `migrationStatus` 为准。
 
 ## 3. 工具命令
 
@@ -81,7 +80,7 @@ pnpm legacy:contracts:check --source "F:\path\SillyTavern-1.19.0" --version 1.19
 
 `pnpm test:browser` 在真实 Chrome/Edge 中验证：
 
-- Hook、IndexedDB、Settings/Snapshot Storage 和上游版本元数据就绪；
+- Hook、IndexedDB、各已迁移 Feature Storage、共享 Assets Worker 和上游版本元数据就绪；
 - 原版 CSS、`lib.js`、`script.js` 加载；
 - jQuery 与关键上游全局对象存在；
 - `script.js`、`scripts/events.js`、`scripts/extensions.js` 等模块可动态导入且关键导出存在；
@@ -91,9 +90,14 @@ pnpm legacy:contracts:check --source "F:\path\SillyTavern-1.19.0" --version 1.19
 - 左右抽屉、世界书抽屉可打开并关闭；
 - 原版 `#fast_ui_mode` 触发原版防抖保存，IndexedDB 记录与刷新后的控件状态一致；
 - 原版账户/快照弹窗完成创建、内容预览、再次修改、确认恢复和自动刷新闭环；
+- 原版 Characters 完成头像、CRUD、重命名/复制、JSON/PNG 导入导出与 embedded lore；
+- 原版单角色 Chats 完成消息、附件、刷新恢复、搜索/recent、重命名和 JSONL 导入导出；
+- 原版 World Books 编辑器与 matcher 完成 CRUD、导入、关键词/constant/disabled 和 opaque 字段验证；
+- Presets 完成 11 类默认种子、原版 selector、PresetManager CRUD/恢复以及 theme/Quick Reply/Moving UI；
+- Assets 完成背景、文件夹、附件、用户图片/persona、sprites、library 与共享 Worker 直接 URL；
 - 本地资源无 404、运行时无异常、控制台无错误、启动兼容请求不进入网络。
 
-测试会在临时浏览器 Profile 中保存一个设置布尔值和一份设置快照；不会保存真实角色、聊天或世界书数据，测试结束后整个 Profile 会删除。
+测试使用临时浏览器 Profile 创建并清理模块验收数据；结束后删除整个 Profile，不污染开发者的浏览器数据。
 
 ## 5. 升级风险处理
 

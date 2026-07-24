@@ -585,6 +585,513 @@ try {
     settingsSnapshotWorkflow.restoredValue = snapshot?.fastUiMode ?? null;
   }
 
+  const presetWorkflowEvaluation = await client.send('Runtime.evaluate', {
+    expression: `(async () => {
+      const scriptModule = await import('/script.js');
+      const presetModule = await import('/scripts/preset-manager.js');
+      const headers = scriptModule.getRequestHeaders();
+      const postJson = (pathname, body) => fetch(pathname, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(body),
+        cache: 'no-cache',
+      });
+      const getBootstrap = async () => {
+        const response = await postJson('/api/settings/get', {});
+        return response.ok ? response.json() : null;
+      };
+      const routeHandled = (pathname) =>
+        globalThis.__PURE_TAVERN__?.diagnostics.requests.some(
+          (request) => request.pathname === pathname && request.handled,
+        ) ?? false;
+
+      const initial = await getBootstrap();
+      const selectorCounts = Object.fromEntries(
+        [
+          'settings_preset',
+          'settings_preset_novel',
+          'settings_preset_openai',
+          'settings_preset_textgenerationwebui',
+          'context_presets',
+          'instruct_presets',
+          'sysprompt_select',
+          'reasoning_select',
+          'themes',
+          'movingUIPresets',
+        ].map((id) => [id, document.getElementById(id)?.querySelectorAll('option').length ?? 0]),
+      );
+
+      const contextManager = presetModule.getPresetManager('context');
+      const sourceContext = initial?.context?.[0] ?? { name: 'Browser Source Context' };
+      await contextManager.savePreset(
+        'Browser Context',
+        { ...structuredClone(sourceContext), name: 'Browser Context', future_field: { kept: true } },
+      );
+      const afterCustom = await getBootstrap();
+      const customContext = afterCustom?.context?.find((preset) => preset.name === 'Browser Context');
+      const defaultContextName = initial?.context?.[0]?.name;
+      const restoredDefault = defaultContextName
+        ? await contextManager.getDefaultPreset(defaultContextName)
+        : null;
+      const customDeleteOk = await contextManager.deletePreset('Browser Context');
+      const afterDelete = await getBootstrap();
+
+      const themeSave = await postJson('/api/themes/save', {
+        name: 'Browser Theme',
+        blur_strength: 7,
+        future_field: { kept: true },
+      });
+      const quickReplySave = await postJson('/api/quick-replies/save', {
+        name: 'Browser Quick Reply',
+        qrList: [],
+        future_field: { kept: true },
+      });
+      const movingUiSave = await postJson('/api/moving-ui/save', {
+        name: 'Browser Moving UI',
+        movingUIState: { browser: { top: 1, left: 2 } },
+        future_field: { kept: true },
+      });
+      const afterSpecialized = await getBootstrap();
+      const themeDelete = await postJson('/api/themes/delete', { name: 'Browser Theme' });
+      const quickReplyDelete = await postJson('/api/quick-replies/delete', {
+        name: 'Browser Quick Reply',
+      });
+
+      return {
+        available: Boolean(initial && contextManager),
+        defaultCounts: {
+          kobold: initial?.koboldai_settings?.length ?? 0,
+          novel: initial?.novelai_settings?.length ?? 0,
+          openai: initial?.openai_settings?.length ?? 0,
+          textgen: initial?.textgenerationwebui_presets?.length ?? 0,
+          instruct: initial?.instruct?.length ?? 0,
+          context: initial?.context?.length ?? 0,
+          sysprompt: initial?.sysprompt?.length ?? 0,
+          reasoning: initial?.reasoning?.length ?? 0,
+          themes: initial?.themes?.length ?? 0,
+          movingUi: initial?.movingUIPresets?.length ?? 0,
+          quickReplies: initial?.quickReplyPresets?.length ?? 0,
+        },
+        selectorCounts,
+        customSavedWithOpaqueField: customContext?.future_field?.kept === true,
+        customDeleteOk: customDeleteOk === true,
+        customDeleted:
+          !afterDelete?.context?.some((preset) => preset.name === 'Browser Context'),
+        defaultRestoreOk: Boolean(restoredDefault?.isDefault === true && restoredDefault?.preset),
+        specialized: {
+          themeSaved:
+            themeSave.ok &&
+            afterSpecialized?.themes?.some(
+              (preset) => preset.name === 'Browser Theme' && preset.future_field?.kept,
+            ),
+          quickReplySaved:
+            quickReplySave.ok &&
+            afterSpecialized?.quickReplyPresets?.some(
+              (preset) => preset.name === 'Browser Quick Reply' && preset.future_field?.kept,
+            ),
+          movingUiSaved:
+            movingUiSave.ok &&
+            afterSpecialized?.movingUIPresets?.some(
+              (preset) => preset.name === 'Browser Moving UI' && preset.future_field?.kept,
+            ),
+          themeDeleteOk: themeDelete.ok,
+          quickReplyDeleteOk: quickReplyDelete.ok,
+        },
+        routesHandled: {
+          save: routeHandled('/api/presets/save'),
+          delete: routeHandled('/api/presets/delete'),
+          restore: routeHandled('/api/presets/restore'),
+          themeSave: routeHandled('/api/themes/save'),
+          themeDelete: routeHandled('/api/themes/delete'),
+          quickReplySave: routeHandled('/api/quick-replies/save'),
+          quickReplyDelete: routeHandled('/api/quick-replies/delete'),
+          movingUiSave: routeHandled('/api/moving-ui/save'),
+        },
+        storage: globalThis.__PURE_TAVERN__?.features?.presets?.storage
+          ? { ...globalThis.__PURE_TAVERN__.features.presets.storage }
+          : null,
+      };
+    })()`,
+    awaitPromise: true,
+    returnByValue: true,
+  });
+  const presetWorkflow = presetWorkflowEvaluation.result?.value;
+
+  const worldBookWorkflowEvaluation = await client.send('Runtime.evaluate', {
+    expression: `(async () => {
+      const worldModule = await import('/scripts/world-info.js');
+      const scriptModule = await import('/script.js');
+      const headers = scriptModule.getRequestHeaders();
+      const postJson = (pathname, body) => fetch(pathname, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(body),
+        cache: 'no-cache',
+      });
+      const routeHandled = (pathname) =>
+        globalThis.__PURE_TAVERN__?.diagnostics.requests.some(
+          (request) => request.pathname === pathname && request.handled,
+        ) ?? false;
+      const makeEntry = (uid, overrides) => ({
+        ...structuredClone(worldModule.newWorldInfoEntryTemplate),
+        uid,
+        displayIndex: uid,
+        ...overrides,
+      });
+      const matcherName = 'Browser Matcher';
+      const matcherDocument = {
+        name: matcherName,
+        extensions: { browser: true },
+        future_top_level: { kept: true },
+        entries: {
+          0: makeEntry(0, {
+            key: ['alpha-probe'],
+            content: 'BROWSER_KEY_MATCH',
+            constant: false,
+            disable: false,
+            position: worldModule.world_info_position.before,
+            future_entry_field: { kept: true },
+          }),
+          1: makeEntry(1, {
+            key: [],
+            content: 'BROWSER_CONSTANT_MATCH',
+            constant: true,
+            disable: false,
+            position: worldModule.world_info_position.after,
+          }),
+          2: makeEntry(2, {
+            key: [],
+            content: 'BROWSER_DISABLED_MATCH',
+            constant: true,
+            disable: true,
+            position: worldModule.world_info_position.before,
+          }),
+        },
+      };
+
+      await worldModule.saveWorldInfo(matcherName, matcherDocument, true);
+      const listResponse = await postJson('/api/worldinfo/list', {});
+      const listedWorlds = listResponse.ok ? await listResponse.json() : [];
+      await worldModule.updateWorldInfoList();
+      await worldModule.showWorldEditor(matcherName);
+      await new Promise((resolve) => setTimeout(resolve, 150));
+      worldModule.worldInfoCache.clear();
+      worldModule.updateWorldInfoSettings(worldModule.getWorldInfoSettings(), [matcherName]);
+      const activated = await worldModule.checkWorldInfo(['alpha-probe'], 4_096, true);
+      const activatedText =
+        String(activated.worldInfoBefore ?? '') + String(activated.worldInfoAfter ?? '');
+      const getResponse = await postJson('/api/worldinfo/get', { name: matcherName });
+      const loaded = getResponse.ok ? await getResponse.json() : null;
+
+      const importedName = 'Browser Imported World';
+      const importFile = new File(
+        [JSON.stringify({ entries: { 0: makeEntry(0, { key: ['imported'], content: 'IMPORTED' }) } })],
+        importedName + '.json',
+        { type: 'application/json' },
+      );
+      await worldModule.importWorldInfo(importFile);
+      const afterImportResponse = await postJson('/api/settings/get', {});
+      const afterImport = afterImportResponse.ok ? await afterImportResponse.json() : null;
+      const editorHasMatcher = [...document.querySelectorAll('#world_editor_select option')]
+        .some((option) => option.textContent === matcherName);
+      const editorEntryCount = document.querySelectorAll('#WorldInfo .world_entry').length;
+
+      const deleteMatcher = await worldModule.deleteWorldInfo(matcherName);
+      const deleteImported = await worldModule.deleteWorldInfo(importedName);
+      const afterDeleteResponse = await postJson('/api/settings/get', {});
+      const afterDelete = afterDeleteResponse.ok ? await afterDeleteResponse.json() : null;
+
+      return {
+        available: true,
+        saveAndGetOk:
+          listResponse.ok &&
+          listedWorlds.some((book) => book.file_id === matcherName) &&
+          getResponse.ok &&
+          loaded?.future_top_level?.kept === true &&
+          loaded?.entries?.['0']?.future_entry_field?.kept === true,
+        matcher: {
+          keyActivated: activatedText.includes('BROWSER_KEY_MATCH'),
+          constantActivated: activatedText.includes('BROWSER_CONSTANT_MATCH'),
+          disabledExcluded: !activatedText.includes('BROWSER_DISABLED_MATCH'),
+        },
+        ui: { editorHasMatcher, editorEntryCount },
+        importVisible: afterImport?.world_names?.includes(importedName) === true,
+        deleteOk: deleteMatcher !== false && deleteImported !== false,
+        deletedFromBootstrap:
+          !afterDelete?.world_names?.includes(matcherName) &&
+          !afterDelete?.world_names?.includes(importedName),
+        routesHandled: {
+          list: routeHandled('/api/worldinfo/list'),
+          get: routeHandled('/api/worldinfo/get'),
+          edit: routeHandled('/api/worldinfo/edit'),
+          import: routeHandled('/api/worldinfo/import'),
+          delete: routeHandled('/api/worldinfo/delete'),
+        },
+        storage: globalThis.__PURE_TAVERN__?.features?.['world-books']?.storage
+          ? { ...globalThis.__PURE_TAVERN__.features['world-books'].storage }
+          : null,
+      };
+    })()`,
+    awaitPromise: true,
+    returnByValue: true,
+  });
+  const worldBookWorkflow = worldBookWorkflowEvaluation.result?.value;
+
+  const assetsWorkflowEvaluation = await client.send('Runtime.evaluate', {
+    expression: `(async () => {
+      const scriptModule = await import('/script.js');
+      const backgroundsModule = await import('/scripts/backgrounds.js');
+      const chatsModule = await import('/scripts/chats.js');
+      const headers = scriptModule.getRequestHeaders();
+      const formHeaders = scriptModule.getRequestHeaders({ omitContentType: true });
+      const postJson = (pathname, body) => fetch(pathname, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(body),
+        cache: 'no-cache',
+      });
+      const routeHandled = (pathname) =>
+        globalThis.__PURE_TAVERN__?.diagnostics.requests.some(
+          (request) => request.pathname === pathname && request.handled,
+        ) ?? false;
+      const pngBytes = Uint8Array.from(
+        atob('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII='),
+        (character) => character.charCodeAt(0),
+      );
+      const pngFile = (name) => new File([pngBytes], name, { type: 'image/png' });
+
+      const defaultBackgroundsResponse = await postJson('/api/backgrounds/all', {});
+      const defaultBackgrounds = defaultBackgroundsResponse.ok
+        ? await defaultBackgroundsResponse.json()
+        : null;
+      const backgroundForm = new FormData();
+      backgroundForm.append('avatar', pngFile('browser-background.png'));
+      const backgroundUpload = await fetch('/api/backgrounds/upload', {
+        method: 'POST',
+        headers: formHeaders,
+        body: backgroundForm,
+      });
+      const backgroundName = backgroundUpload.ok ? await backgroundUpload.text() : '';
+      await backgroundsModule.getBackgrounds();
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      const backgroundDomVisible = Boolean(
+        document.querySelector('.bg_example[bgfile="browser-background.png"]'),
+      );
+      const backgroundDirect = await fetch('/backgrounds/browser-background.png', {
+        cache: 'reload',
+      });
+      const backgroundThumbnail = await fetch(
+        '/thumbnail?type=bg&file=browser-background.png&t=' + Date.now(),
+        { cache: 'reload' },
+      );
+      const folderCreate = await postJson('/api/image-metadata/folders/create', {
+        name: 'Browser Folder',
+      });
+      const folder = folderCreate.ok ? await folderCreate.json() : null;
+      const folderAssign = folder?.id
+        ? await postJson('/api/image-metadata/folders/assign', {
+            id: folder.id,
+            paths: ['/backgrounds/browser-background.png'],
+          })
+        : null;
+      const foldersResponse = await postJson('/api/backgrounds/folders', {});
+      const folders = foldersResponse.ok ? await foldersResponse.json() : null;
+      const backgroundRename = await postJson('/api/backgrounds/rename', {
+        old_bg: 'browser-background.png',
+        new_bg: 'browser-background-renamed.png',
+      });
+      const renamedBackground = await fetch('/backgrounds/browser-background-renamed.png', {
+        cache: 'reload',
+      });
+
+      const attachmentUrl = await chatsModule.uploadFileAttachment(
+        'browser-attachment.txt',
+        btoa('Browser attachment text'),
+      );
+      const attachmentText = attachmentUrl
+        ? await chatsModule.getFileAttachment(attachmentUrl)
+        : null;
+      const attachmentVerify = await postJson('/api/files/verify', {
+        urls: attachmentUrl ? [attachmentUrl] : [],
+      });
+      const attachmentVerification = attachmentVerify.ok
+        ? await attachmentVerify.json()
+        : null;
+      const attachmentDirect = attachmentUrl
+        ? await fetch(attachmentUrl, { cache: 'reload' })
+        : null;
+
+      const userImageUpload = await postJson('/api/images/upload', {
+        image: btoa(String.fromCharCode(...pngBytes)),
+        format: 'png',
+        filename: 'browser-image.png',
+        ch_name: 'Browser Images',
+      });
+      const userImageData = userImageUpload.ok ? await userImageUpload.json() : null;
+      const userImageList = await postJson('/api/images/list', {
+        folder: 'Browser Images',
+        sortField: 'date',
+        sortOrder: 'asc',
+        type: 1,
+      });
+      const userImageNames = userImageList.ok ? await userImageList.json() : [];
+      const userImageDirect = userImageData?.path
+        ? await fetch(userImageData.path, { cache: 'reload' })
+        : null;
+
+      const avatarForm = new FormData();
+      avatarForm.append('avatar', pngFile('browser-user-avatar.png'));
+      const avatarUpload = await fetch('/api/avatars/upload', {
+        method: 'POST',
+        headers: formHeaders,
+        body: avatarForm,
+      });
+      const avatarData = avatarUpload.ok ? await avatarUpload.json() : null;
+      const avatarList = await postJson('/api/avatars/get', {});
+      const avatarNames = avatarList.ok ? await avatarList.json() : [];
+      const avatarDirect = avatarData?.path
+        ? await fetch('/User%20Avatars/' + encodeURIComponent(avatarData.path), { cache: 'reload' })
+        : null;
+      const avatarThumbnail = avatarData?.path
+        ? await fetch('/thumbnail?type=persona&file=' + encodeURIComponent(avatarData.path), {
+            cache: 'reload',
+          })
+        : null;
+
+      const spriteForm = new FormData();
+      spriteForm.append('name', 'Browser Sprite Owner');
+      spriteForm.append('label', 'joy');
+      spriteForm.append('avatar', pngFile('joy.png'));
+      const spriteUpload = await fetch('/api/sprites/upload', {
+        method: 'POST',
+        headers: formHeaders,
+        body: spriteForm,
+      });
+      const spriteListResponse = await fetch(
+        '/api/sprites/get?name=' + encodeURIComponent('Browser Sprite Owner'),
+        { headers },
+      );
+      const sprites = spriteListResponse.ok ? await spriteListResponse.json() : [];
+      const spriteDirect = sprites[0]?.path
+        ? await fetch(sprites[0].path, { cache: 'reload' })
+        : null;
+
+      const libraryDownload = await postJson('/api/assets/download', {
+        url: location.origin + '/sounds/silence.mp3',
+        category: 'blip',
+        filename: 'browser-silence.mp3',
+      });
+      const libraryData = libraryDownload.ok ? await libraryDownload.json() : null;
+      const libraryList = await postJson('/api/assets/get', {});
+      const installedLibrary = libraryList.ok ? await libraryList.json() : null;
+      const libraryDirect = libraryData?.path
+        ? await fetch('/' + libraryData.path.replace(/^\\//, ''), { cache: 'reload' })
+        : null;
+
+      const backgroundDelete = await postJson('/api/backgrounds/delete', {
+        bg: 'browser-background-renamed.png',
+      });
+      const folderDelete = folder?.id
+        ? await postJson('/api/image-metadata/folders/delete', { id: folder.id })
+        : null;
+      const userImageDelete = userImageData?.path
+        ? await postJson('/api/images/delete', { path: userImageData.path })
+        : null;
+      const avatarDelete = avatarData?.path
+        ? await postJson('/api/avatars/delete', { avatar: avatarData.path })
+        : null;
+      const spriteDelete = await postJson('/api/sprites/delete', {
+        name: 'Browser Sprite Owner',
+        label: 'joy',
+        spriteName: 'joy',
+      });
+      const libraryDelete = await postJson('/api/assets/delete', {
+        category: 'blip',
+        filename: 'browser-silence.mp3',
+      });
+
+      return {
+        available: true,
+        defaultBackgroundCount: defaultBackgrounds?.images?.length ?? 0,
+        defaultBackgroundSeed: globalThis.__PURE_TAVERN__?.features?.assets?.defaultBackgrounds
+          ? { ...globalThis.__PURE_TAVERN__.features.assets.defaultBackgrounds }
+          : null,
+        serviceWorker: globalThis.__PURE_TAVERN__?.features?.assets?.serviceWorker
+          ? { ...globalThis.__PURE_TAVERN__.features.assets.serviceWorker }
+          : null,
+        storage: {
+          blobs: globalThis.__PURE_TAVERN__?.features?.assets?.blobs
+            ? { ...globalThis.__PURE_TAVERN__.features.assets.blobs }
+            : null,
+          index: globalThis.__PURE_TAVERN__?.features?.assets?.index
+            ? { ...globalThis.__PURE_TAVERN__.features.assets.index }
+            : null,
+        },
+        background: {
+          uploadOk: backgroundUpload.ok && backgroundName === 'browser-background.png',
+          domVisible: backgroundDomVisible,
+          directSource: backgroundDirect.headers.get('X-Pure-Tavern-Asset'),
+          thumbnailSource: backgroundThumbnail.headers.get('X-Pure-Tavern-Asset'),
+          folderOk:
+            folderCreate.ok &&
+            folderAssign?.ok === true &&
+            folders?.imageFolderMap?.['browser-background.png']?.includes(folder.id),
+          renameOk:
+            backgroundRename.ok &&
+            renamedBackground.headers.get('X-Pure-Tavern-Asset') === 'assets/backgrounds',
+          deleteOk: backgroundDelete.ok && folderDelete?.ok === true,
+        },
+        attachment: {
+          url: attachmentUrl,
+          text: attachmentText,
+          verified: attachmentVerification?.[attachmentUrl] === true,
+          directSource: attachmentDirect?.headers.get('X-Pure-Tavern-Asset') ?? null,
+        },
+        userImage: {
+          uploadOk: userImageUpload.ok,
+          listed: userImageList.ok && userImageNames.includes('browser-image.png'),
+          directSource: userImageDirect?.headers.get('X-Pure-Tavern-Asset') ?? null,
+          deleteOk: userImageDelete?.ok === true,
+        },
+        avatar: {
+          uploadOk: avatarUpload.ok,
+          listed: avatarNames.includes(avatarData?.path),
+          directSource: avatarDirect?.headers.get('X-Pure-Tavern-Asset') ?? null,
+          thumbnailSource: avatarThumbnail?.headers.get('X-Pure-Tavern-Asset') ?? null,
+          deleteOk: avatarDelete?.ok === true,
+        },
+        sprite: {
+          uploadOk: spriteUpload.ok,
+          listed: sprites.some((sprite) => sprite.label === 'joy'),
+          directSource: spriteDirect?.headers.get('X-Pure-Tavern-Asset') ?? null,
+          deleteOk: spriteDelete.ok,
+        },
+        library: {
+          downloadOk: libraryDownload.ok,
+          listed: installedLibrary?.blip?.includes(libraryData?.path),
+          directSource: libraryDirect?.headers.get('X-Pure-Tavern-Asset') ?? null,
+          deleteOk: libraryDelete.ok,
+        },
+        routesHandled: {
+          filesUpload: routeHandled('/api/files/upload'),
+          filesVerify: routeHandled('/api/files/verify'),
+          imagesUpload: routeHandled('/api/images/upload'),
+          imagesList: routeHandled('/api/images/list'),
+          backgroundsAll: routeHandled('/api/backgrounds/all'),
+          backgroundsUpload: routeHandled('/api/backgrounds/upload'),
+          backgroundsFolders: routeHandled('/api/backgrounds/folders'),
+          metadataFolders: routeHandled('/api/image-metadata/folders/create'),
+          avatarsUpload: routeHandled('/api/avatars/upload'),
+          spritesUpload: routeHandled('/api/sprites/upload'),
+          assetsDownload: routeHandled('/api/assets/download'),
+        },
+      };
+    })()`,
+    awaitPromise: true,
+    returnByValue: true,
+  });
+  const assetsWorkflow = assetsWorkflowEvaluation.result?.value;
+
   const characterCreateEditEvaluation = await client.send('Runtime.evaluate', {
     expression: `(async () => {
       const scriptModule = await import('/script.js');
@@ -602,7 +1109,31 @@ try {
       form.append('creator_notes', 'Pure frontend test card.');
       form.append('talkativeness', '0.5');
       form.append('fav', 'false');
-      form.append('json_data', '{}');
+      const embeddedBookName = 'Browser Embedded Lore';
+      const embeddedCharacterData = {
+        data: {
+          character_book: {
+            name: embeddedBookName,
+            extensions: { browser: true },
+            entries: [
+              {
+                id: 0,
+                keys: ['embedded-probe'],
+                secondary_keys: [],
+                comment: 'Browser embedded lore',
+                content: 'BROWSER_EMBEDDED_LORE',
+                constant: false,
+                selective: false,
+                insertion_order: 100,
+                enabled: true,
+                position: 'before_char',
+                extensions: { future_embedded_field: { kept: true } },
+              },
+            ],
+          },
+        },
+      };
+      form.append('json_data', JSON.stringify(embeddedCharacterData));
       const createResponse = await fetch('/api/characters/create', {
         method: 'POST',
         headers: formHeaders,
@@ -638,7 +1169,7 @@ try {
       editForm.append('create_date', '2026-01-01T00:00:00.000Z');
       editForm.append('talkativeness', '0.65');
       editForm.append('fav', 'false');
-      editForm.append('json_data', '{}');
+      editForm.append('json_data', JSON.stringify(embeddedCharacterData));
       const editResponse = await fetch('/api/characters/edit', {
         method: 'POST',
         headers: formHeaders,
@@ -653,6 +1184,32 @@ try {
       });
       const getAfterEdit = getAfterEditResponse.ok ? await getAfterEditResponse.json() : null;
 
+      await scriptModule.getCharacters();
+      const embeddedCharacterId = scriptModule.characters.findIndex(
+        (character) => character.avatar === createdAvatar,
+      );
+      const worldModule = await import('/scripts/world-info.js');
+      const { accountStorage } = await import('/scripts/util/AccountStorage.js');
+      accountStorage.setItem('AlertWI_' + createdAvatar, 'true');
+      const embeddedDetected = worldModule.checkEmbeddedWorld(embeddedCharacterId);
+      await worldModule.importEmbeddedWorldInfo(true);
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      const embeddedGetResponse = await fetch('/api/worldinfo/get', {
+        method: 'POST',
+        headers: jsonHeaders,
+        body: JSON.stringify({ name: embeddedBookName }),
+      });
+      const embeddedWorld = embeddedGetResponse.ok ? await embeddedGetResponse.json() : null;
+      const embeddedSettingsResponse = await fetch('/api/settings/get', {
+        method: 'POST',
+        headers: jsonHeaders,
+        body: JSON.stringify({}),
+      });
+      const embeddedSettings = embeddedSettingsResponse.ok
+        ? await embeddedSettingsResponse.json()
+        : null;
+      const embeddedDeleteOk = (await worldModule.deleteWorldInfo(embeddedBookName)) !== false;
+
       return {
         createdAvatar,
         createOk: createResponse.ok,
@@ -666,6 +1223,16 @@ try {
         editOk: editResponse.ok,
         editedDescription: getAfterEdit?.description ?? null,
         editedChat: getAfterEdit?.chat ?? null,
+        embeddedWorld: {
+          detected: embeddedDetected,
+          imported:
+            embeddedGetResponse.ok &&
+            embeddedSettings?.world_names?.includes(embeddedBookName) === true,
+          content: embeddedWorld?.entries?.['0']?.content ?? null,
+          opaqueFieldKept:
+            embeddedWorld?.entries?.['0']?.extensions?.future_embedded_field?.kept === true,
+          deleteOk: embeddedDeleteOk,
+        },
         routesHandled: {
           create: routeHandled('/api/characters/create'),
           all: routeHandled('/api/characters/all'),
@@ -692,9 +1259,288 @@ try {
   await client.send('Page.navigate', { url: appUrl });
   snapshot = await waitForApplicationSnapshot();
 
+  const chatCreateEvaluation = await client.send('Runtime.evaluate', {
+    expression: `(async () => {
+      const delay = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
+      const scriptModule = await import('/script.js');
+      const jsonHeaders = scriptModule.getRequestHeaders();
+      const createdAvatar = ${JSON.stringify(characterCreateEdit?.createdAvatar ?? '')};
+      const attachmentUrl = ${JSON.stringify(assetsWorkflow?.attachment?.url ?? '')};
+      const routeHandled = (pathname) =>
+        globalThis.__PURE_TAVERN__?.diagnostics.requests.some(
+          (request) => request.pathname === pathname && request.handled,
+        ) ?? false;
+      const postJson = (pathname, body) => fetch(pathname, {
+        method: 'POST',
+        headers: jsonHeaders,
+        body: JSON.stringify(body),
+        cache: 'no-cache',
+      });
+
+      await scriptModule.getCharacters();
+      const characterId = scriptModule.characters.findIndex((character) => character.avatar === createdAvatar);
+      if (characterId < 0) return { available: false, error: 'Created character was not found.' };
+      await scriptModule.selectCharacterById(characterId);
+      await delay(250);
+      const mainChatName = scriptModule.characters[scriptModule.this_chid]?.chat;
+      const greetingSaved = scriptModule.chat.some((message) => message.mes === 'Edited first message.');
+
+      await scriptModule.sendMessageAsUser('Browser local user message');
+      await scriptModule.saveChat({
+        withMetadata: {
+          browser_marker: 'persisted',
+          attachments: attachmentUrl
+            ? [{ url: attachmentUrl, name: 'browser-attachment.txt', size: 23 }]
+            : [],
+        },
+      });
+      const localMessageSaved = scriptModule.chat.some(
+        (message) => message.is_user && message.mes === 'Browser local user message',
+      );
+
+      await scriptModule.openCharacterChat('Browser second');
+      await delay(100);
+      const secondChatSaved = scriptModule.chat.some((message) => message.mes === 'Edited first message.');
+      await scriptModule.displayPastChats();
+      await delay(250);
+      const manageChatFilesCount = document.querySelectorAll(
+        '#select_chat_div .select_chat_block_wrapper',
+      ).length;
+
+      const searchResponse = await postJson('/api/chats/search', {
+        query: 'Browser local user message',
+        avatar_url: createdAvatar,
+        group_id: null,
+      });
+      const searchResults = searchResponse.ok ? await searchResponse.json() : [];
+      const renameResponse = await postJson('/api/chats/rename', {
+        is_group: false,
+        avatar_url: createdAvatar,
+        original_file: 'Browser second.jsonl',
+        renamed_file: 'Browser second renamed.jsonl',
+      });
+      const renameData = renameResponse.ok ? await renameResponse.json() : null;
+
+      const exportJsonlResponse = await postJson('/api/chats/export', {
+        is_group: false,
+        avatar_url: createdAvatar,
+        file: mainChatName + '.jsonl',
+        exportfilename: 'browser-main.jsonl',
+        format: 'jsonl',
+      });
+      const exportJsonlData = exportJsonlResponse.ok ? await exportJsonlResponse.json() : null;
+      const exportTxtResponse = await postJson('/api/chats/export', {
+        is_group: false,
+        avatar_url: createdAvatar,
+        file: mainChatName + '.jsonl',
+        exportfilename: 'browser-main.txt',
+        format: 'txt',
+      });
+      const exportTxtData = exportTxtResponse.ok ? await exportTxtResponse.json() : null;
+
+      const importForm = new FormData();
+      importForm.append('file_type', 'jsonl');
+      importForm.append('avatar_url', createdAvatar);
+      importForm.append('character_name', 'Browser Alice');
+      importForm.append('user_name', 'User');
+      importForm.append(
+        'file',
+        new File([exportJsonlData?.result ?? ''], 'browser-main.jsonl', {
+          type: 'application/jsonl',
+        }),
+      );
+      const importedFileNames = exportJsonlData?.result
+        ? await scriptModule.importCharacterChat(importForm, { refresh: true })
+        : [];
+      const importedFileName = importedFileNames[0] ?? '';
+      const importedListResponse = await postJson('/api/characters/chats', {
+        avatar_url: createdAvatar,
+        simple: true,
+      });
+      const importedList = importedListResponse.ok ? await importedListResponse.json() : [];
+      const importedVisible = importedList.some((chat) => chat.file_name === importedFileName);
+      if (importedFileName) {
+        await scriptModule.openCharacterChat(importedFileName.replace(/\\.jsonl$/i, ''));
+      }
+      const importedLoadOk = scriptModule.chat.some(
+        (message) => message.is_user && message.mes === 'Browser local user message',
+      );
+
+      const deleteResponse = await postJson('/api/chats/delete', {
+        avatar_url: createdAvatar,
+        chatfile: 'Browser second renamed.jsonl',
+      });
+      await scriptModule.openCharacterChat(mainChatName);
+      const switchedToRemaining =
+        scriptModule.characters[scriptModule.this_chid]?.chat === mainChatName &&
+        scriptModule.chat.some((message) => message.mes === 'Browser local user message');
+      const recentResponse = await postJson('/api/chats/recent', {
+        max: 10,
+        pinned: [{ avatar: createdAvatar, file_name: mainChatName + '.jsonl' }],
+      });
+      const recent = recentResponse.ok ? await recentResponse.json() : [];
+
+      return {
+        available: true,
+        mainChatName,
+        greetingSaved,
+        localMessageSaved,
+        secondChatSaved,
+        manageChatFilesCount,
+        searchOk: searchResponse.ok && searchResults.some((chat) => chat.file_name === mainChatName),
+        renameOk: renameResponse.ok && renameData?.sanitizedFileName === 'Browser second renamed',
+        exportJsonlOk:
+          exportJsonlResponse.ok &&
+          typeof exportJsonlData?.result === 'string' &&
+          exportJsonlData.result.includes('Browser local user message'),
+        exportTxtOk:
+          exportTxtResponse.ok &&
+          typeof exportTxtData?.result === 'string' &&
+          exportTxtData.result.includes('Browser local user message'),
+        importedFileName,
+        importedVisible,
+        importedLoadOk,
+        deleteOk: deleteResponse.ok,
+        switchedToRemaining,
+        recentOk:
+          recentResponse.ok &&
+          recent[0]?.avatar === createdAvatar &&
+          recent[0]?.file_name === mainChatName + '.jsonl',
+        metadataBeforeReload: scriptModule.chat_metadata?.browser_marker ?? null,
+        routesHandled: {
+          get: routeHandled('/api/chats/get'),
+          save: routeHandled('/api/chats/save'),
+          list: routeHandled('/api/characters/chats'),
+          search: routeHandled('/api/chats/search'),
+          rename: routeHandled('/api/chats/rename'),
+          export: routeHandled('/api/chats/export'),
+          import: routeHandled('/api/chats/import'),
+          delete: routeHandled('/api/chats/delete'),
+          recent: routeHandled('/api/chats/recent'),
+        },
+        storage: globalThis.__PURE_TAVERN__?.features?.chats?.storage
+          ? { ...globalThis.__PURE_TAVERN__.features.chats.storage }
+          : null,
+        messages: globalThis.__PURE_TAVERN__?.features?.chats?.messages
+          ? { ...globalThis.__PURE_TAVERN__.features.chats.messages }
+          : null,
+      };
+    })()`,
+    awaitPromise: true,
+    returnByValue: true,
+  });
+  const chatCreate = chatCreateEvaluation.result?.value;
+
+  await client.send('Page.navigate', { url: appUrl });
+  snapshot = await waitForApplicationSnapshot();
+
+  const chatPostReloadEvaluation = await client.send('Runtime.evaluate', {
+    expression: `(async () => {
+      const scriptModule = await import('/script.js');
+      const createdAvatar = ${JSON.stringify(characterCreateEdit?.createdAvatar ?? '')};
+      const expectedMainChatName = ${JSON.stringify(chatCreate?.mainChatName ?? '')};
+      const jsonHeaders = scriptModule.getRequestHeaders();
+      const formHeaders = scriptModule.getRequestHeaders({ omitContentType: true });
+      const postJson = (pathname, body) => fetch(pathname, {
+        method: 'POST',
+        headers: jsonHeaders,
+        body: JSON.stringify(body),
+        cache: 'no-cache',
+      });
+
+      await scriptModule.getCharacters();
+      const characterId = scriptModule.characters.findIndex((character) => character.avatar === createdAvatar);
+      if (characterId < 0) return { available: false, error: 'Character missing after reload.' };
+      await scriptModule.selectCharacterById(characterId);
+      const messageRestored = scriptModule.chat.some(
+        (message) => message.is_user && message.mes === 'Browser local user message',
+      );
+      const metadataRestored = scriptModule.chat_metadata?.browser_marker === 'persisted';
+      const attachmentUrl = scriptModule.chat_metadata?.attachments?.[0]?.url ?? '';
+      const chatsModule = await import('/scripts/chats.js');
+      const attachmentRestored = attachmentUrl === ${JSON.stringify(assetsWorkflow?.attachment?.url ?? '')};
+      const attachmentText = attachmentUrl ? await chatsModule.getFileAttachment(attachmentUrl) : null;
+      const attachmentDeleteOk = attachmentUrl
+        ? await chatsModule.deleteFileFromServer(attachmentUrl, false)
+        : false;
+
+      const renameCharacterOk = await scriptModule.renameCharacter('Browser Alice Chat Renamed', {
+        silent: true,
+        renameChats: false,
+      });
+      const renamedCharacter = scriptModule.characters.find(
+        (character) => character.name === 'Browser Alice Chat Renamed',
+      );
+      const renamedAvatar = renamedCharacter?.avatar ?? '';
+      const renamedGetResponse = renamedAvatar
+        ? await postJson('/api/chats/get', {
+            ch_name: 'Browser Alice Chat Renamed',
+            file_name: expectedMainChatName,
+            avatar_url: renamedAvatar,
+          })
+        : null;
+      const renamedDocument = renamedGetResponse?.ok ? await renamedGetResponse.json() : [];
+      const renamePreservedChat = renamedDocument.some(
+        (message) => message.is_user && message.mes === 'Browser local user message',
+      );
+
+      const keepForm = new FormData();
+      keepForm.append('ch_name', 'Browser Keep Chats');
+      keepForm.append('first_mes', 'Keep greeting');
+      keepForm.append('json_data', '{}');
+      const keepCreateResponse = await fetch('/api/characters/create', {
+        method: 'POST',
+        headers: formHeaders,
+        body: keepForm,
+      });
+      const keepAvatar = keepCreateResponse.ok ? await keepCreateResponse.text() : '';
+      if (keepAvatar) {
+        await postJson('/api/chats/save', {
+          ch_name: 'Browser Keep Chats',
+          file_name: 'kept-chat',
+          avatar_url: keepAvatar,
+          chat: [
+            { chat_metadata: {}, user_name: 'unused', character_name: 'unused' },
+            { name: 'Browser Keep Chats', is_user: false, mes: 'kept', extra: {} },
+          ],
+        });
+      }
+      const keepDeleteResponse = keepAvatar
+        ? await postJson('/api/characters/delete', { avatar_url: keepAvatar, delete_chats: false })
+        : null;
+      const keptChatsResponse = keepAvatar
+        ? await postJson('/api/characters/chats', { avatar_url: keepAvatar, simple: true })
+        : null;
+      const keptChats = keptChatsResponse?.ok ? await keptChatsResponse.json() : [];
+      if (keepAvatar) {
+        await postJson('/api/chats/delete', { avatar_url: keepAvatar, chatfile: 'kept-chat.jsonl' });
+      }
+
+      return {
+        available: true,
+        messageRestored,
+        metadataRestored,
+        attachmentRestored,
+        attachmentText,
+        attachmentDeleteOk,
+        renameCharacterOk,
+        renamedAvatar,
+        renamePreservedChat,
+        keepChatsFalseOk:
+          keepCreateResponse.ok &&
+          keepDeleteResponse?.ok === true &&
+          keptChats.some((chat) => chat.file_name === 'kept-chat.jsonl'),
+      };
+    })()`,
+    awaitPromise: true,
+    returnByValue: true,
+  });
+  const chatPostReload = chatPostReloadEvaluation.result?.value;
+  const chatWorkflow = { ...(chatCreate ?? {}), ...(chatPostReload ?? {}) };
+
   const characterPostReloadEvaluation = await client.send('Runtime.evaluate', {
     expression: `(async () => {
-      const createdAvatar = ${JSON.stringify(characterCreateEdit?.createdAvatar ?? '')};
+      const createdAvatar = ${JSON.stringify(chatPostReload?.renamedAvatar ?? characterCreateEdit?.createdAvatar ?? '')};
       const scriptModule = await import('/script.js');
       const jsonHeaders = scriptModule.getRequestHeaders();
       const formHeaders = scriptModule.getRequestHeaders({ omitContentType: true });
@@ -790,6 +1636,12 @@ try {
         const response = await postJson('/api/characters/delete', { avatar_url: avatar, delete_chats: true });
         deleteResults.push({ avatar, ok: response.ok });
       }
+      const chatsAfterDeleteResponse = createdAvatar
+        ? await postJson('/api/characters/chats', { avatar_url: createdAvatar, simple: true })
+        : null;
+      const chatsAfterDelete = chatsAfterDeleteResponse?.ok
+        ? await chatsAfterDeleteResponse.json()
+        : null;
       const listAfterDeleteResponse = await postJson('/api/characters/all', {});
       const listAfterDelete = listAfterDeleteResponse.ok ? await listAfterDeleteResponse.json() : [];
 
@@ -811,6 +1663,7 @@ try {
         importPngOk: importPngResponse?.ok ?? false,
         importPngFileName: importPngData?.file_name ?? null,
         deleteResults,
+        deleteChatsTrueOk: Array.isArray(chatsAfterDelete) && chatsAfterDelete.length === 0,
         listAfterDeleteEmpty: listAfterDelete.length === 0,
         routesHandled: {
           duplicate: routeHandled('/api/characters/duplicate'),
@@ -885,6 +1738,95 @@ try {
       characterWorkflow?.storage?.backend === 'indexeddb' &&
       characterWorkflow?.assets?.status === 'ready' &&
       characterWorkflow?.assets?.backend === 'indexeddb',
+    presetsStorageReady:
+      presetWorkflow?.storage?.status === 'ready' &&
+      presetWorkflow?.storage?.backend === 'indexeddb',
+    presetsBrowserWorkflow:
+      presetWorkflow?.available === true &&
+      Object.values(presetWorkflow?.defaultCounts ?? {}).every((count) => count > 0) &&
+      presetWorkflow?.selectorCounts?.context_presets > 0 &&
+      presetWorkflow?.selectorCounts?.instruct_presets > 0 &&
+      presetWorkflow?.selectorCounts?.themes > 0 &&
+      presetWorkflow?.customSavedWithOpaqueField === true &&
+      presetWorkflow?.customDeleteOk === true &&
+      presetWorkflow?.customDeleted === true &&
+      presetWorkflow?.defaultRestoreOk === true &&
+      Object.values(presetWorkflow?.specialized ?? {}).every(Boolean) &&
+      Object.values(presetWorkflow?.routesHandled ?? {}).every(Boolean),
+    worldBooksStorageReady:
+      worldBookWorkflow?.storage?.status === 'ready' &&
+      worldBookWorkflow?.storage?.backend === 'indexeddb',
+    worldBooksBrowserWorkflow:
+      worldBookWorkflow?.available === true &&
+      worldBookWorkflow?.saveAndGetOk === true &&
+      worldBookWorkflow?.matcher?.keyActivated === true &&
+      worldBookWorkflow?.matcher?.constantActivated === true &&
+      worldBookWorkflow?.matcher?.disabledExcluded === true &&
+      worldBookWorkflow?.ui?.editorHasMatcher === true &&
+      worldBookWorkflow?.ui?.editorEntryCount >= 1 &&
+      worldBookWorkflow?.importVisible === true &&
+      worldBookWorkflow?.deleteOk === true &&
+      worldBookWorkflow?.deletedFromBootstrap === true &&
+      Object.values(worldBookWorkflow?.routesHandled ?? {}).every(Boolean),
+    assetsStorageReady:
+      assetsWorkflow?.storage?.blobs?.status === 'ready' &&
+      assetsWorkflow?.storage?.blobs?.backend === 'indexeddb' &&
+      assetsWorkflow?.storage?.index?.status === 'ready' &&
+      assetsWorkflow?.storage?.index?.backend === 'indexeddb' &&
+      assetsWorkflow?.serviceWorker?.status === 'ready' &&
+      assetsWorkflow?.defaultBackgroundSeed?.status === 'ready',
+    assetsBrowserWorkflow:
+      assetsWorkflow?.available === true &&
+      assetsWorkflow?.defaultBackgroundCount > 0 &&
+      assetsWorkflow?.background?.uploadOk === true &&
+      assetsWorkflow?.background?.domVisible === true &&
+      assetsWorkflow?.background?.directSource === 'assets/backgrounds' &&
+      assetsWorkflow?.background?.thumbnailSource === 'assets/backgrounds' &&
+      assetsWorkflow?.background?.folderOk === true &&
+      assetsWorkflow?.background?.renameOk === true &&
+      assetsWorkflow?.background?.deleteOk === true &&
+      typeof assetsWorkflow?.attachment?.url === 'string' &&
+      assetsWorkflow.attachment.url.length > 0 &&
+      assetsWorkflow?.attachment?.text === 'Browser attachment text' &&
+      assetsWorkflow?.attachment?.verified === true &&
+      assetsWorkflow?.attachment?.directSource === 'assets/attachments' &&
+      Object.values(assetsWorkflow?.userImage ?? {}).every(Boolean) &&
+      Object.values(assetsWorkflow?.avatar ?? {}).every(Boolean) &&
+      Object.values(assetsWorkflow?.sprite ?? {}).every(Boolean) &&
+      Object.values(assetsWorkflow?.library ?? {}).every(Boolean) &&
+      Object.values(assetsWorkflow?.routesHandled ?? {}).every(Boolean),
+    chatsStorageReady:
+      chatWorkflow?.storage?.status === 'ready' &&
+      chatWorkflow?.storage?.backend === 'indexeddb' &&
+      chatWorkflow?.messages?.status === 'ready' &&
+      chatWorkflow?.messages?.backend === 'indexeddb',
+    chatBrowserWorkflow:
+      chatWorkflow?.available === true &&
+      chatWorkflow?.greetingSaved === true &&
+      chatWorkflow?.localMessageSaved === true &&
+      chatWorkflow?.secondChatSaved === true &&
+      chatWorkflow?.manageChatFilesCount >= 2 &&
+      chatWorkflow?.searchOk === true &&
+      chatWorkflow?.renameOk === true &&
+      chatWorkflow?.exportJsonlOk === true &&
+      chatWorkflow?.exportTxtOk === true &&
+      typeof chatWorkflow?.importedFileName === 'string' &&
+      chatWorkflow.importedFileName.endsWith('.jsonl') &&
+      chatWorkflow?.importedVisible === true &&
+      chatWorkflow?.importedLoadOk === true &&
+      chatWorkflow?.deleteOk === true &&
+      chatWorkflow?.switchedToRemaining === true &&
+      chatWorkflow?.recentOk === true &&
+      chatWorkflow?.metadataBeforeReload === 'persisted' &&
+      chatWorkflow?.messageRestored === true &&
+      chatWorkflow?.metadataRestored === true &&
+      chatWorkflow?.attachmentRestored === true &&
+      chatWorkflow?.attachmentText === 'Browser attachment text' &&
+      chatWorkflow?.attachmentDeleteOk === true &&
+      chatWorkflow?.renameCharacterOk === true &&
+      chatWorkflow?.renamePreservedChat === true &&
+      chatWorkflow?.keepChatsFalseOk === true &&
+      Object.values(chatWorkflow?.routesHandled ?? {}).every(Boolean),
     characterBrowserCrudWorkflow:
       characterWorkflow?.createOk === true &&
       characterWorkflow?.listAfterCreateHasCard === true &&
@@ -896,12 +1838,17 @@ try {
       characterWorkflow?.directAvatarAssetSource === 'characters/avatar' &&
       characterWorkflow?.editOk === true &&
       characterWorkflow?.editedDescription === 'Edited in the browser verification flow.' &&
+      characterWorkflow?.embeddedWorld?.detected === true &&
+      characterWorkflow?.embeddedWorld?.imported === true &&
+      characterWorkflow?.embeddedWorld?.content === 'BROWSER_EMBEDDED_LORE' &&
+      characterWorkflow?.embeddedWorld?.opaqueFieldKept === true &&
+      characterWorkflow?.embeddedWorld?.deleteOk === true &&
       characterWorkflow?.getAfterReloadOk === true &&
       characterWorkflow?.reloadedDescription === 'Edited in the browser verification flow.' &&
       characterWorkflow?.duplicateOk === true &&
       characterWorkflow?.renameOk === true &&
       characterWorkflow?.exportJsonOk === true &&
-      characterWorkflow?.exportJsonName === 'Browser Alice' &&
+      characterWorkflow?.exportJsonName === 'Browser Alice Chat Renamed' &&
       characterWorkflow?.exportJsonHasNoChat === true &&
       characterWorkflow?.exportPngOk === true &&
       characterWorkflow?.exportPngIsPng === true &&
@@ -909,6 +1856,7 @@ try {
       characterWorkflow?.importPngOk === true &&
       characterWorkflow?.deleteResults?.length >= 4 &&
       characterWorkflow.deleteResults.every((result) => result.ok) &&
+      characterWorkflow?.deleteChatsTrueOk === true &&
       characterWorkflow?.listAfterDeleteEmpty === true &&
       Object.values(characterWorkflow?.routesHandled ?? {}).every(Boolean),
     upstreamMetadataLoaded:
@@ -954,7 +1902,11 @@ try {
     moduleContracts,
     settingsPersistence,
     settingsSnapshotWorkflow,
+    presetWorkflow,
+    worldBookWorkflow,
+    assetsWorkflow,
     characterWorkflow,
+    chatWorkflow,
     requestCount: requests.length,
     localScriptRequestCount: localScriptRequests.length,
     compatibilityNetworkRequests,

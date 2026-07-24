@@ -67,9 +67,9 @@
     {
       "method": "POST",
       "pathname": "/api/characters/chats",
-      "category": "data-capability-pending-migration",
-      "responseKind": "empty-chat-list-json",
-      "migrationStatus": "m05-pending-empty-compatibility"
+      "category": "bootstrap-compatibility-fallback",
+      "responseKind": "empty-chat-list-if-chats-feature-absent",
+      "migrationStatus": "overridden-by-m05-chats-capability"
     },
     {
       "method": "POST",

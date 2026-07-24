@@ -33,7 +33,7 @@ function blobFromBytes(bytes: Uint8Array, type = 'image/png'): Blob {
   return new Blob([buffer], { type });
 }
 
-async function createHarness() {
+async function createHarness(deleteOwnerChats: ((ownerId: string) => Promise<void>) | null = null) {
   const database = new AppDatabase(`pure-tavern-character-test-${crypto.randomUUID()}`);
   databases.push(database);
   const storage = new AppStorage(database);
@@ -49,6 +49,8 @@ async function createHarness() {
     assets,
     async () => defaultAvatar,
     Promise.resolve('skipped'),
+    undefined,
+    deleteOwnerChats,
   );
   return { service, assets, repository, defaultAvatar };
 }
@@ -162,6 +164,29 @@ describe('CharacterService', () => {
       data: { character_version: 'bulk' },
     });
     await expect(service.listChats()).resolves.toEqual([]);
+  });
+
+  it('exposes stable identity across rename and only invokes chat lifecycle deletion when requested', async () => {
+    const deletedOwnerIds: string[] = [];
+    const { service } = await createHarness(async (ownerId) => {
+      deletedOwnerIds.push(ownerId);
+    });
+    await service.createCharacter({ ch_name: 'Keep Chats' });
+    const keepIdentity = await service.resolveStableIdentity('Keep Chats.png');
+    const renamedAvatar = await service.renameCharacter('Keep Chats.png', 'Keep Renamed');
+    expect(renamedAvatar).toBe('Keep Renamed.png');
+    expect(await service.resolveStableIdentity(renamedAvatar)).toEqual({
+      ownerId: keepIdentity?.ownerId,
+      avatarUrl: renamedAvatar,
+    });
+    expect(await service.getAvatarForStableIdentity(keepIdentity!.ownerId)).toBe(renamedAvatar);
+    await service.deleteCharacter(renamedAvatar, false);
+    expect(deletedOwnerIds).toEqual([]);
+
+    await service.createCharacter({ ch_name: 'Delete Chats' });
+    const deleteIdentity = await service.resolveStableIdentity('Delete Chats.png');
+    await service.deleteCharacter('Delete Chats.png', true);
+    expect(deletedOwnerIds).toEqual([deleteIdentity?.ownerId]);
   });
 
   it('reports memory degradation when IndexedDB fails', async () => {

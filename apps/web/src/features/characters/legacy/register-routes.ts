@@ -92,7 +92,7 @@ export function registerCharactersLegacyRoutes(
   router.register('POST', '/api/characters/delete', async (request) => {
     try {
       const body = await readJsonBody(request);
-      await characters.deleteCharacter(body.avatar_url);
+      await characters.deleteCharacter(body.avatar_url, body.delete_chats === true);
       return textResponse('OK', 200);
     } catch (error) {
       return characterErrorResponse(error, 400);

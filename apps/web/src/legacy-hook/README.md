@@ -10,11 +10,15 @@
 
 功能代码禁止继续加入本目录。每个模块必须把装配、Repository、Legacy routes、契约声明和测试放在 `src/features/<module>/**`。
 
-Settings 诊断现在位于：
+模块诊断统一位于：
 
 ```js
-globalThis.__PURE_TAVERN__.features.settings.storage;
-globalThis.__PURE_TAVERN__.features.settings.snapshots;
+globalThis.__PURE_TAVERN__.features.settings;
+globalThis.__PURE_TAVERN__.features.characters;
+globalThis.__PURE_TAVERN__.features.chats;
+globalThis.__PURE_TAVERN__.features['world-books'];
+globalThis.__PURE_TAVERN__.features.presets;
+globalThis.__PURE_TAVERN__.features.assets;
 ```
 
-未迁移的核心兼容路径仍由 `platform/legacy/register-core-routes.ts` 返回空数据或安全默认值；未来迁移时应将该路径移入对应功能模块。
+未迁移的核心兼容路径仍由 `platform/legacy/register-core-routes.ts` 返回空数据或安全默认值；迁移后由对应 Feature 注册同 method/path 覆盖 placeholder，并由模块自己的 contract 声明真实状态。

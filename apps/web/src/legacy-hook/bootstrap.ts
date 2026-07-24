@@ -3,6 +3,7 @@ import { installFeatureModules } from '../platform/features/feature-module';
 import {
   CompatibilityRouter,
   installCompatibilityFetch,
+  installCompatibilityXhr,
 } from '../platform/legacy/compatibility-router';
 import { registerCoreLegacyRoutes } from '../platform/legacy/register-core-routes';
 import { loadUpstreamMetadata } from '../platform/legacy/upstream-metadata';
@@ -19,6 +20,7 @@ const features = installFeatureModules(featureModules, {
   nativeFetch,
   storage: appStorage,
 });
+installCompatibilityXhr(router);
 
 const database = initializeStorageSafely(appStorage);
 void database.then((state) => {

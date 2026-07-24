@@ -101,7 +101,7 @@ features/<module>/
 ## M01 — Runtime / 模块运行时
 
 - **优先级**：P0
-- **当前状态**：`designed`（Legacy Hook/诊断已运行；通用模块注册器尚未实现）
+- **当前状态**：`browser-ready-foundation`（Legacy Hook、通用模块注册器、诊断与类型安全 Capability Registry 已运行；依赖图和错误隔离继续演进）
 - **核心性**：必需，不可删除
 - **新位置**：`apps/web/src/app/runtime/**`
 - **职责**：模块注册、依赖检查、Capability 注册、启动状态、错误隔离。
@@ -181,8 +181,8 @@ features/<module>/
   - `CharacterCardCodec` 支持 Legacy JSON、Character Card V2/V3，PNG `chara`/`ccv3` tEXt chunk 使用 `Uint8Array` 边界检查解析，导出 PNG 时写回 `chara` 与可生成的 `ccv3`；
   - Legacy routes 覆盖 `all/get/create/edit/rename/edit-avatar/edit-attribute/merge-attributes/delete/import/duplicate/export`，同时支持原版 multipart FormData 与 JSON create；
   - 角色文件名与显示名解耦：重命名生成新的唯一 avatar key 并迁移 Blob，不依赖显示名找头像；
-  - 模块声明 `runtime-assets.json`，构建脚本自动复制 `characters-service-worker.js`；Service Worker 只处理 `/thumbnail?type=avatar&file=...` 与 `/characters/<file>`，其它请求继续走网络；
-  - `/api/characters/chats` 保持空列表兼容，真实聊天迁移归 M05。
+  - 头像 Blob 由 M13 共享根 scope Service Worker 提供 `/thumbnail?type=avatar&file=...` 与 `/characters/<file>`；Characters 通过 `AssetServiceWorkerCapability` 等待 Worker，不再安装第二个 Worker；
+  - `/api/characters/chats` 已由 M05 覆盖；Characters 的独立 fallback 仅在 Chats 模块未安装时保留空列表兼容。
 - **验收**：Vitest 覆盖 Repository、Blob、V2/V3、PNG chunk、CRUD、重复、导入导出和错误响应；真实 Chrome 门禁通过原版 UI/接口流创建、列表 DOM、头像加载、编辑后刷新保留、复制、重命名、JSON/PNG 导入导出和删除，并保持零 404、零异常、零意外兼容网络请求。
 - **Service Worker 生命周期/清站点数据**：首次安装后由 `navigator.serviceWorker.ready` 等待可用；清站点数据会同时清除 IndexedDB 与 Service Worker，下一次启动重新安装并从空角色库开始。
 - **可选后端**：未来可通过相同 Port 添加角色同步、大文件存储或共享角色库；本阶段不启动 Node 服务端。
@@ -192,7 +192,7 @@ features/<module>/
 ## M05 — Chats / 聊天与消息
 
 - **优先级**：P1
-- **初始状态**：`inventory`
+- **当前状态**：`completed`（纯前端范围：单角色聊天 CRUD、检索、recent、导入导出与原版 UI 闭环）
 - **原始前端**：
   - `public/script.js`
   - `public/scripts/chats.js`
@@ -201,11 +201,19 @@ features/<module>/
   - `public/scripts/streaming-display.js`
 - **原始服务端**：`src/endpoints/chats.js`
 - **原始接口**：`save`、`get`、`rename`、`delete`、`export`、`import`、`search`、`recent` 及 group chat 子路径。
-- **目标 Port**：`ChatRepository`、`MessageRepository`、`ChatImportExportPort`。
-- **浏览器实现**：IndexedDB；消息与聊天元数据分表；支持 JSONL 兼容导入导出。
-- **可选后端**：多设备同步、全文检索、远程备份。
-- **依赖**：M02；通常依赖 M04，但数据模型不得硬依赖角色文件名。
-- **删除影响**：核心模块，不可整体删除；书签、搜索、分支可独立删除。
+- **已实现 Port/模块**：`apps/web/src/features/chats/**` 中的 `ChatRepository`、`MessageRepository`、`ChatImportExportPort` 与 owner alias Port；中央只在 Feature Registry 注册 `chatsFeature`。
+- **浏览器实现**：
+  - 固定通用 `records` 使用 `chats / sessions / <stable-chat-id>`、`chats / messages / <stable-chat-id>` 与 `chats / owner-aliases / <avatar-url>` 逻辑 collection；不新增 Object Store 或数据库版本；
+  - Header、完整 `chat_metadata` 与 opaque messages 分离存储，完整保留 `extra/swipes/swipe_id/swipe_info`、书签/分支和未来扩展字段；
+  - `save/get/rename/delete/export/import/search/recent` 与 `/api/characters/chats` 覆盖原版单聊 DTO；同 owner 写入串行化，支持完整文档 last-writer-wins 和 `integrity/force`；
+  - JSONL 逐行校验并兼容 Chub swipe；JSON codecs 支持 Ooba、Agnai、CAI Tools、Kobold Lite、RisuAI；TXT 导出过滤系统隐藏消息；
+  - Characters 通过类型安全 `CharacterIdentityCapability` 暴露 M04 stable ID；Chats 不直接 import Characters 内部实现。角色 avatar 重命名不改变 owner，recent 可反查当前 avatar；无 Characters 时 alias collection 自行生成稳定 owner；
+  - Chats 注册 owner lifecycle capability，Characters 仅在 `delete_chats:true` 时调用；`false` 保留聊天；IndexedDB 失败时各 Repository 降级为页面会话内存。
+- **模块边界**：`/api/chats/group/*` 和 `/api/groups/*` 仍归 M06；模型请求和世界书业务不属于 M05。聊天附件文件由 M13 提供，M05 只把 opaque attachment metadata 随 chat document 保存。
+- **验收**：Vitest 覆盖 Repository、opaque 往返、并发、integrity、search/recent、JSONL/JSON、错误和 memory fallback；真实 Chrome 门禁覆盖原版角色进入聊天、问候自动保存、本地用户消息、刷新恢复、附件读取/恢复/删除、第二聊天、Manage Chat Files、搜索/重命名/recent/导入导出/删除及角色 rename/delete_chats 生命周期。
+- **可选后端**：未来通过同一 Port 增加多设备同步、远程全文检索和备份；不成为本地运行前提。
+- **依赖**：M02；可选消费 M04 identity capability，但缺少 Characters 时仍可独立存储。
+- **删除影响**：核心模块不可整体删除；搜索、recent、书签/分支增强可独立演进。
 
 ## M06 — Groups / 群组聊天
 
@@ -223,13 +231,19 @@ features/<module>/
 ## M07 — World Books / 世界书
 
 - **优先级**：P1
-- **初始状态**：`inventory`
+- **当前状态**：`completed`（纯前端范围：文档 CRUD、导入、角色嵌入 lore 与原版匹配闭环）
 - **原始前端**：`public/scripts/world-info.js`
 - **原始服务端**：`src/endpoints/worldinfo.js`
 - **原始接口**：`list`、`get`、`delete`、`import`、`edit`。
-- **目标 Port**：`WorldBookRepository`、`WorldInfoMatcher`。
-- **浏览器实现**：IndexedDB；匹配算法放 Worker 的可行性后续评估。
-- **可选后端**：共享世界书、同步。
+- **已实现 Port/模块**：`apps/web/src/features/world-books/**` 中的 `WorldBookRepository`、`WorldInfoMatcher` 边界、Import Codec 与 Legacy adapter。
+- **浏览器实现**：
+  - 通用 `records` 使用 `world-books / books / <stable-book-id>` 与 `world-books / aliases / <legacy-file-id>`；文件名 alias 与 stable ID 解耦；
+  - `/api/worldinfo/list|get|edit|delete|import` 已桥接；原生 `{ entries }` JSON 和前端已转换的 Novel/Agnai/Risu 数据可导入；
+  - 顶层、entry、extensions 未来字段按 opaque JSON 完整往返；写入串行化，IndexedDB 失败后降级为页面内存；
+  - `WorldNamesCapability` 由 M07 提供，Settings 在请求时动态组合 `world_names`，两个模块不互相读取 Repository；
+  - 匹配算法继续使用未修改的原版 `/scripts/world-info.js`，本阶段不复制到新实现或 Worker。
+- **验收**：真实 Chrome 覆盖原版 World Editor、CRUD/JSON import、关键词/constant/disabled 匹配、opaque 字段、Settings world names，以及 Character Card embedded lore 导入。
+- **可选后端**：未来通过同一 Port 增加共享世界书和同步，不成为本地启动前提。
 - **依赖**：M02；提示词装配模块可选依赖本模块 Capability。
 - **删除影响**：聊天仍可运行，只失去世界书注入。
 
@@ -248,7 +262,7 @@ features/<module>/
 ## M09 — Presets / 提示词预设、主题与快捷回复
 
 - **优先级**：P1/P2
-- **初始状态**：`inventory`
+- **当前状态**：`completed`（纯前端范围：11 类默认种子、CRUD、恢复、导入导出与 Legacy bootstrap）
 - **原始前端**：
   - `public/scripts/preset-manager.js`
   - `public/scripts/PromptManager.js`
@@ -261,9 +275,16 @@ features/<module>/
   - `src/endpoints/themes.js`
   - `src/endpoints/quick-replies.js`
   - `src/endpoints/moving-ui.js`
-- **目标 Port**：按类型拆分 `PresetRepository<T>`，禁止继续由 Settings 聚合返回。
-- **浏览器实现**：IndexedDB，JSON 导入导出。
-- **可选后端**：预设同步和共享。
+- **已实现 Port/模块**：`apps/web/src/features/presets/**` 中按类型命名空间化的 `PresetRepository<T>`、seed/import-export service 与 Legacy routes；Settings 不拥有 preset records。
+- **浏览器实现**：
+  - 支持 kobold、novel、openai、textgenerationwebui、instruct、context、sysprompt、reasoning、theme、moving-ui、quick-reply；
+  - 通用 records 使用 documents/aliases/seed-state/tombstones collection；stable ID 与 Legacy 名称解耦；
+  - 构建从当前只读 upstream 生成 134 条 SHA-256 默认清单；新增默认被补入，未修改默认可升级，用户修改和删除 tombstone 不被覆盖；
+  - `/api/presets/*`、themes、quick-replies、moving-ui routes 已接入；单文档和分类 bundle JSON 导入导出要求显式冲突策略；
+  - `LegacyPresetBootstrapCapability` 向 Settings 提供原版 DTO，Settings 只在请求时组合，不直接读取 M09 存储；
+  - IndexedDB 失败后固定降级到页面内存并暴露诊断。
+- **验收**：真实 Chrome 覆盖 11 类默认数据与原版 select、原版 `PresetManager` 保存/删除/默认恢复，以及 theme/Quick Reply/Moving UI 保存和 opaque 字段往返。
+- **可选后端**：未来通过同一 Port 增加预设同步和共享。
 - **依赖**：M02、M03。
 - **删除影响**：各预设类型可独立删除；保留默认提示词即可继续生成。
 
@@ -327,7 +348,7 @@ features/<module>/
 ## M13 — Assets / 文件、图片、背景与附件
 
 - **优先级**：P1
-- **当前状态**：`browser-ready-foundation`（通用 Blob/模块 runtime-assets 解析基础已完成；背景、附件、sprites 等具体资产仍属各后续模块）
+- **当前状态**：`completed`（纯前端本地范围：背景、附件、用户图片/persona 头像、sprites、扩展资产与共享资源 Worker）
 - **原始前端**：
   - `public/scripts/backgrounds.js`
   - `public/scripts/chats.js` 的附件逻辑
@@ -339,14 +360,18 @@ features/<module>/
   - `src/endpoints/assets.js`
   - `src/endpoints/avatars.js`
   - `src/endpoints/sprites.js`
-- **目标 Port**：`BlobRepository`、`AssetIndex`、`ImageProcessor`。
+- **已实现 Port/模块**：`apps/web/src/features/assets/**` 中的 `BlobRepository`、`AssetIndex`、`ImageProcessor`、默认背景 seeder 与 Legacy adapters。
 - **浏览器实现**：
-  - 固定通用 `blobs` Object Store 已在 M02 完成，模块使用命名空间 collection 存放二进制与 JSON metadata，不新增 IndexedDB Object Store 或数据库版本；
-  - `prepare-legacy-runtime.mjs` 自动扫描 `features/*/runtime-assets.json` 并复制模块 runtime assets，避免为每个功能修改中央构建脚本；
-  - Characters 已使用该基础提供头像 Service Worker 与 PNG/JSON Blob 往返验证。
-- **未迁移范围**：背景、聊天附件、用户图片、sprites、通用文件管理与图片处理仍在各自模块中后续完成。
-- **可选后端**：远程 Blob/S3/WebDAV Adapter。
-- **依赖**：M02。
+  - 固定通用 `blobs`/`records` 使用 assets 命名空间存放稳定 Blob ID、索引、Legacy path alias、背景文件夹与 seed state，不新增 IndexedDB Object Store 或数据库版本；
+  - files、images、backgrounds、image-metadata、avatars、sprites、assets 各 route family 已接入；背景 rename 只迁移 alias/metadata，不复制 Blob；
+  - `BrowserImageProcessor` 验证 PNG/JPEG/GIF/WebP、尺寸和动画标记，并通过 Canvas 能力提供头像 crop/resize；不支持时返回明确错误；
+  - 文件名、MIME/signature、单文件大小、ZIP 文件数/压缩与展开总量、zip-slip 均有门禁；远程 asset 遵循浏览器 CORS；
+  - 构建生成默认背景 hash 清单，新 upstream 默认可增量补入，用户删除以 seed state 保留；
+  - 共享根 scope Service Worker 统一解析 Character 头像、背景、persona、聊天附件、用户图片、sprites 与 extension/library URL；Worker 无版本打开现有数据库，不创建 schema；
+  - Characters 通过 `AssetServiceWorkerCapability` 复用该 Worker；聊天只保存附件 metadata，实际 Blob 生命周期归 M13。
+- **验收**：真实 Chrome 覆盖默认背景、原版背景列表 DOM、上传/缩略图/文件夹/rename/delete、聊天附件跨刷新、用户图片、persona、sprite、extension asset 与直接 Blob URL；零资源 404、零运行时异常。
+- **可选后端**：未来提供远程 Blob/S3/WebDAV Adapter；浏览器 CORS 与站点配额不能被本地实现绕过。
+- **依赖**：M02；与 M04/M05 仅通过 capability 或公开 URL DTO 协作。
 - **删除影响**：媒体子模块可删；文本聊天仍应工作。
 
 ## M14 — Secrets / 密钥
@@ -365,7 +390,7 @@ features/<module>/
 ## M15 — Tokenizers / Token 计算
 
 - **优先级**：P2
-- **初始状态**：`inventory`
+- **初始状态**：`inventory`（M05 浏览器门禁仅增加 `/api/tokenizers/llama/encode` 四字符粗估计兼容边界；明确不代表 M15 tokenizer 已迁移）
 - **原始前端**：`public/scripts/tokenizers.js`
 - **原始服务端**：`src/endpoints/tokenizers.js`、`src/tokenizers/**`
 - **目标 Port**：`TokenizerPort`。
@@ -462,7 +487,7 @@ features/<module>/
 ## M23 — Stats / 使用统计
 
 - **优先级**：P3
-- **初始状态**：`deferred`
+- **初始状态**：`deferred`（M05 浏览器门禁仅增加 `/api/stats/update` 丢弃式 200 兼容边界；不持久化、不代表 M23 已迁移）
 - **原始前端**：`public/scripts/stats.js`
 - **原始服务端**：`src/endpoints/stats.js`
 - **目标 Port**：`StatsRepository`。

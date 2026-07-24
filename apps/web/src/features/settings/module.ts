@@ -11,7 +11,7 @@ import { registerSettingsLegacyRoutes } from './legacy/register-routes';
 
 export const settingsFeature: FeatureModule = {
   id: 'settings',
-  install({ router, nativeFetch, records }) {
+  install({ router, nativeFetch, records, capabilities }) {
     const repository = new ResilientSettingsRepository(new IndexedDbSettingsRepository(records));
     const service = new SettingsService(repository, async () => {
       const response = await nativeFetch('/__pure_tavern/default-settings.json');
@@ -37,7 +37,7 @@ export const settingsFeature: FeatureModule = {
     );
     const snapshots = new SettingsSnapshotService(service, snapshotRepository);
 
-    registerSettingsLegacyRoutes(router, service, snapshots);
+    registerSettingsLegacyRoutes(router, service, snapshots, capabilities);
 
     return {
       diagnostics: {
