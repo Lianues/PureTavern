@@ -269,8 +269,16 @@ function createUi() {
   if (document.querySelector('#pure-tavern-data-management-entry')) return;
   const entry = document.createElement('section');
   entry.id = 'pure-tavern-data-management-entry';
-  entry.innerHTML =
-    '<strong>Pure Tavern 数据管理</strong><p class="ptdm-muted">统一导出、导入、本地恢复点与容量检查。</p><button type="button" class="menu_button">打开数据管理</button>';
+  entry.innerHTML = `
+    <div class="inline-drawer">
+      <div class="inline-drawer-toggle inline-drawer-header">
+        <b>Pure Tavern 数据管理</b>
+        <div class="inline-drawer-icon fa-solid fa-circle-chevron-down down"></div>
+      </div>
+      <div class="inline-drawer-content">
+        <button type="button" class="menu_button">打开数据管理</button>
+      </div>
+    </div>`;
   (document.querySelector('#extensions_settings2') || document.body).prepend(entry);
 
   const dialog = document.createElement('dialog');
@@ -282,7 +290,7 @@ function createUi() {
       <progress id="ptdm-quota" class="ptdm-progress" max="100" value="0"></progress>
       <section class="ptdm-section"><h3>模块</h3><div id="ptdm-modules"></div><label class="ptdm-danger"><input id="ptdm-include-secrets" type="checkbox"> 包含明文 Secrets（危险，不加密）</label></section>
       <section class="ptdm-section"><h3>手动导出</h3><div class="ptdm-toolbar"><button id="ptdm-export" class="menu_button">导出 ZIP</button><button id="ptdm-create-backup" class="menu_button">创建本地恢复点</button></div></section>
-      <section class="ptdm-section"><h3>导入与恢复</h3><div class="ptdm-toolbar"><input id="ptdm-import-file" type="file" accept=".zip,application/zip"><select id="ptdm-strategy"><option value="merge">合并并覆盖冲突</option><option value="skip">跳过冲突</option><option value="replace-module">替换选中模块</option><option value="replace-all">替换归档模块</option></select><button id="ptdm-import-confirm" class="menu_button" disabled>执行导入</button></div><pre id="ptdm-preview" class="ptdm-report ptdm-hidden"></pre><pre id="ptdm-report" class="ptdm-report ptdm-hidden"></pre></section>
+      <section class="ptdm-section"><h3>导入与恢复</h3><div class="ptdm-toolbar"><input id="ptdm-import-file" class="ptdm-hidden" type="file" accept=".zip,application/zip,application/x-zip-compressed"><label for="ptdm-import-file" class="menu_button ptdm-file-picker">选择数据 ZIP</label><span id="ptdm-import-file-name" class="ptdm-muted" title="尚未选择文件">尚未选择文件</span><select id="ptdm-strategy"><option value="merge">合并并覆盖冲突</option><option value="skip">跳过冲突</option><option value="replace-module">替换选中模块</option><option value="replace-all">替换归档模块</option></select><button id="ptdm-import-confirm" class="menu_button" disabled>执行导入</button></div><pre id="ptdm-preview" class="ptdm-report ptdm-hidden"></pre><pre id="ptdm-report" class="ptdm-report ptdm-hidden"></pre></section>
       <section class="ptdm-section"><h3>本地恢复点</h3><div id="ptdm-backups"></div></section>
     </div>`;
   document.body.appendChild(dialog);
@@ -300,7 +308,14 @@ function createUi() {
   dialog.querySelector('#ptdm-create-backup').addEventListener('click', () => void createBackup());
   dialog.querySelector('#ptdm-import-file').addEventListener('change', async (event) => {
     const file = event.target.files?.[0];
-    if (!file) return;
+    const fileName = dialog.querySelector('#ptdm-import-file-name');
+    if (!file) {
+      fileName.textContent = '尚未选择文件';
+      fileName.title = '尚未选择文件';
+      return;
+    }
+    fileName.textContent = file.name;
+    fileName.title = file.name;
     try {
       await previewImport(file);
     } catch (error) {

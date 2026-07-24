@@ -19,6 +19,9 @@ describe('Pure Tavern data management first-party extension', () => {
     });
     expect(assets).toContain('scripts/extensions/pure-tavern-data-management/index.js');
     expect(script).toContain('pure-tavern-data-management-dialog');
+    expect(script).toContain('inline-drawer-toggle inline-drawer-header');
+    expect(script).toContain('inline-drawer-content');
+    expect(script).toContain('打开数据管理');
     expect(script).toContain('/api/backups/archive');
     expect(prepareScript).toContain("extensionId: 'pure-tavern.data-management'");
     expect(prepareScript).toContain("sourceKind: 'pure-tavern-first-party'");

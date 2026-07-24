@@ -1,11 +1,3 @@
-#pure-tavern-data-management-entry {
-  margin: 0.5rem 0;
-  padding: 0.75rem;
-  border: 1px solid var(--SmartThemeBorderColor);
-  border-radius: 8px;
-  background: color-mix(in srgb, var(--SmartThemeBlurTintColor) 82%, transparent);
-}
-
 #pure-tavern-data-management-dialog {
   width: min(1000px, 94vw);
   max-height: 92vh;
@@ -18,6 +10,38 @@
 
 #pure-tavern-data-management-dialog::backdrop {
   background: rgb(0 0 0 / 65%);
+}
+
+#pure-tavern-data-management-entry button,
+#pure-tavern-data-management-dialog button,
+#pure-tavern-data-management-dialog .ptdm-file-picker {
+  width: auto !important;
+  min-width: max-content;
+  flex: 0 0 auto;
+  writing-mode: horizontal-tb !important;
+  text-orientation: mixed !important;
+  white-space: nowrap !important;
+  word-break: keep-all;
+}
+
+#pure-tavern-data-management-dialog .ptdm-file-picker {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+#ptdm-import-file-name {
+  min-width: 0;
+  max-width: min(360px, 100%);
+  overflow: hidden;
+  color: var(--SmartThemeBodyColor);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ptdm-toolbar {
+  flex-wrap: wrap;
 }
 
 .ptdm-header,
