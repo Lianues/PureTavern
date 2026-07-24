@@ -1,0 +1,387 @@
+name: Build Test Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Stable version without a v prefix (for example 0.2.0)
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: pure-tavern-test-release
+  cancel-in-progress: false
+
+env:
+  RELEASE_VERSION: ${{ inputs.version }}
+
+jobs:
+  preflight:
+    name: Validate test release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Validate version, branch and tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if [[ "$GITHUB_REF" != "refs/heads/main" ]]; then
+            echo "Test releases must run from main." >&2
+            exit 1
+          fi
+          node scripts/set-release-version.mjs "$RELEASE_VERSION" --check
+          CURRENT_VERSION="$(node -p "require('./package.json').version")"
+          if [[ "$CURRENT_VERSION" == "$RELEASE_VERSION" ]]; then
+            echo "Version $RELEASE_VERSION is already committed." >&2
+            exit 1
+          fi
+          TAG="test-v$RELEASE_VERSION"
+          if git ls-remote --exit-code --tags origin "refs/tags/$TAG" >/dev/null 2>&1; then
+            echo "Tag $TAG already exists." >&2
+            exit 1
+          fi
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "Release $TAG already exists." >&2
+            exit 1
+          fi
+
+  web:
+    name: Generic web ZIP
+    needs: preflight
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.17.1
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Apply version and build web
+        run: |
+          node scripts/set-release-version.mjs "$RELEASE_VERSION"
+          pnpm build
+
+      - name: Package generic web ZIP
+        run: |
+          mkdir -p release
+          cd apps/web/dist
+          zip -qr "$GITHUB_WORKSPACE/release/PureTavern-$RELEASE_VERSION-web.zip" .
+
+      - name: Upload reusable web build
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-dist
+          path: apps/web/dist
+          include-hidden-files: true
+          retention-days: 1
+
+      - name: Upload web release package
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-web
+          path: release/PureTavern-${{ inputs.version }}-web.zip
+          if-no-files-found: error
+          retention-days: 7
+
+  android:
+    name: Android test APK
+    needs: [preflight, web]
+    runs-on: ubuntu-latest
+    env:
+      PURE_TAVERN_VERSION_CODE: ${{ github.run_number }}
+      PURE_TAVERN_VERSION_NAME: ${{ inputs.version }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.17.1
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Set up Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+          cache: gradle
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android SDK 36
+        run: sdkmanager 'platforms;android-36' 'build-tools;36.0.0'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Download generic web build
+        uses: actions/download-artifact@v4
+        with:
+          name: web-dist
+          path: apps/web/dist
+
+      - name: Apply version and build APK
+        run: |
+          node scripts/set-release-version.mjs "$RELEASE_VERSION"
+          pnpm --filter @pure-tavern/mobile build:android:debug
+
+      - name: Stage Android package
+        run: |
+          mkdir -p release
+          cp apps/mobile/android/app/build/outputs/apk/debug/app-debug.apk "release/PureTavern-$RELEASE_VERSION-Android-debug.apk"
+
+      - name: Upload Android release package
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-android
+          path: release/*.apk
+          if-no-files-found: error
+          retention-days: 7
+
+  desktop:
+    name: ${{ matrix.name }} test package
+    needs: [preflight, web]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Windows
+            os: windows-latest
+            bundles: nsis
+          - name: macOS
+            os: macos-latest
+            bundles: dmg
+          - name: Linux
+            os: ubuntu-22.04
+            bundles: appimage,deb
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.17.1
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust build
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: apps/desktop/src-tauri -> target
+
+      - name: Install Linux system dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Download generic web build
+        uses: actions/download-artifact@v4
+        with:
+          name: web-dist
+          path: apps/web/dist
+
+      - name: Apply version and build desktop package
+        run: |
+          node scripts/set-release-version.mjs "${{ inputs.version }}"
+          pnpm --filter @pure-tavern/desktop exec tauri build --ci --bundles "${{ matrix.bundles }}"
+
+      - name: Upload desktop release package
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-desktop-${{ matrix.name }}
+          path: apps/desktop/src-tauri/target/release/bundle/**/*
+          if-no-files-found: error
+          retention-days: 7
+
+  ios:
+    name: iOS unsigned test IPA
+    needs: [preflight, web]
+    runs-on: macos-latest
+    timeout-minutes: 45
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.17.1
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Download generic web build
+        uses: actions/download-artifact@v4
+        with:
+          name: web-dist
+          path: apps/web/dist
+
+      - name: Apply version and sync iOS
+        run: |
+          node scripts/set-release-version.mjs "$RELEASE_VERSION"
+          pnpm --filter @pure-tavern/mobile sync:ios
+
+      - name: Build unsigned iOS application
+        run: |
+          xcodebuild \
+            -project apps/mobile/ios/App/App.xcodeproj \
+            -scheme App \
+            -configuration Release \
+            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath apps/mobile/ios/DerivedData \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            DEVELOPMENT_TEAM='' \
+            CURRENT_PROJECT_VERSION="$GITHUB_RUN_NUMBER" \
+            MARKETING_VERSION="$RELEASE_VERSION" \
+            build
+
+      - name: Package unsigned IPA
+        run: |
+          mkdir -p apps/mobile/ios/output/Payload
+          cp -R apps/mobile/ios/DerivedData/Build/Products/Release-iphoneos/App.app apps/mobile/ios/output/Payload/
+          cd apps/mobile/ios/output
+          /usr/bin/ditto -c -k --sequesterRsrc --keepParent Payload "PureTavern-$RELEASE_VERSION-iOS-unsigned.ipa"
+
+      - name: Upload iOS release package
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-ios
+          path: apps/mobile/ios/output/*.ipa
+          if-no-files-found: error
+          retention-days: 7
+
+  publish:
+    name: Commit, tag and publish test release
+    needs: [preflight, web, android, desktop, ios]
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Download release packages
+        uses: actions/download-artifact@v4
+        with:
+          pattern: release-*
+          path: release-assets
+          merge-multiple: true
+
+      - name: Verify main has not moved
+        run: |
+          set -euo pipefail
+          git fetch origin main --tags
+          if [[ "$(git rev-parse origin/main)" != "$GITHUB_SHA" ]]; then
+            echo "origin/main changed while packages were building; refusing to tag stale artifacts." >&2
+            exit 1
+          fi
+          TAG="test-v$RELEASE_VERSION"
+          if git rev-parse "$TAG" >/dev/null 2>&1; then
+            echo "Tag $TAG already exists." >&2
+            exit 1
+          fi
+
+      - name: Create version commit and test tag
+        run: |
+          set -euo pipefail
+          node scripts/set-release-version.mjs "$RELEASE_VERSION"
+          git diff --check
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \
+            package.json \
+            apps/desktop/package.json \
+            apps/desktop/src-tauri/Cargo.lock \
+            apps/desktop/src-tauri/Cargo.toml \
+            apps/desktop/src-tauri/tauri.conf.json \
+            apps/mobile/android/app/build.gradle \
+            apps/mobile/ios/App/App.xcodeproj/project.pbxproj \
+            apps/mobile/package.json \
+            apps/server/package.json \
+            apps/web/package.json \
+            apps/web/src/features/import-export/application/archive-service.ts \
+            apps/web/src/legacy-hook/bootstrap.ts \
+            packages/contracts/package.json \
+            packages/shared/package.json
+          git commit -m "chore(test-release): $RELEASE_VERSION"
+          TAG="test-v$RELEASE_VERSION"
+          git tag -a "$TAG" -m "$RELEASE_VERSION Test"
+          git push --atomic origin HEAD:main "refs/tags/$TAG"
+
+      - name: Create test release
+        run: |
+          set -euo pipefail
+          TAG="test-v$RELEASE_VERSION"
+          TITLE="$RELEASE_VERSION Test"
+          : > release-notes.txt
+          mapfile -d '' ASSETS < <(find release-assets -type f -print0)
+          if [[ "${#ASSETS[@]}" -eq 0 ]]; then
+            echo "No release packages were downloaded." >&2
+            exit 1
+          fi
+          gh release create "$TAG" "${ASSETS[@]}" \
+            --verify-tag \
+            --prerelease \
+            --title "$TITLE" \
+            --notes-file release-notes.txt

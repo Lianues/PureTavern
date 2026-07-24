@@ -7,16 +7,21 @@ const mobileRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '.
 const projectRoot = mobileRoot.replace(/[\\/]apps[\\/]mobile$/u, '');
 const iosRoot = path.join(mobileRoot, 'ios');
 
-const [project, info, iconContents, scheme, workflow, gitignore, icon, splash] = await Promise.all([
-  readFile(path.join(iosRoot, 'App/App.xcodeproj/project.pbxproj'), 'utf8'),
-  readFile(path.join(iosRoot, 'App/App/Info.plist'), 'utf8'),
-  readFile(path.join(iosRoot, 'App/App/Assets.xcassets/AppIcon.appiconset/Contents.json'), 'utf8'),
-  readFile(path.join(iosRoot, 'App/App.xcodeproj/xcshareddata/xcschemes/App.xcscheme'), 'utf8'),
-  readFile(path.join(projectRoot, '.github/workflows/ios-ipa.yml'), 'utf8'),
-  readFile(path.join(iosRoot, '.gitignore'), 'utf8'),
-  readFile(path.join(iosRoot, 'App/App/Assets.xcassets/AppIcon.appiconset/AppIcon-512@2x.png')),
-  readFile(path.join(iosRoot, 'App/App/Assets.xcassets/Splash.imageset/splash-2732x2732.png')),
-]);
+const [project, info, iconContents, scheme, workflow, gitignore, packageJson, icon, splash] =
+  await Promise.all([
+    readFile(path.join(iosRoot, 'App/App.xcodeproj/project.pbxproj'), 'utf8'),
+    readFile(path.join(iosRoot, 'App/App/Info.plist'), 'utf8'),
+    readFile(
+      path.join(iosRoot, 'App/App/Assets.xcassets/AppIcon.appiconset/Contents.json'),
+      'utf8',
+    ),
+    readFile(path.join(iosRoot, 'App/App.xcodeproj/xcshareddata/xcschemes/App.xcscheme'), 'utf8'),
+    readFile(path.join(projectRoot, '.github/workflows/ios-ipa.yml'), 'utf8'),
+    readFile(path.join(iosRoot, '.gitignore'), 'utf8'),
+    readFile(path.join(mobileRoot, 'package.json'), 'utf8'),
+    readFile(path.join(iosRoot, 'App/App/Assets.xcassets/AppIcon.appiconset/AppIcon-512@2x.png')),
+    readFile(path.join(iosRoot, 'App/App/Assets.xcassets/Splash.imageset/splash-2732x2732.png')),
+  ]);
 
 function pngMetadata(buffer) {
   assert.equal(buffer.toString('ascii', 1, 4), 'PNG');
@@ -31,7 +36,12 @@ assert.equal(
   (project.match(/PRODUCT_BUNDLE_IDENTIFIER = com\.puretavern\.app;/gu) ?? []).length,
   2,
 );
-assert.equal((project.match(/MARKETING_VERSION = 0\.1\.0;/gu) ?? []).length, 2);
+const appVersion = JSON.parse(packageJson).version;
+const escapedVersion = appVersion.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&');
+assert.equal(
+  (project.match(new RegExp(`MARKETING_VERSION = ${escapedVersion};`, 'gu')) ?? []).length,
+  2,
+);
 assert.match(info, /<string>PureTavern<\/string>/u);
 assert.match(iconContents, /AppIcon-512@2x\.png/u);
 assert.match(scheme, /BlueprintIdentifier = "504EC3031FED79650016851F"/u);

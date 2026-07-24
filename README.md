@@ -115,6 +115,28 @@ pnpm desktop:build
 
 桌面产物位于 `apps/desktop/src-tauri/target/release`。GitHub Actions 的 **Build Desktop Bundles** workflow 仅手动触发，可分别生成 Windows NSIS、macOS DMG、Linux AppImage 和 DEB 测试包。
 
+## 测试版发布
+
+GitHub Actions 的 **Build Test Release** workflow 用于手动创建一次完整测试版发布。运行时填写不带 `v` 的稳定版本号，例如 `0.2.0`。
+
+CI 会先构建并验证以下产物：
+
+- 通用 Web `dist` ZIP；
+- Android Debug APK；
+- Windows NSIS；
+- macOS DMG；
+- Linux AppImage 与 DEB；
+- iOS unsigned IPA。
+
+只有全部平台成功后，CI 才会：
+
+1. 创建 `chore(test-release): 0.2.0` 版本提交；
+2. 创建 `test-v0.2.0` annotated tag；
+3. 创建标题为 `0.2.0 Test`、正文为空的 GitHub Prerelease；
+4. 上传全部平台包和 `PureTavern-0.2.0-web.zip`。
+
+构建期间如果 `main` 已前移，发布阶段会拒绝提交和打 Tag，避免用过期源码创建 Release。当前测试版移动端和桌面端没有正式发布者签名：Android 为 Debug APK，iOS 为 unsigned IPA，桌面包会触发对应系统的未签名应用警告。
+
 ## 浏览器限制
 
 纯前端无法绕过目标服务的 CORS、TLS 和 Private Network Access 策略。当前密钥保存在浏览器本地，不应视为安全 Vault。
