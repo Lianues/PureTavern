@@ -32,7 +32,7 @@ apps/mobile/android/app/build/outputs/apk/debug/app-debug.apk
 - Android SDK Platform 36；
 - Android SDK Build Tools 36.0.0。
 
-GitHub Actions 会自动准备这些工具。推送相关改动到 `main` 后，可以从对应 Workflow Run 下载 APK artifact。
+GitHub Actions 会在手动运行 **Build Android APK** workflow 时准备这些工具并上传 APK artifact；提交或推送代码不会自动打包。
 
 Debug APK 仅用于测试。正式分发需要由发布者使用私有 keystore 签署 Release APK 或 AAB。
 

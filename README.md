@@ -88,7 +88,7 @@ pnpm android:open
 apps/mobile/android/app/build/outputs/apk/debug/app-debug.apk
 ```
 
-推送相关改动到 `main` 后，GitHub Actions 也会自动构建并上传 Debug APK artifact。Debug APK 适合测试；正式发布仍需配置私有签名密钥并构建 Release APK/AAB。
+GitHub Actions 不会在提交代码时自动打包。需要 APK 时，在仓库的 **Actions → Build Android APK → Run workflow** 中手动触发，完成后下载 Debug APK artifact。Debug APK 适合测试；正式发布仍需配置私有签名密钥并构建 Release APK/AAB。
 
 ## 浏览器限制
 

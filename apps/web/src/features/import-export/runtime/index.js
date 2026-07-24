@@ -142,18 +142,60 @@ async function saveBlob(blob, fileName) {
       const writable = await handle.createWritable();
       await writable.write(blob);
       await writable.close();
-      return;
+      return {
+        cancelled: false,
+        fileName: handle.name || fileName,
+        location: '你在系统文件选择器中选择的位置',
+      };
     } catch (error) {
       if (error?.name !== 'AbortError') console.warn(error);
-      if (error?.name === 'AbortError') return;
+      if (error?.name === 'AbortError') return { cancelled: true, fileName, location: '' };
     }
   }
+  if (typeof globalThis.File === 'function' && typeof globalThis.navigator?.share === 'function') {
+    const file = new globalThis.File([blob], fileName, { type: 'application/zip' });
+    const shareData = { files: [file], title: 'PureTavern 数据归档' };
+    let canShare;
+    try {
+      canShare = !globalThis.navigator.canShare || globalThis.navigator.canShare(shareData);
+    } catch (error) {
+      canShare = false;
+      console.warn(error);
+    }
+    if (canShare) {
+      try {
+        await globalThis.navigator.share(shareData);
+        return {
+          cancelled: false,
+          fileName,
+          location: '你在系统文件/分享面板中选择的位置',
+        };
+      } catch (error) {
+        if (error?.name === 'AbortError') return { cancelled: true, fileName, location: '' };
+        console.warn(error);
+      }
+    }
+  }
+
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement('a');
   anchor.href = url;
   anchor.download = fileName;
+  anchor.style.display = 'none';
+  document.body.appendChild(anchor);
   anchor.click();
-  setTimeout(() => URL.revokeObjectURL(url), 0);
+  anchor.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 60_000);
+  return {
+    cancelled: false,
+    fileName,
+    location: '浏览器/系统默认下载目录（通常是 Download/下载）',
+  };
+}
+
+function notifySavedFile(prefix, result) {
+  if (result.cancelled) return;
+  notify('success', `${prefix}。文件：${result.fileName}；位置：${result.location}`);
 }
 
 async function exportArchive() {
@@ -162,8 +204,8 @@ async function exportArchive() {
       moduleIds: selectedModules(),
       includeSecrets: includeSecrets(),
     });
-    await saveBlob(result.blob, result.fileName);
-    notify('success', '数据归档已导出。');
+    const saved = await saveBlob(result.blob, result.fileName);
+    notifySavedFile('数据归档已导出', saved);
   } catch (error) {
     notify('error', error.message);
   }
@@ -186,7 +228,8 @@ async function createBackup() {
 async function downloadBackup(id) {
   try {
     const result = await fetchArchive(`${API}/local/download`, { id });
-    await saveBlob(result.blob, result.fileName);
+    const saved = await saveBlob(result.blob, result.fileName);
+    notifySavedFile('恢复点已导出', saved);
   } catch (error) {
     notify('error', error.message);
   }
