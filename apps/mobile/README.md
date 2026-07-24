@@ -36,6 +36,10 @@ GitHub Actions 会在手动运行 **Build Android APK** workflow 时准备这些
 
 Debug APK 仅用于测试。正式分发需要由发布者使用私有 keystore 签署 Release APK 或 AAB。
 
+## 文件导出
+
+Android 外壳提供通用的系统文件保存器。Web 下载层通过 `ACTION_CREATE_DOCUMENT` 打开系统文件选择器，并分块写入用户选择的位置。此流程使用用户对目标文件的一次性授权，不申请 `READ_EXTERNAL_STORAGE`、`WRITE_EXTERNAL_STORAGE` 或 `MANAGE_EXTERNAL_STORAGE`。
+
 ## 品牌资源
 
 Android launcher 和 splash 由以下脚本从 Web 的统一 PureTavern 图标生成：

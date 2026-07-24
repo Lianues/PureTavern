@@ -23,9 +23,13 @@ describe('PureTavern data management first-party extension', () => {
     expect(script).toContain('inline-drawer-content');
     expect(script).toContain('打开数据管理');
     expect(script).toContain('/api/backups/archive');
+    expect(script).toContain('PureTavernFileSaver');
+    expect(script).toContain('NATIVE_SAVE_CHUNK_SIZE');
+    expect(script).toContain('你在 Android 系统文件选择器中选择的位置');
     expect(script).toContain('你在系统文件/分享面板中选择的位置');
     expect(script).toContain('浏览器/系统默认下载目录（通常是 Download/下载）');
     expect(script).toContain('globalThis.navigator.share(shareData)');
+    expect(script).toContain('Web 页面无法确认文件是否写入');
     expect(script).toContain("notifySavedFile('数据归档已导出', saved)");
     expect(script).toContain("notifySavedFile('恢复点已导出', saved)");
     expect(prepareScript).toContain("extensionId: 'pure-tavern.data-management'");

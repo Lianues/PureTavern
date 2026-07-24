@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
+    "test": "node scripts/verify-file-saver.mjs",
     "sync:android": "cap sync android",
     "open:android": "cap sync android && cap open android",
     "build:android:debug": "cap sync android && node scripts/run-gradle.mjs assembleDebug"

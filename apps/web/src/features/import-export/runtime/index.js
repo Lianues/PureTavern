@@ -132,7 +132,63 @@ async function fetchArchive(path, body) {
   return { blob: await response.blob(), fileName };
 }
 
+const NATIVE_SAVE_CHUNK_SIZE = 512 * 1024;
+
+function encodeBase64(buffer) {
+  const bytes = new Uint8Array(buffer);
+  const blocks = [];
+  for (let offset = 0; offset < bytes.length; offset += 0x8000) {
+    blocks.push(String.fromCharCode(...bytes.subarray(offset, offset + 0x8000)));
+  }
+  return globalThis.btoa(blocks.join(''));
+}
+
+async function saveWithNativeFilePicker(blob, fileName) {
+  const saver = globalThis.Capacitor?.Plugins?.PureTavernFileSaver;
+  if (
+    typeof saver?.beginSave !== 'function' ||
+    typeof saver?.writeChunk !== 'function' ||
+    typeof saver?.finishSave !== 'function'
+  ) {
+    return null;
+  }
+
+  const target = await saver.beginSave({
+    fileName,
+    mimeType: blob.type || 'application/zip',
+  });
+  if (target.cancelled) return { cancelled: true, confirmed: false, fileName, location: '' };
+  if (!target.sessionId) throw new Error('系统文件选择器未创建保存会话。');
+
+  try {
+    for (let offset = 0; offset < blob.size; offset += NATIVE_SAVE_CHUNK_SIZE) {
+      const data = encodeBase64(
+        await blob.slice(offset, offset + NATIVE_SAVE_CHUNK_SIZE).arrayBuffer(),
+      );
+      await saver.writeChunk({ sessionId: target.sessionId, data });
+    }
+    await saver.finishSave({ sessionId: target.sessionId });
+  } catch (error) {
+    try {
+      await saver.abortSave?.({ sessionId: target.sessionId });
+    } catch (abortError) {
+      console.warn(abortError);
+    }
+    throw error;
+  }
+
+  return {
+    cancelled: false,
+    confirmed: true,
+    fileName: target.fileName || fileName,
+    location: '你在 Android 系统文件选择器中选择的位置',
+  };
+}
+
 async function saveBlob(blob, fileName) {
+  const nativeResult = await saveWithNativeFilePicker(blob, fileName);
+  if (nativeResult) return nativeResult;
+
   if (globalThis.showSaveFilePicker) {
     try {
       const handle = await globalThis.showSaveFilePicker({
@@ -144,12 +200,15 @@ async function saveBlob(blob, fileName) {
       await writable.close();
       return {
         cancelled: false,
+        confirmed: true,
         fileName: handle.name || fileName,
         location: '你在系统文件选择器中选择的位置',
       };
     } catch (error) {
       if (error?.name !== 'AbortError') console.warn(error);
-      if (error?.name === 'AbortError') return { cancelled: true, fileName, location: '' };
+      if (error?.name === 'AbortError') {
+        return { cancelled: true, confirmed: false, fileName, location: '' };
+      }
     }
   }
   if (typeof globalThis.File === 'function' && typeof globalThis.navigator?.share === 'function') {
@@ -167,11 +226,14 @@ async function saveBlob(blob, fileName) {
         await globalThis.navigator.share(shareData);
         return {
           cancelled: false,
+          confirmed: false,
           fileName,
           location: '你在系统文件/分享面板中选择的位置',
         };
       } catch (error) {
-        if (error?.name === 'AbortError') return { cancelled: true, fileName, location: '' };
+        if (error?.name === 'AbortError') {
+          return { cancelled: true, confirmed: false, fileName, location: '' };
+        }
         console.warn(error);
       }
     }
@@ -188,6 +250,7 @@ async function saveBlob(blob, fileName) {
   setTimeout(() => URL.revokeObjectURL(url), 60_000);
   return {
     cancelled: false,
+    confirmed: false,
     fileName,
     location: '浏览器/系统默认下载目录（通常是 Download/下载）',
   };
@@ -195,7 +258,12 @@ async function saveBlob(blob, fileName) {
 
 function notifySavedFile(prefix, result) {
   if (result.cancelled) return;
-  notify('success', `${prefix}。文件：${result.fileName}；位置：${result.location}`);
+  const details = `文件：${result.fileName}；位置：${result.location}`;
+  if (result.confirmed) {
+    notify('success', `${prefix}。${details}`);
+    return;
+  }
+  notify('info', `已将下载请求交给系统处理，Web 页面无法确认文件是否写入。${details}`);
 }
 
 async function exportArchive() {
