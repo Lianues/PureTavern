@@ -124,7 +124,12 @@ pnpm vscode:build
 pnpm vscode:package
 ```
 
-扩展 ID 为 `lianues.pure-tavern`，作者为 `Limerence`。GitHub Actions 的 **Build VS Code Extension** workflow 仅手动触发。
+扩展 ID 为 `lianues.pure-tavern`，作者为 `Limerence`。可以从以下扩展市场安装和体验：
+
+- [Visual Studio Marketplace](https://marketplace.visualstudio.com/items?itemName=Lianues.pure-tavern)
+- [Open VSX Registry](https://open-vsx.org/extension/Lianues/pure-tavern)
+
+GitHub Actions 的 **Build VS Code Extension** workflow 仅手动触发。
 
 ## 测试版发布
 
