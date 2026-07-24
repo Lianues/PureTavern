@@ -4,6 +4,7 @@ dist/
 coverage/
 .vite/
 *.tsbuildinfo
+.wrangler
 
 # Environment and local tooling
 .env
