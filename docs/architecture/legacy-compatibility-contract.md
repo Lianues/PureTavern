@@ -58,8 +58,9 @@ Pure Tavern 将 SillyTavern 原版 UI/交互作为长期保留的上游兼容层
 - Tokenizers 的 35 条 Legacy 路径由 M15 feature manifest 覆盖，使用统一 `tokenx` 近似计数并明确报告 `approximate`，不等价于模型专用 tokenizer；
 - Secrets 的 8 条 Legacy 路径由 M14 feature manifest 覆盖，使用本地明文 IndexedDB、多值 active 语义和窄 CredentialResolver；该状态不代表加密或 Vault 安全性；
 - Generation 的 status/generate/bias 由 M12 manifest 覆盖，仅声明 Chat Completion 浏览器直连；26 个 source 有 Adapter，但实际可达性仍取决于厂商 CORS/TLS，非聊天主 API未迁移；
+- Stats 的 get/update/recreate 由 M23 manifest 覆盖，完整文档保存到 IndexedDB，recreate 通过 M05 只读 Capability 派生，统计失败不进入聊天写事务；
 - `/csrf-token`、`/version`、`/api/users/me` 等仍是 UI 启动固定兼容响应；
-- 群组、Horde、非 CORS/私有 Git、Node plugins 和丢弃式 stats 等仍是空数据、安全默认或明确降级响应。
+- 群组、Horde、非 CORS/私有 Git 和 Node plugins 等仍是空数据、安全默认或明确降级响应。
 
 契约 schema v2 使用 `dataCapabilities` 分类。标记为 `bootstrap-compatibility-only`、`bootstrap-empty-response-not-migrated`、`extension-loading-disabled` 或其他明确降级状态的路径都不是已完成业务能力；是否迁移以 feature manifest 的 `migrationStatus` 为准。
 

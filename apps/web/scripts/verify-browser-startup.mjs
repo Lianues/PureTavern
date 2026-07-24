@@ -2169,6 +2169,24 @@ try {
       });
       const recent = recentResponse.ok ? await recentResponse.json() : [];
 
+      const statsModule = await import('/scripts/stats.js');
+      await statsModule.getStats();
+      const statsCountBefore = Number(statsModule.charStats?.[createdAvatar]?.user_msg_count ?? 0);
+      await statsModule.statMesProcess(
+        {
+          is_user: true,
+          mes: 'Browser incremental stats marker',
+          send_date: '2026-07-24T00:00:00.000Z',
+        },
+        'user',
+        scriptModule.characters,
+        scriptModule.this_chid,
+        '',
+      );
+      await delay(150);
+      await statsModule.getStats();
+      const statsCountAfter = Number(statsModule.charStats?.[createdAvatar]?.user_msg_count ?? 0);
+
       return {
         available: true,
         mainChatName,
@@ -2196,6 +2214,12 @@ try {
           recent[0]?.avatar === createdAvatar &&
           recent[0]?.file_name === mainChatName + '.jsonl',
         metadataBeforeReload: scriptModule.chat_metadata?.browser_marker ?? null,
+        statsSeed: {
+          avatar: createdAvatar,
+          countBefore: statsCountBefore,
+          countAfter: statsCountAfter,
+          incrementalUpdateOk: statsCountAfter === statsCountBefore + 1,
+        },
         routesHandled: {
           get: routeHandled('/api/chats/get'),
           save: routeHandled('/api/chats/save'),
@@ -2326,6 +2350,96 @@ try {
   });
   const chatPostReload = chatPostReloadEvaluation.result?.value;
   const chatWorkflow = { ...(chatCreate ?? {}), ...(chatPostReload ?? {}) };
+
+  const statsWorkflowEvaluation = await client.send('Runtime.evaluate', {
+    expression: `(async () => {
+      const delay = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
+      const scriptModule = await import('/script.js');
+      const statsModule = await import('/scripts/stats.js');
+      const headers = scriptModule.getRequestHeaders();
+      const oldAvatar = ${JSON.stringify(chatCreate?.statsSeed?.avatar ?? '')};
+      const currentAvatar = ${JSON.stringify(chatPostReload?.renamedAvatar ?? '')};
+      const expectedPersistedCount = ${JSON.stringify(chatCreate?.statsSeed?.countAfter ?? null)};
+      const routeHandled = (pathname) =>
+        globalThis.__PURE_TAVERN__?.diagnostics.requests.some(
+          (request) => request.pathname === pathname && request.handled,
+        ) ?? false;
+
+      await statsModule.getStats();
+      const persistedCount = Number(statsModule.charStats?.[oldAvatar]?.user_msg_count ?? -1);
+      const updateResponse = await fetch('/api/stats/update', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(statsModule.charStats),
+      });
+      const recreateResponse = await fetch('/api/stats/recreate', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({}),
+        cache: 'no-cache',
+      });
+      await statsModule.getStats();
+      const rebuilt = statsModule.charStats?.[currentAvatar] ?? null;
+
+      await scriptModule.getCharacters();
+      const characterId = scriptModule.characters.findIndex(
+        (character) => character.avatar === currentAvatar,
+      );
+      let characterPopupBlocks = 0;
+      let userPopupBlocks = 0;
+      if (characterId >= 0) {
+        await statsModule.characterStatsHandler(scriptModule.characters, characterId);
+        await delay(150);
+        const characterPopup = [...document.querySelectorAll('dialog.popup[open]')].at(-1);
+        characterPopupBlocks = characterPopup?.querySelectorAll('.rm_stat_block').length ?? 0;
+        characterPopup?.querySelector('.popup-button-close')?.click();
+        await delay(100);
+        await statsModule.userStatsHandler();
+        await delay(150);
+        const userPopup = [...document.querySelectorAll('dialog.popup[open]')].at(-1);
+        userPopupBlocks = userPopup?.querySelectorAll('.rm_stat_block').length ?? 0;
+        for (const closeButton of document.querySelectorAll(
+          'dialog.popup[open] .popup-button-close',
+        )) {
+          closeButton.click();
+        }
+      }
+
+      const feature = globalThis.__PURE_TAVERN__?.features?.stats;
+      return {
+        available: true,
+        persistedAcrossReload:
+          expectedPersistedCount !== null && persistedCount === Number(expectedPersistedCount),
+        updateOk: updateResponse.ok,
+        recreateOk: recreateResponse.ok,
+        currentAvatar,
+        rebuilt: rebuilt
+          ? {
+              userMessages: rebuilt.user_msg_count,
+              characterMessages: rebuilt.non_user_msg_count,
+              userWords: rebuilt.user_word_count,
+              characterWords: rebuilt.non_user_word_count,
+              chatSize: rebuilt.chat_size,
+              firstChat: rebuilt.date_first_chat,
+              lastChat: rebuilt.date_last_chat,
+            }
+          : null,
+        characterPopupBlocks,
+        userPopupBlocks,
+        storage: feature?.storage ? { ...feature.storage } : null,
+        chatSource: feature?.chatSource ? { ...feature.chatSource } : null,
+        consistency: feature?.consistency ? { ...feature.consistency } : null,
+        routesHandled: {
+          get: routeHandled('/api/stats/get'),
+          update: routeHandled('/api/stats/update'),
+          recreate: routeHandled('/api/stats/recreate'),
+        },
+      };
+    })()`,
+    awaitPromise: true,
+    returnByValue: true,
+  });
+  const statsWorkflow = statsWorkflowEvaluation.result?.value;
 
   const characterPostReloadEvaluation = await client.send('Runtime.evaluate', {
     expression: `(async () => {
@@ -2801,6 +2915,27 @@ try {
       chatWorkflow?.storage?.backend === 'indexeddb' &&
       chatWorkflow?.messages?.status === 'ready' &&
       chatWorkflow?.messages?.backend === 'indexeddb',
+    statsStorageReady:
+      statsWorkflow?.storage?.status === 'ready' &&
+      statsWorkflow?.storage?.backend === 'indexeddb' &&
+      statsWorkflow?.chatSource?.status === 'ready' &&
+      statsWorkflow?.consistency?.blocksChatWrites === false,
+    statsBrowserWorkflow:
+      statsWorkflow?.available === true &&
+      chatWorkflow?.statsSeed?.incrementalUpdateOk === true &&
+      statsWorkflow?.persistedAcrossReload === true &&
+      statsWorkflow?.updateOk === true &&
+      statsWorkflow?.recreateOk === true &&
+      statsWorkflow?.rebuilt?.userMessages > 0 &&
+      statsWorkflow?.rebuilt?.characterMessages > 0 &&
+      statsWorkflow?.rebuilt?.userWords > 0 &&
+      statsWorkflow?.rebuilt?.characterWords > 0 &&
+      statsWorkflow?.rebuilt?.chatSize > 0 &&
+      statsWorkflow?.rebuilt?.firstChat > 0 &&
+      statsWorkflow?.rebuilt?.lastChat > 0 &&
+      statsWorkflow?.characterPopupBlocks === 7 &&
+      statsWorkflow?.userPopupBlocks === 7 &&
+      Object.values(statsWorkflow?.routesHandled ?? {}).every(Boolean),
     chatBrowserWorkflow:
       chatWorkflow?.available === true &&
       chatWorkflow?.greetingSaved === true &&
@@ -2913,6 +3048,7 @@ try {
     assetsWorkflow,
     characterWorkflow,
     chatWorkflow,
+    statsWorkflow,
     requestCount: requests.length,
     localScriptRequestCount: localScriptRequests.length,
     compatibilityNetworkRequests,

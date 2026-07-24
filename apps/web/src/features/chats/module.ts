@@ -2,6 +2,7 @@ import type { FeatureModule } from '@/platform/features/feature-module';
 import {
   characterIdentityCapability,
   chatOwnerLifecycleCapability,
+  chatStatsSourceCapability,
 } from '@/platform/features/standard-capabilities';
 
 import { ChatService } from './application/chat-service';
@@ -36,6 +37,21 @@ export const chatsFeature: FeatureModule = {
 
     capabilities.register(chatOwnerLifecycleCapability, {
       deleteChatsForOwner: (ownerId) => service.deleteChatsForOwner(ownerId),
+    });
+    capabilities.register(chatStatsSourceCapability, {
+      async listChatsForStats() {
+        const storedSessions = await sessions.list();
+        return Promise.all(
+          storedSessions.map(async (session) => ({
+            id: session.id,
+            ownerId: session.ownerId,
+            avatarUrl: await owners.getCurrentAvatar(session.ownerId, session.ownerAlias),
+            byteSize: session.byteSize,
+            updatedAt: session.updatedAt,
+            messages: await messages.get(session.id),
+          })),
+        );
+      },
     });
     registerChatsLegacyRoutes(router, service);
 

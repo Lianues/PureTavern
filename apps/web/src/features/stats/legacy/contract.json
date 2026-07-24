@@ -1,0 +1,31 @@
+{
+  "module": "stats",
+  "legacyRequests": [
+    {
+      "method": "POST",
+      "pathname": "/api/stats/get",
+      "category": "browser-data-capability",
+      "responseKind": "indexeddb-derived-stats-document-json",
+      "migrationStatus": "completed-browser-derived-stats"
+    },
+    {
+      "method": "POST",
+      "pathname": "/api/stats/update",
+      "category": "browser-data-capability",
+      "responseKind": "indexeddb-stats-document-update-empty-200",
+      "migrationStatus": "completed-browser-derived-stats"
+    },
+    {
+      "method": "POST",
+      "pathname": "/api/stats/recreate",
+      "category": "browser-data-capability",
+      "responseKind": "indexeddb-chat-derived-stats-recreate-empty-200",
+      "migrationStatus": "completed-browser-derived-stats"
+    }
+  ],
+  "notes": [
+    "Legacy stats.js remains unchanged and performs fire-and-forget incremental updates that never enter the chat write transaction.",
+    "Recreate derives repairable local statistics from the M05 read-only chat stats capability.",
+    "Persistent storage failures degrade to page memory so statistics cannot block chat persistence."
+  ]
+}

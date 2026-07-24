@@ -53,6 +53,4 @@ export function registerCoreLegacyRoutes(
     jsonResponse({ folders: [], imageFolderMap: {} }),
   );
   router.register('POST', '/api/image-metadata/all', () => jsonResponse({ images: {} }));
-  router.register('POST', '/api/stats/get', () => jsonResponse({}));
-  router.register('POST', '/api/stats/update', () => emptyResponse(200));
 }

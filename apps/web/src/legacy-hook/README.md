@@ -20,6 +20,7 @@ globalThis.__PURE_TAVERN__.features.assets;
 globalThis.__PURE_TAVERN__.features.personas;
 globalThis.__PURE_TAVERN__.features.characters;
 globalThis.__PURE_TAVERN__.features.chats;
+globalThis.__PURE_TAVERN__.features.stats;
 globalThis.__PURE_TAVERN__.features['world-books'];
 globalThis.__PURE_TAVERN__.features.presets;
 globalThis.__PURE_TAVERN__.features.extensions;

@@ -2,7 +2,7 @@
   "schemaVersion": 2,
   "project": "SillyTavern",
   "version": "1.18.0",
-  "generatedAt": "2026-07-24T10:55:55.167Z",
+  "generatedAt": "2026-07-24T11:44:26.045Z",
   "source": {
     "publicRoot": "legacy/upstream/public",
     "repositoryRoot": "legacy/upstream"
@@ -4526,20 +4526,6 @@
         },
         {
           "method": "POST",
-          "pathname": "/api/stats/get",
-          "category": "data-capability-pending-migration",
-          "responseKind": "empty-object-json",
-          "migrationStatus": "bootstrap-empty-response-not-migrated"
-        },
-        {
-          "method": "POST",
-          "pathname": "/api/stats/update",
-          "category": "ui-required-compatibility-boundary",
-          "responseKind": "discarded-empty-200",
-          "migrationStatus": "m23-not-migrated-discard-only"
-        },
-        {
-          "method": "POST",
           "pathname": "/api/tokenizers/llama/encode",
           "category": "browser-data-capability",
           "responseKind": "tokenx-approximate-encode-json",
@@ -5111,6 +5097,27 @@
           "category": "browser-data-capability",
           "responseKind": "indexeddb-snapshot-restore-empty-204",
           "migrationStatus": "browser-ready-settings-snapshots"
+        },
+        {
+          "method": "POST",
+          "pathname": "/api/stats/get",
+          "category": "browser-data-capability",
+          "responseKind": "indexeddb-derived-stats-document-json",
+          "migrationStatus": "completed-browser-derived-stats"
+        },
+        {
+          "method": "POST",
+          "pathname": "/api/stats/update",
+          "category": "browser-data-capability",
+          "responseKind": "indexeddb-stats-document-update-empty-200",
+          "migrationStatus": "completed-browser-derived-stats"
+        },
+        {
+          "method": "POST",
+          "pathname": "/api/stats/recreate",
+          "category": "browser-data-capability",
+          "responseKind": "indexeddb-chat-derived-stats-recreate-empty-200",
+          "migrationStatus": "completed-browser-derived-stats"
         },
         {
           "method": "POST",

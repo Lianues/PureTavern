@@ -6,7 +6,6 @@ import {
   jsonResponse,
   syncJsonResponse,
 } from './compatibility-router';
-import { registerCoreLegacyRoutes } from './register-core-routes';
 
 const cleanups: Array<() => void> = [];
 
@@ -54,27 +53,5 @@ describe('CompatibilityRouter XMLHttpRequest bridge', () => {
     expect(router.diagnostics.requests).toMatchObject([
       { method: 'POST', pathname: '/api/sync-probe', handled: true },
     ]);
-  });
-
-  it('keeps discarded stats update as a narrow non-migrated boundary', async () => {
-    const router = new CompatibilityRouter();
-    registerCoreLegacyRoutes(
-      router,
-      Promise.resolve({
-        project: 'SillyTavern',
-        version: '1.18.0',
-        upstreamRepository: 'https://example.test/upstream',
-        syncedAt: '2026-07-24T00:00:00.000Z',
-        fileCount: 591,
-      }),
-    );
-
-    const statsUrl = new URL('/api/stats/update', window.location.href);
-    const statsResponse = await router.dispatch(
-      new Request(statsUrl, { method: 'POST', body: '{}' }),
-      statsUrl,
-    );
-    expect(statsResponse?.status).toBe(200);
-    expect(await statsResponse?.text()).toBe('');
   });
 });

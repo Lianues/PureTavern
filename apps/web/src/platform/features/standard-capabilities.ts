@@ -14,6 +14,19 @@ export interface ChatOwnerLifecycleCapability {
   deleteChatsForOwner(ownerId: string): Promise<void>;
 }
 
+export interface ChatStatsSourceItem {
+  id: string;
+  ownerId: string;
+  avatarUrl: string;
+  byteSize: number;
+  updatedAt: string;
+  messages: readonly Record<string, unknown>[];
+}
+
+export interface ChatStatsSourceCapability {
+  listChatsForStats(): Promise<readonly ChatStatsSourceItem[]>;
+}
+
 export interface WorldNamesCapability {
   listWorldNames(): Promise<string[]>;
 }
@@ -96,6 +109,9 @@ export const characterIdentityCapability =
 export const chatOwnerLifecycleCapability = defineCapability<ChatOwnerLifecycleCapability>(
   'chats.owner-lifecycle.v1',
 );
+
+export const chatStatsSourceCapability =
+  defineCapability<ChatStatsSourceCapability>('chats.stats-source.v1');
 
 export const worldNamesCapability = defineCapability<WorldNamesCapability>('world-books.names.v1');
 

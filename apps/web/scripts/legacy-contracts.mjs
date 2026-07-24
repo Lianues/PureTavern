@@ -226,20 +226,6 @@ export const CORE_COMPATIBILITY_REQUESTS = Object.freeze([
   },
   {
     method: 'POST',
-    pathname: '/api/stats/get',
-    category: 'data-capability-pending-migration',
-    responseKind: 'empty-object-json',
-    migrationStatus: 'bootstrap-empty-response-not-migrated',
-  },
-  {
-    method: 'POST',
-    pathname: '/api/stats/update',
-    category: 'ui-required-compatibility-boundary',
-    responseKind: 'discarded-empty-200',
-    migrationStatus: 'm23-not-migrated-discard-only',
-  },
-  {
-    method: 'POST',
     pathname: '/api/tokenizers/llama/encode',
     category: 'ui-required-compatibility-boundary',
     responseKind: 'rough-character-estimate-json',

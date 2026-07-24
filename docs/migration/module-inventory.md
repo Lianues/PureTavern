@@ -532,14 +532,16 @@ features/<module>/
 ## M23 — Stats / 使用统计
 
 - **优先级**：P3
-- **初始状态**：`deferred`（M05 浏览器门禁仅增加 `/api/stats/update` 丢弃式 200 兼容边界；不持久化、不代表 M23 已迁移）
-- **原始前端**：`public/scripts/stats.js`
-- **原始服务端**：`src/endpoints/stats.js`
-- **目标 Port**：`StatsRepository`。
-- **浏览器实现**：IndexedDB 派生统计；不应阻塞聊天写入。
-- **可选后端**：跨设备聚合。
+- **当前状态**：`completed-browser-derived-stats`
+- **原始前端**：`public/scripts/stats.js` 保持不变，原版用户/角色统计弹窗、`getStats`、`statMesProcess` 与 `refreshStats` 继续作为 UI 和增量更新入口。
+- **原始服务端**：`src/endpoints/stats.js` 的 get/update/recreate 语义已迁移到浏览器模块。
+- **已实现 Port/模块**：`apps/web/src/features/stats/**` 中的 `StatsRepository`、派生器、IndexedDB/内存降级和 Legacy routes。
+- **浏览器实现**：完整统计文档保存在 module=`stats`、collection=`documents`、id=`current`；首次读取和 `/api/stats/recreate` 从 M05 只读 `ChatStatsSourceCapability` 派生消息、词数、swipe、生成耗时、首末聊天时间与字节数。
+- **非阻塞语义**：原版 `statMesProcess` 仍 fire-and-forget 调用 update；Stats 不进入聊天写事务，持久化失败降级到页面内存，崩溃窗口可由 recreate 修复。
+- **验收**：模块测试覆盖 Legacy DTO、派生规则、去重、日期、串行更新、故障降级与 M05 集成；production Chrome 覆盖增量更新、跨刷新持久化、重建以及原版两类统计弹窗。
+- **可选后端**：未实现；跨设备聚合仍可作为未来增强。
 - **依赖**：M05。
-- **删除影响**：可完整删除。
+- **删除影响**：可完整删除，不影响聊天数据和聊天写入。
 
 ---
 

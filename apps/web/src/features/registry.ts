@@ -9,6 +9,7 @@ import { personasFeature } from './personas/module';
 import { presetsFeature } from './presets/module';
 import { secretsFeature } from './secrets/module';
 import { settingsFeature } from './settings/module';
+import { statsFeature } from './stats/module';
 import { tokenizersFeature } from './tokenizers/module';
 import { worldBooksFeature } from './world-books/module';
 
@@ -20,6 +21,7 @@ export const featureModules: readonly FeatureModule[] = [
   personasFeature,
   charactersFeature,
   chatsFeature,
+  statsFeature,
   worldBooksFeature,
   presetsFeature,
   extensionsFeature,
