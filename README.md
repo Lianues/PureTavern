@@ -1,104 +1,72 @@
 # PureTavern
 
-一个以浏览器本地能力为默认实现、可选连接后端增强能力的酒馆项目。
+PureTavern 是一个以 SillyTavern 为上游的第三方客户端，采用“纯前端 + 可选后端”的设计。
 
-当前阶段采用 **Legacy-first**：根页面长期运行原版 SillyTavern UI、CSS 和交互脚本，我方 Hook 将原版能力桥接到浏览器实现。Settings、角色卡、单角色聊天、使用统计、用户人格、世界书、预设、本地 Assets、明文 Secrets、浏览器直连 Chat Completion、trusted 内置扩展和支持 CORS 的第三方前端扩展已接入浏览器模块；群聊与 Text Completion/Novel/Horde/Kobold 等能力仍待迁移。Vue 仅用于隔离的新页面或完成所有权切换的新能力。
+当前版本不依赖后端服务，可以直接部署到 Cloudflare Pages、GitHub Pages 或其他静态托管平台。可选后端接口已经在架构中预留，但尚未实现。
 
-## 开发
+> PureTavern 是独立第三方项目，不是 SillyTavern 官方发行版。
+
+## 密钥与隐私（重点）
+
+PureTavern 当前为纯前端应用，API Key 等密钥只保存在用户当前浏览器的 IndexedDB 中，不会上传到 PureTavern 服务器；项目不会收集或窃取用户密钥。发起模型请求时，密钥只会发送给用户主动配置的模型服务商。
+
+密钥的本地保存不等于安全加密：同源脚本、用户安装的第三方扩展、浏览器插件、开发者工具或被篡改的部署站点仍可能读取密钥。请使用可信部署并谨慎安装第三方扩展。
+
+## 特点
+
+- 不需要运行 SillyTavern Node.js 服务端；
+- 保留原版 SillyTavern 界面、提示词系统和前端扩展兼容层；
+- 角色、聊天、设置、世界书、预设、密钥和资源保存在浏览器 IndexedDB；
+- 支持本地 ZIP 数据导入、导出和恢复点；
+- 支持浏览器直连允许 CORS 的 聊天补全服务平台；
+- 使用 Service Worker 和 Build ID 缓存静态资源，同版本重复访问无需逐文件校验；
+- 为未来的代理、远程备份、私有模型桥接等可选后端能力预留接口。
+
+## 架构
+
+```text
+SillyTavern Legacy UI
+        │
+PureTavern Compatibility Hook
+        │
+Feature Modules / Capability Ports
+        │
+IndexedDB + Service Worker + Browser Fetch
+        │
+Optional Backend Adapters（暂未实现）
+```
+
+- **Legacy UI**：继续使用上游 SillyTavern 的界面和纯前端业务逻辑；
+- **Compatibility Hook**：在浏览器中接管原版 `/api/**` 请求；
+- **Feature Modules**：按角色、聊天、设置、资源、扩展等能力拆分；
+- **Browser Storage**：业务数据写入 IndexedDB，静态代码使用 CacheStorage；
+- **Optional Backend**：未来可接入 CORS 代理、远程备份、Vault 和私网模型桥接。
+
+## 开发与构建
 
 ```bash
 pnpm install
 pnpm dev
 ```
 
-默认地址由 Vite 输出。Web 页面不需要运行 `SillyTavern-1.18.0/server.js`。生产部署以 Build ID 管理静态运行时缓存：首次加载后，后续同版本页面直接从 CacheStorage 读取 JS/CSS/字体/配置，不再逐文件发起 ETag 校验；仅首页与版本探针保持动态检查。
-
-- `/`：原版 UI + 原版交互 + PureTavern Hook。
-- `/modern.html`：Vue 3 现代模块/诊断入口。
-
-## 当前浏览器能力
-
-- Settings 与快照：原版 `/api/settings/*` 已桥接到 IndexedDB，首次从上游默认设置初始化，之后按完整 Legacy 文档语义保存和恢复。
-- Characters：角色 CRUD、头像、重命名、复制以及 JSON/PNG Character Card V2/V3 导入导出已接入原版 UI。
-- Chats：单角色聊天、消息、搜索、recent、重命名、删除和 JSONL/多格式导入导出已本地持久化；群聊仍属 M06。
-- Stats：原版用户/角色统计 UI 继续运行，完整统计文档由 IndexedDB 保存；增量 update 不阻塞聊天，recreate 可从 M05 消息重建词数、消息、swipe、时间和体积指标。
-- Import / Export / Backup：第一方数据管理扩展提供全模块容量、版本化 ZIP 导出、hash/冲突预览、四种导入策略和本地恢复点；Secrets 默认排除。共享 Archive Contract 与 `BackupTransport` 可直接接未来可选后端。
-- World Books：原版编辑器、导入、角色卡嵌入 lore 和原版匹配算法继续运行，文档由 M07 IndexedDB 模块提供。
-- Presets：11 类提示词预设、主题、Moving UI 与快捷回复由独立 M09 模块管理，默认内容通过构建清单增量初始化，不再由 Settings 存储拥有。
-- Assets：附件、用户图片、背景、persona 头像、sprites 与扩展资产使用通用 Blob/索引模块；共享 Service Worker 为原版 URL 提供本地资源响应；原版“从外部 URL 导入”可直接导入允许 CORS 的 PNG 角色卡。
-- Personas：原版 Persona UI 继续使用 Settings 与头像接口；M08 负责 stable identity、默认/当前选择、角色绑定、opaque descriptor 和删除降级。
-- Extensions：原版风险警告、管理 UI、manifest loader 和 same-context 插件模型保持不变；14 个 upstream 内置扩展、1 个 PureTavern 第一方数据管理扩展以及 GitHub/GitLab/direct ZIP 等支持浏览器 CORS 的第三方扩展均可运行，第三方代码能读取同源数据与密钥。
-- Prompt Pipeline：原版 `openai.js`、PromptManager、宏、作者注和世界书注入作为唯一权威实现长期保留；不维护功能重复的 TypeScript 副本，生成后的 `generate_data` 直接交给 M12。
-- Tokenizers：原版同步/异步 tokenizer 路径统一桥接到 Web Worker/主线程 `tokenx` 近似计数；所有模型故意采用同一估算器，响应明确标记 `approximate`，pseudo token IDs 只用于 UI 兼容。
-- Secrets：原版密钥管理器的多值保存、查看、查找、轮换、重命名和删除已桥接到 IndexedDB，并通过 CredentialResolver 为 M12 预留入口；密钥按产品决策明文保存，不是安全 Vault。
-- Generation：仅迁移原版 Chat Completion，26 个 source 由 OpenAI-compatible、Anthropic、Google、Cohere 四类浏览器直连 Adapter 提供模型目录、非流式和 SSE；Provider 是否可达仍取决于其 CORS/TLS 策略。
-- 各模块 IndexedDB 不可用时降级为当前页面会话内存存储，并在 `__PURE_TAVERN__.features.<module>` 下报告诊断状态。
-
-## 常用命令
+生产构建：
 
 ```bash
 pnpm build
-pnpm typecheck
-pnpm test
-pnpm lint
-pnpm format:check
-pnpm legacy:verify
-pnpm legacy:contracts:check
-
-# 先在另一个终端运行 pnpm dev，再执行真实浏览器启动与交互检查
-pnpm test:browser
 ```
 
-## 更新上游 UI
+静态产物位于：
 
-固定顺序：先看文件 diff，再看契约 diff，再构建和跑浏览器契约测试。
-
-```powershell
-# 1. 文件 diff + 嵌入式契约 diff（只读，不写快照）
-pnpm legacy:sync:check --source "F:\path\SillyTavern-新版本" --version 新版本号
-
-# 2. 如需单独查看契约 diff
-pnpm legacy:contracts:check --source "F:\path\SillyTavern-新版本" --version 新版本号
+```text
+apps/web/dist
 ```
 
-确认报告后正式同步：
+## 浏览器限制
 
-```powershell
-pnpm legacy:sync --source "F:\path\SillyTavern-新版本" --version 新版本号
-```
+纯前端无法绕过目标服务的 CORS、TLS 和 Private Network Access 策略。当前密钥保存在浏览器本地，不应视为安全 Vault。
 
-同步会完整替换 `apps/web/legacy/upstream/**`，不会修改 `apps/web/src/legacy-hook/**`。同步后执行：
+## 许可证
 
-```powershell
-pnpm legacy:contracts:generate # 接受新上游后生成新的版本化基线
-pnpm legacy:verify
-pnpm legacy:contracts:check
-pnpm build
+PureTavern 使用 [AGPL-3.0](./LICENSE) 许可证。
 
-# 终端 A：启动生产/开发页面
-pnpm dev
-
-# 终端 B：真实浏览器契约测试
-pnpm test:browser
-```
-
-详细流程和验收项见 [`docs/architecture/legacy-ui-strategy.md`](docs/architecture/legacy-ui-strategy.md)、[`docs/architecture/legacy-compatibility-contract.md`](docs/architecture/legacy-compatibility-contract.md) 与 [`docs/architecture/feature-module-structure.md`](docs/architecture/feature-module-structure.md)。
-
-## 目录
-
-- `apps/web`：浏览器应用、Legacy Hook、上游快照和升级工具。
-- `apps/web/legacy/upstream/public`：只读 SillyTavern 前端快照，禁止直接编辑。
-- `apps/web/legacy/contracts`：版本化 Legacy 兼容契约基线。
-- `apps/web/src/legacy-hook`：只保留注入启动入口。
-- `apps/web/src/platform`：通用 Legacy Router、Feature Runtime 与 records/blobs 存储平台。
-- `apps/web/src/features`：按模块聚合的装配、领域、存储、Legacy 路由、契约和测试。
-- `apps/server`：可选后端占位；不是 Web 应用的运行依赖。
-- `packages/contracts`：浏览器与可选后端共享的纯类型契约。
-- `packages/shared`：与运行环境无关的通用代码。
-- `docs/migration`：迁移模块清单和批次。
-- `docs/architecture`：架构决策、Legacy-first 和升级策略。
-- `SillyTavern-1.18.0`：本机只读参考源码，不参与新项目构建。
-
-## Legacy 许可
-
-`apps/web/legacy/upstream/public` 来源于 SillyTavern，受其 AGPL-3.0 许可证及相关资源许可证约束。请参阅该目录内的 `UPSTREAM_LICENSE` 和 `UPSTREAM_SOURCE.md`。
+项目包含或衍生自 SillyTavern 的上游资源时，同时遵循对应的上游许可证和署名要求。
