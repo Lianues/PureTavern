@@ -1,0 +1,32 @@
+{
+  "module": "generation",
+  "legacyRequests": [
+    {
+      "method": "POST",
+      "pathname": "/api/backends/chat-completions/status",
+      "category": "browser-data-capability",
+      "responseKind": "direct-provider-normalized-model-catalog-json",
+      "migrationStatus": "browser-ready-chat-completion-direct"
+    },
+    {
+      "method": "POST",
+      "pathname": "/api/backends/chat-completions/generate",
+      "category": "browser-data-capability",
+      "responseKind": "direct-provider-json-or-sse-stream",
+      "migrationStatus": "browser-ready-chat-completion-direct"
+    },
+    {
+      "method": "POST",
+      "pathname": "/api/backends/chat-completions/bias",
+      "category": "browser-data-capability",
+      "responseKind": "explicit-token-id-bias-map-json",
+      "migrationStatus": "browser-ready-chat-completion-direct"
+    }
+  ],
+  "notes": [
+    "Only main_api=openai Chat Completion is migrated; Text Completion, NovelAI, Horde and KoboldAI remain outside M12.",
+    "All 26 SillyTavern 1.18.0 chat_completion_sources are represented by four browser protocol adapters.",
+    "Provider reachability depends on browser CORS, TLS and network policy; no CORS proxy or optional backend is implemented.",
+    "M15 pseudo token IDs are never used for real logit bias; only explicit numeric token ID arrays are accepted."
+  ]
+}

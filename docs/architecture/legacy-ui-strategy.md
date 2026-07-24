@@ -95,21 +95,22 @@ Hook 必须在原版主模块执行前安装。当前职责仅有：
 
 - 初始化固定的 records/blobs IndexedDB 存储平台；
 - 包装同源 `fetch`；
-- 通过 Feature Registry 安装 Settings、Secrets、Characters、Chats、Personas、World Books、Presets、Assets、Extensions、Tokenizers 与 Prompt Pipeline candidate，并将对应 Legacy 路径或 capability 桥接到浏览器 Use Case；
+- 通过 Feature Registry 安装 Settings、Secrets、Generation、Characters、Chats、Personas、World Books、Presets、Assets、Extensions、Tokenizers 与 Prompt Pipeline candidate，并将对应 Legacy 路径或 capability 桥接到浏览器 Use Case；
 - 通过类型化 Capability Registry 连接模块间的可选能力，而不是互相 import Repository；
 - 对尚未迁移但启动阶段必需的路径返回固定空数据或安全默认值；
 - 记录已处理请求和未处理路径；
 - 暴露 `globalThis.__PURE_TAVERN__` 诊断信息；
 - 读取同步工具生成的上游版本元数据。
 
-当前浏览器模块已经接管 Settings/Snapshots、明文 Secrets、Characters、单角色 Chats、Personas、World Books、Presets、本地 Assets、trusted built-in Extensions 与统一近似 Tokenizers。Prompt Pipeline 已安装纯 TypeScript candidate，但原版 Pipeline 仍持有所有权。模块只使用固定 `records` / `blobs` Object Store；新增 feature 或 collection 不递增数据库业务版本。IndexedDB 不可用时各 Repository 可降级为页面会话内存，并在模块 diagnostics 中明确报告。
+当前浏览器模块已经接管 Settings/Snapshots、明文 Secrets、Chat Completion Generation、Characters、单角色 Chats、Personas、World Books、Presets、本地 Assets、trusted built-in Extensions 与统一近似 Tokenizers。Prompt Pipeline 已安装纯 TypeScript candidate，但原版 Pipeline 仍持有所有权。模块只使用固定 `records` / `blobs` Object Store；新增 feature 或 collection 不递增数据库业务版本。IndexedDB 不可用时各 Repository 可降级为页面会话内存，并在模块 diagnostics 中明确报告。
 
 空群组、离线 Horde、远程扩展 Git 操作和丢弃式 stats 等仍属于 **Bootstrap Compatibility Contract** 或显式浏览器限制，不代表相应业务已经迁移：
 
-- 不实现群组聊天或模型请求；
+- 不实现群组聊天；模型请求只实现 `main_api="openai"` 的 Chat Completion，Text Completion、NovelAI、Horde、KoboldAI 和 WebLLM 不在当前范围；
 - trusted built-ins 可由原版 loader 运行，但用户第三方包只能进入 sandbox；不实现浏览器无法保证的 Git/Node plugins；
 - M15 `tokenx` 结果是统一近似值，pseudo token IDs 只服务原版 UI；模型生成和精确上下文预算仍需对应模型的精确 tokenizer adapter；
 - M14 密钥按产品决策以 IndexedDB 明文保存；同源脚本、DevTools、浏览器 Profile、XSS 和请求拦截均可读取，不能描述为安全 Vault；
+- M12 是浏览器直连，不能绕过 Provider CORS、TLS、Private Network Access 或网络策略；支持 source 不等于每个环境都能连接；
 - 不把旧 `/api` 当成新架构的内部正式接口；
 - 不让新 Vue 代码依赖这些兼容 HTTP 路径。
 

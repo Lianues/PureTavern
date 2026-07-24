@@ -83,6 +83,12 @@ export interface CredentialResolverCapability {
   hasCredential(key: string): Promise<boolean>;
 }
 
+export interface GenerationProviderCapability {
+  listSources(): string[];
+  listModels(request: Record<string, unknown>, signal?: AbortSignal): Promise<unknown>;
+  generate(request: Record<string, unknown>, signal?: AbortSignal): Promise<Response>;
+}
+
 export const characterIdentityCapability =
   defineCapability<CharacterIdentityCapability>('characters.identity.v1');
 
@@ -121,4 +127,8 @@ export const tokenizerCapability = defineCapability<TokenizerCapability>(
 
 export const credentialResolverCapability = defineCapability<CredentialResolverCapability>(
   'secrets.credential-resolver.v1',
+);
+
+export const generationProviderCapability = defineCapability<GenerationProviderCapability>(
+  'generation.chat-completion.v1',
 );

@@ -57,6 +57,7 @@ Pure Tavern 将 SillyTavern 原版 UI/交互作为长期保留的上游兼容层
 - Prompt Pipeline candidate 没有 Legacy API，当前保持 `ownership=legacy` 与 `replacementEnabled=false`；
 - Tokenizers 的 35 条 Legacy 路径由 M15 feature manifest 覆盖，使用统一 `tokenx` 近似计数并明确报告 `approximate`，不等价于模型专用 tokenizer；
 - Secrets 的 8 条 Legacy 路径由 M14 feature manifest 覆盖，使用本地明文 IndexedDB、多值 active 语义和窄 CredentialResolver；该状态不代表加密或 Vault 安全性；
+- Generation 的 status/generate/bias 由 M12 manifest 覆盖，仅声明 Chat Completion 浏览器直连；26 个 source 有 Adapter，但实际可达性仍取决于厂商 CORS/TLS，非聊天主 API未迁移；
 - `/csrf-token`、`/version`、`/api/users/me` 等仍是 UI 启动固定兼容响应；
 - 群组、Horde、远程 Git 扩展操作和丢弃式 stats 等仍是空数据、安全默认或明确降级响应。
 
@@ -104,6 +105,7 @@ pnpm legacy:contracts:check --source "F:\path\SillyTavern-1.19.0" --version 1.19
 - Prompt Pipeline candidate 就绪，但真实 Chrome 明确验证原版 prepare 函数仍为权威且替换关闭；
 - Tokenizers 通过原版同步/异步调用验证全部 alias 的统一计数、OpenAI/remote count、Worker backend、pseudo decode 往返以及 M10 approximate estimator；
 - Secrets 通过原版 `scripts/secrets.js` 验证多值保存、掩码、find/view、轮换、重命名、跨刷新持久化、删除回退和明文 diagnostics 声明；
+- Generation 使用本机 CORS Mock Provider 验证模型目录、OpenAI-compatible 非流式/SSE、Anthropic、Google、Cohere、M14 凭据和精确 ID bias 降级，不访问真实厂商；
 - 本地资源无 404、运行时无异常、控制台无错误、启动兼容请求不进入网络。
 
 测试使用临时浏览器 Profile 创建并清理模块验收数据；结束后删除整个 Profile，不污染开发者的浏览器数据。

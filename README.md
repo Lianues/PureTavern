@@ -2,7 +2,7 @@
 
 一个以浏览器本地能力为默认实现、可选连接后端增强能力的酒馆项目。
 
-当前阶段采用 **Legacy-first**：根页面长期运行原版 SillyTavern UI、CSS 和交互脚本，我方 Hook 将原版能力桥接到浏览器实现。Settings、角色卡、单角色聊天、用户人格、世界书、预设、本地 Assets、明文 Secrets 和 trusted 内置扩展已接入浏览器模块；群聊、模型生成与远程扩展安装等能力仍待迁移。Vue 仅用于隔离的新页面或完成所有权切换的新能力。
+当前阶段采用 **Legacy-first**：根页面长期运行原版 SillyTavern UI、CSS 和交互脚本，我方 Hook 将原版能力桥接到浏览器实现。Settings、角色卡、单角色聊天、用户人格、世界书、预设、本地 Assets、明文 Secrets、浏览器直连 Chat Completion 和 trusted 内置扩展已接入浏览器模块；群聊、Text Completion/Novel/Horde/Kobold 与远程扩展安装等能力仍待迁移。Vue 仅用于隔离的新页面或完成所有权切换的新能力。
 
 ## 开发
 
@@ -29,6 +29,7 @@ pnpm dev
 - Prompt Pipeline：纯 TypeScript 候选、宏引擎和预算服务已经安装，但仍标记为 `conformance-candidate`；原版 `prepareOpenAIMessages` 暂时保持权威，避免提前破坏生成兼容性。
 - Tokenizers：原版同步/异步 tokenizer 路径统一桥接到 Web Worker/主线程 `tokenx` 近似计数；所有模型故意采用同一估算器，响应明确标记 `approximate`，pseudo token IDs 只用于 UI 兼容。
 - Secrets：原版密钥管理器的多值保存、查看、查找、轮换、重命名和删除已桥接到 IndexedDB，并通过 CredentialResolver 为 M12 预留入口；密钥按产品决策明文保存，不是安全 Vault。
+- Generation：仅迁移原版 Chat Completion，26 个 source 由 OpenAI-compatible、Anthropic、Google、Cohere 四类浏览器直连 Adapter 提供模型目录、非流式和 SSE；Provider 是否可达仍取决于其 CORS/TLS 策略。
 - 各模块 IndexedDB 不可用时降级为当前页面会话内存存储，并在 `__PURE_TAVERN__.features.<module>` 下报告诊断状态。
 
 ## 常用命令

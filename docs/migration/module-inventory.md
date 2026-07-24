@@ -346,25 +346,35 @@ features/<module>/
 ## M12 — Generation Providers / 模型生成
 
 - **优先级**：P2
-- **初始状态**：`inventory`
+- **当前状态**：`browser-ready-chat-completion-direct`（只迁移 Chat Completion；其他主 API 明确不在范围）
 - **原始前端**：
   - `public/scripts/openai.js`
-  - `public/scripts/textgen-settings.js`
-  - `public/scripts/kai-settings.js`
-  - `public/scripts/nai-settings.js`
+  - `public/scripts/textgen-settings.js`（本阶段不迁移）
+  - `public/scripts/kai-settings.js`（本阶段不迁移）
+  - `public/scripts/nai-settings.js`（本阶段不迁移）
   - `public/scripts/sse-stream.js`
 - **原始服务端**：
   - `src/endpoints/openai.js`
   - `src/endpoints/google.js`
   - `src/endpoints/anthropic.js`
-  - `src/endpoints/novelai.js`
+  - `src/endpoints/novelai.js`（本阶段不迁移）
   - `src/endpoints/openrouter.js`
-  - `src/endpoints/backends/**`
-- **目标 Port**：`GenerationGateway`、`ModelCatalogGateway`、`StreamingGeneration`。
-- **浏览器实现**：OpenAI-compatible direct、支持 CORS 的厂商 API、本地 WebLLM。
-- **可选后端**：CORS 代理、密钥 Vault、请求签名、本地私网模型桥接。
-- **依赖**：M03、M10、M14。
-- **删除影响**：每个 Provider 可独立删除；至少保留一个 Provider 或离线模拟器。
+  - `src/endpoints/backends/chat-completions.js`
+- **已实现 Port/模块**：`apps/web/src/features/generation/**` 中的 `GenerationGateway`、`ModelCatalogGateway`、`StreamingGeneration`、26-source registry 与 `GenerationProviderCapability`。
+- **浏览器实现**：
+  - 仅接管 `main_api="openai"` 的 `/status`、`/generate`、`/bias` 三条核心路径；原版 `openai.js`、PromptManager 与 Legacy Prompt Pipeline 继续组装请求和解析回复；
+  - 26 个 SillyTavern 1.18.0 `chat_completion_sources` 由声明式 descriptor 覆盖，不编写 26 套重复实现；
+  - 22 个 OpenAI-compatible source 共用 Adapter；Claude、MakerSuite/Vertex、Cohere 分别使用 Anthropic、Google、Cohere Adapter；
+  - 模型目录归一化为原版 `{ data: [{ id }] }`；非流式保留厂商响应，SSE 使用 `ReadableStream` 直接转发，AbortSignal 向上游传播；
+  - 通过 M14 `CredentialResolverCapability` 按 source/secret ID 即时取值，内部控制字段和密钥不会进入 Provider body 或 diagnostics；
+  - Custom/reverse proxy 只允许 HTTPS 或 localhost 开发地址；CORS/TLS/PNA/网络错误明确报告，不伪装成功；
+  - M15 是近似 tokenizer，bias 只接受显式数字 token ID 数组，普通文本 bias 被诚实跳过；
+  - Vertex Express API-key 模式可用；Full Service Account、专有高级 multimodal/cache/reasoning signature/beta tool 组合仍可能返回明确 capability error。
+- **不迁移范围**：Text Completion、NovelAI、AI Horde、KoboldAI、WebLLM；原版 DOM 选项保留以避免破坏扩展契约，但不宣称可用。
+- **验收**：9 项模块测试覆盖 registry、四协议转换、模型目录、SSE、abort、CORS 错误、URL/凭据清洗和 bias；production Chrome 使��本机 CORS Mock Provider 验证 OpenAI-compatible 非流式/SSE、Anthropic、Google、Cohere、M14 与三条 Legacy routes，零异常。
+- **可选后端**：当前不实现 CORS 代理、Vault、请求签名或私网桥；用户 reverse proxy 只是直连目标，不是项目后端。
+- **依赖**：M03、M10、M14；M15 提供近似预算但不提供真实 bias token ID。
+- **删除影响**：删除 M12 后本地数据仍可浏览，但无法生成；非聊天主 API 当前本就未迁移。
 
 ## M13 — Assets / 文件、图片、背景与附件
 

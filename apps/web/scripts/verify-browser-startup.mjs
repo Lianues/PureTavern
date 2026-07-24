@@ -1,6 +1,7 @@
 import { spawn } from 'node:child_process';
 import { access, mkdtemp, rm } from 'node:fs/promises';
-import { createServer } from 'node:net';
+import { createServer as createHttpServer } from 'node:http';
+import { createServer as createNetServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
@@ -35,7 +36,7 @@ async function findBrowser() {
 }
 
 async function getAvailablePort() {
-  const server = createServer();
+  const server = createNetServer();
   await new Promise((resolve, reject) => {
     server.once('error', reject);
     server.listen(0, '127.0.0.1', resolve);
@@ -46,6 +47,100 @@ async function getAvailablePort() {
     server.close((error) => (error ? reject(error) : resolve())),
   );
   return address.port;
+}
+
+async function startMockChatCompletionProvider() {
+  const server = createHttpServer(async (request, response) => {
+    response.setHeader('Access-Control-Allow-Origin', '*');
+    response.setHeader(
+      'Access-Control-Allow-Headers',
+      'Content-Type, Authorization, x-api-key, anthropic-version, HTTP-Referer, X-Title, Accept-Language',
+    );
+    response.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+    if (request.method === 'OPTIONS') {
+      response.writeHead(204).end();
+      return;
+    }
+
+    const chunks = [];
+    for await (const chunk of request) chunks.push(chunk);
+    const body = (() => {
+      try {
+        return chunks.length ? JSON.parse(Buffer.concat(chunks).toString('utf8')) : {};
+      } catch {
+        return {};
+      }
+    })();
+    const pathname = new URL(request.url ?? '/', 'http://127.0.0.1').pathname;
+    const sendJson = (value) => {
+      response.setHeader('Content-Type', 'application/json');
+      response.end(JSON.stringify(value));
+    };
+
+    if (pathname.endsWith('/models')) {
+      if (pathname.startsWith('/google/')) {
+        sendJson({ models: [{ name: 'models/browser-google-model' }] });
+      } else if (pathname.startsWith('/cohere/')) {
+        sendJson({ models: [{ name: 'browser-cohere-model' }] });
+      } else {
+        sendJson({ data: [{ id: 'browser-provider-model' }] });
+      }
+      return;
+    }
+    if (pathname.endsWith('/chat/completions')) {
+      if (body.stream === true) {
+        response.setHeader('Content-Type', 'text/event-stream');
+        response.write('data: {"choices":[{"index":0,"delta":{"content":"Browser "}}]}\n\n');
+        response.write('data: {"choices":[{"index":0,"delta":{"content":"stream"}}]}\n\n');
+        response.end('data: [DONE]\n\n');
+      } else {
+        sendJson({
+          id: 'browser-completion',
+          choices: [{ index: 0, message: { role: 'assistant', content: 'Browser non-stream' } }],
+        });
+      }
+      return;
+    }
+    if (pathname.endsWith('/anthropic/messages')) {
+      sendJson({ content: [{ type: 'text', text: 'Browser Anthropic' }] });
+      return;
+    }
+    if (pathname.includes('/google/') && pathname.includes(':generateContent')) {
+      sendJson({
+        candidates: [{ content: { role: 'model', parts: [{ text: 'Browser Google' }] } }],
+      });
+      return;
+    }
+    if (pathname.endsWith('/cohere/v2/chat')) {
+      sendJson({
+        message: { role: 'assistant', content: [{ type: 'text', text: 'Browser Cohere' }] },
+      });
+      return;
+    }
+    sendJson({ error: { message: `Unhandled mock provider path: ${pathname}` } });
+  });
+  await new Promise((resolve, reject) => {
+    server.once('error', reject);
+    server.listen(0, '127.0.0.1', resolve);
+  });
+  const address = server.address();
+  if (!address || typeof address === 'string') throw new Error('Could not start mock provider.');
+  return { server, baseUrl: `http://127.0.0.1:${address.port}` };
+}
+
+async function removeBrowserProfile(directory) {
+  let lastError;
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    try {
+      await rm(directory, { recursive: true, force: true });
+      return;
+    } catch (error) {
+      lastError = error;
+      if (error?.code !== 'EBUSY' && error?.code !== 'EPERM') throw error;
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+  }
+  throw lastError;
 }
 
 async function waitForDebugTarget(port, timeoutMs = 15_000) {
@@ -120,6 +215,7 @@ class DevToolsClient {
 const browserPath = await findBrowser();
 const debugPort = await getAvailablePort();
 const profileDirectory = await mkdtemp(path.join(tmpdir(), 'pure-tavern-browser-'));
+const mockProvider = await startMockChatCompletionProvider();
 const browser = spawn(
   browserPath,
   [
@@ -857,6 +953,122 @@ try {
     returnByValue: true,
   });
   const secretWorkflow = secretWorkflowEvaluation.result?.value ?? {};
+
+  const generationWorkflowEvaluation = await client.send('Runtime.evaluate', {
+    expression: `(async () => {
+      const scriptModule = await import('/script.js');
+      const secretsModule = await import('/scripts/secrets.js');
+      const openAiModule = await import('/scripts/openai.js');
+      const sseModule = await import('/scripts/sse-stream.js');
+      const headers = scriptModule.getRequestHeaders();
+      const mockBase = ${JSON.stringify(mockProvider.baseUrl)};
+      const post = (pathname, body) => fetch(pathname, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(body),
+      });
+      const routeHandled = (pathname) =>
+        globalThis.__PURE_TAVERN__?.diagnostics.requests.some(
+          (request) => request.pathname === pathname && request.handled,
+        ) ?? false;
+
+      await secretsModule.writeSecret('api_key_custom', 'browser-custom-provider-key', 'Browser Custom');
+      await secretsModule.writeSecret('api_key_claude', 'browser-claude-provider-key', 'Browser Claude');
+      await secretsModule.writeSecret('api_key_makersuite', 'browser-google-provider-key', 'Browser Google');
+      await secretsModule.writeSecret('api_key_cohere', 'browser-cohere-provider-key', 'Browser Cohere');
+
+      const customBase = {
+        chat_completion_source: 'custom',
+        custom_url: mockBase + '/v1',
+        model: 'browser-provider-model',
+        messages: [{ role: 'user', content: 'Browser provider prompt' }],
+      };
+      const statusResponse = await post('/api/backends/chat-completions/status', customBase);
+      const status = statusResponse.ok ? await statusResponse.json() : null;
+      const nonStreamResponse = await post('/api/backends/chat-completions/generate', {
+        ...customBase,
+        stream: false,
+      });
+      const nonStream = nonStreamResponse.ok ? await nonStreamResponse.json() : null;
+
+      const streamResponse = await post('/api/backends/chat-completions/generate', {
+        ...customBase,
+        stream: true,
+      });
+      const eventStream = sseModule.getEventSourceStream();
+      streamResponse.body.pipeThrough(eventStream);
+      const reader = eventStream.readable.getReader();
+      const streamState = { reasoning: '', images: [], signature: '', toolSignatures: {} };
+      let streamText = '';
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done || value.data === '[DONE]') break;
+        streamText += openAiModule.getStreamingReply(JSON.parse(value.data), streamState, {
+          chatCompletionSource: 'openai',
+        });
+      }
+
+      const messages = [
+        { role: 'system', content: 'Browser system' },
+        { role: 'user', content: 'Browser native prompt' },
+      ];
+      const anthropicResponse = await post('/api/backends/chat-completions/generate', {
+        chat_completion_source: 'claude',
+        reverse_proxy: mockBase + '/anthropic',
+        model: 'browser-claude-model',
+        messages,
+        max_tokens: 64,
+      });
+      const anthropic = anthropicResponse.ok ? await anthropicResponse.json() : null;
+      const googleResponse = await post('/api/backends/chat-completions/generate', {
+        chat_completion_source: 'makersuite',
+        reverse_proxy: mockBase + '/google',
+        model: 'browser-google-model',
+        messages,
+        max_tokens: 64,
+      });
+      const google = googleResponse.ok ? await googleResponse.json() : null;
+      const cohereResponse = await post('/api/backends/chat-completions/generate', {
+        chat_completion_source: 'cohere',
+        reverse_proxy: mockBase + '/cohere',
+        model: 'browser-cohere-model',
+        messages,
+        max_tokens: 64,
+      });
+      const cohere = cohereResponse.ok ? await cohereResponse.json() : null;
+      const biasResponse = await post('/api/backends/chat-completions/bias?model=ignored', [
+        { text: '[101, 202]', value: -3 },
+        { text: 'requires exact tokenizer', value: 2 },
+      ]);
+      const bias = biasResponse.ok ? await biasResponse.json() : null;
+      const feature = globalThis.__PURE_TAVERN__?.features?.generation;
+
+      return {
+        available: true,
+        modelIds: status?.data?.map((model) => model.id) ?? [],
+        nonStreamText: nonStream?.choices?.[0]?.message?.content ?? null,
+        streamText,
+        anthropicText: anthropic?.content?.[0]?.text ?? null,
+        googleText: google?.candidates?.[0]?.content?.parts?.[0]?.text ?? null,
+        cohereText: cohere?.message?.content?.[0]?.text ?? null,
+        bias,
+        sourceCount: feature?.providerSources?.length ?? 0,
+        service: feature?.service ? { ...feature.service } : null,
+        transport: feature?.transport ? { ...feature.transport } : null,
+        scope: feature?.scope ?? null,
+        directBrowserRequests: feature?.directBrowserRequests ?? null,
+        optionalBackend: feature?.optionalBackend ?? null,
+        routesHandled: {
+          status: routeHandled('/api/backends/chat-completions/status'),
+          generate: routeHandled('/api/backends/chat-completions/generate'),
+          bias: routeHandled('/api/backends/chat-completions/bias'),
+        },
+      };
+    })()`,
+    awaitPromise: true,
+    returnByValue: true,
+  });
+  const generationWorkflow = generationWorkflowEvaluation.result?.value;
 
   const presetWorkflowEvaluation = await client.send('Runtime.evaluate', {
     expression: `(async () => {
@@ -2324,6 +2536,26 @@ try {
       secretWorkflow?.missingStatus === 404 &&
       secretWorkflow?.deleteHandled === true &&
       Object.values(secretWorkflow?.routesHandled ?? {}).every(Boolean),
+    generationProvidersReady:
+      generationWorkflow?.available === true &&
+      generationWorkflow?.sourceCount === 26 &&
+      generationWorkflow?.service?.providerCount === 26 &&
+      generationWorkflow?.service?.protocolCount === 4 &&
+      generationWorkflow?.scope === 'chat-completion-only' &&
+      generationWorkflow?.directBrowserRequests === true &&
+      generationWorkflow?.optionalBackend === false,
+    generationBrowserWorkflow:
+      generationWorkflow?.modelIds?.includes('browser-provider-model') === true &&
+      generationWorkflow?.nonStreamText === 'Browser non-stream' &&
+      generationWorkflow?.streamText === 'Browser stream' &&
+      generationWorkflow?.anthropicText === 'Browser Anthropic' &&
+      generationWorkflow?.googleText === 'Browser Google' &&
+      generationWorkflow?.cohereText === 'Browser Cohere' &&
+      generationWorkflow?.bias?.['101'] === -3 &&
+      generationWorkflow?.bias?.['202'] === -3 &&
+      Object.keys(generationWorkflow?.bias ?? {}).length === 2 &&
+      generationWorkflow?.transport?.failures === 0 &&
+      Object.values(generationWorkflow?.routesHandled ?? {}).every(Boolean),
     presetsStorageReady:
       presetWorkflow?.storage?.status === 'ready' &&
       presetWorkflow?.storage?.backend === 'indexeddb',
@@ -2492,6 +2724,7 @@ try {
     promptPipelineWorkflow,
     tokenizerWorkflow,
     secretWorkflow,
+    generationWorkflow,
     personaWorkflow,
     presetWorkflow,
     worldBookWorkflow,
@@ -2512,7 +2745,9 @@ try {
   if (!report.ok) process.exitCode = 1;
 } finally {
   client?.close();
+  const browserExit = new Promise((resolve) => browser.once('exit', resolve));
   browser.kill();
-  await new Promise((resolve) => setTimeout(resolve, 250));
-  await rm(profileDirectory, { recursive: true, force: true });
+  await Promise.race([browserExit, new Promise((resolve) => setTimeout(resolve, 2_000))]);
+  await new Promise((resolve) => mockProvider.server.close(resolve));
+  await removeBrowserProfile(profileDirectory);
 }

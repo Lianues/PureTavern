@@ -2,7 +2,7 @@
   "schemaVersion": 2,
   "project": "SillyTavern",
   "version": "1.18.0",
-  "generatedAt": "2026-07-24T08:07:51.946Z",
+  "generatedAt": "2026-07-24T09:11:24.773Z",
   "source": {
     "publicRoot": "legacy/upstream/public",
     "repositoryRoot": "legacy/upstream"
@@ -4950,6 +4950,27 @@
           "category": "extension-ecosystem-required",
           "responseKind": "empty-array-json",
           "migrationStatus": "bootstrap-empty-extension-provider-not-migrated"
+        },
+        {
+          "method": "POST",
+          "pathname": "/api/backends/chat-completions/status",
+          "category": "browser-data-capability",
+          "responseKind": "direct-provider-normalized-model-catalog-json",
+          "migrationStatus": "browser-ready-chat-completion-direct"
+        },
+        {
+          "method": "POST",
+          "pathname": "/api/backends/chat-completions/generate",
+          "category": "browser-data-capability",
+          "responseKind": "direct-provider-json-or-sse-stream",
+          "migrationStatus": "browser-ready-chat-completion-direct"
+        },
+        {
+          "method": "POST",
+          "pathname": "/api/backends/chat-completions/bias",
+          "category": "browser-data-capability",
+          "responseKind": "explicit-token-id-bias-map-json",
+          "migrationStatus": "browser-ready-chat-completion-direct"
         },
         {
           "method": "POST",
