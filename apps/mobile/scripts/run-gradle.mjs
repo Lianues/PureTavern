@@ -23,8 +23,9 @@ if (process.platform === 'win32' && !env.ANDROID_HOME) {
 }
 env.ANDROID_SDK_ROOT ??= env.ANDROID_HOME;
 
-const executable = process.platform === 'win32' ? (env.ComSpec ?? 'cmd.exe') : './gradlew';
-const args = process.platform === 'win32' ? ['/d', '/s', '/c', `gradlew.bat ${task}`] : [task];
+const executable = process.platform === 'win32' ? (env.ComSpec ?? 'cmd.exe') : '/bin/sh';
+const args =
+  process.platform === 'win32' ? ['/d', '/s', '/c', `gradlew.bat ${task}`] : ['./gradlew', task];
 const child = spawn(executable, args, {
   cwd: androidRoot,
   env,

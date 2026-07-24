@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "test": "node scripts/verify-file-saver.mjs && node scripts/verify-ios-shell.mjs",
+    "test": "node scripts/verify-file-saver.mjs && node scripts/verify-ios-shell.mjs && node scripts/verify-gradle-runner.mjs",
     "brand:mobile": "python scripts/generate_mobile_branding.py",
     "sync:android": "cap sync android",
     "open:android": "cap sync android && cap open android",
