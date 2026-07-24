@@ -49,10 +49,16 @@ jobs:
       - name: Build generic web app and Android shell
         run: pnpm android:debug
 
+      - name: Stage universal Android APK
+        run: |
+          mkdir -p release
+          cp apps/mobile/android/app/build/outputs/apk/debug/app-debug.apk "release/PureTavern-$PURE_TAVERN_VERSION_NAME-android-universal.apk"
+
       - name: Upload installable APK
         uses: actions/upload-artifact@v4
         with:
-          name: PureTavern-android-debug-${{ github.run_number }}
-          path: apps/mobile/android/app/build/outputs/apk/debug/app-debug.apk
+          name: PureTavern-android-universal-${{ github.run_number }}
+          path: release/*.apk
           if-no-files-found: error
+          compression-level: 0
           retention-days: 30

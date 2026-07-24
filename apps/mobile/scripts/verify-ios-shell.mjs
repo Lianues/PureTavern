@@ -48,7 +48,7 @@ assert.match(scheme, /BlueprintIdentifier = "504EC3031FED79650016851F"/u);
 assert.match(workflow, /^\s*workflow_dispatch:\s*$/mu);
 assert.doesNotMatch(workflow, /^\s*push:\s*$/mu);
 assert.match(workflow, /CODE_SIGNING_ALLOWED=NO/u);
-assert.match(workflow, /PureTavern-unsigned\.ipa/u);
+assert.match(workflow, /PureTavern-\$RELEASE_VERSION-ios-unsigned\.ipa/u);
 assert.match(gitignore, /^output$/mu);
 assert.deepEqual(pngMetadata(icon), { width: 1024, height: 1024, colorType: 2 });
 assert.deepEqual(pngMetadata(splash), { width: 2732, height: 2732, colorType: 2 });

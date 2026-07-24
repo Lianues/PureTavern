@@ -33,6 +33,9 @@ jobs:
       - name: Build generic web app and sync iOS
         run: pnpm ios:sync
 
+      - name: Read package version
+        run: node -p '"RELEASE_VERSION=" + require("./package.json").version' >> "$GITHUB_ENV"
+
       - name: Build unsigned iOS application
         run: |
           xcodebuild \
@@ -52,12 +55,13 @@ jobs:
           mkdir -p apps/mobile/ios/output/Payload
           cp -R apps/mobile/ios/DerivedData/Build/Products/Release-iphoneos/App.app apps/mobile/ios/output/Payload/
           cd apps/mobile/ios/output
-          /usr/bin/ditto -c -k --sequesterRsrc --keepParent Payload PureTavern-unsigned.ipa
+          /usr/bin/ditto -c -k --sequesterRsrc --keepParent Payload "PureTavern-$RELEASE_VERSION-ios-unsigned.ipa"
 
       - name: Upload unsigned IPA
         uses: actions/upload-artifact@v4
         with:
-          name: PureTavern-iOS-unsigned-${{ github.run_number }}
-          path: apps/mobile/ios/output/PureTavern-unsigned.ipa
+          name: PureTavern-ios-unsigned-${{ github.run_number }}
+          path: apps/mobile/ios/output/*.ipa
           if-no-files-found: error
+          compression-level: 0
           retention-days: 30

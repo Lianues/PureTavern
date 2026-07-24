@@ -16,11 +16,17 @@ interface TestReleaseWorkflow {
 
 describe('manual test release workflow', () => {
   it('builds every package before committing and publishing the marked test release', async () => {
-    const [source, desktopSource] = await Promise.all([
+    const [source, desktopSource, androidSource, iosSource, stagingSource] = await Promise.all([
       readFile('../../.github/workflows/test-release.yml', 'utf8'),
       readFile('../../.github/workflows/desktop-bundles.yml', 'utf8'),
+      readFile('../../.github/workflows/android-apk.yml', 'utf8'),
+      readFile('../../.github/workflows/ios-ipa.yml', 'utf8'),
+      readFile('../../scripts/stage-desktop-release.mjs', 'utf8'),
     ]);
     const workflow = parse(source) as TestReleaseWorkflow;
+    for (const workflowSource of [desktopSource, androidSource, iosSource]) {
+      expect(() => parse(workflowSource)).not.toThrow();
+    }
 
     expect(workflow.name).toBe('Build Test Release');
     expect(workflow.on).toEqual({
@@ -59,12 +65,20 @@ describe('manual test release workflow', () => {
     expect(source).toContain('--prerelease');
     expect(source).toContain('--notes-file release-notes.txt');
     for (const workflowSource of [source, desktopSource]) {
-      expect(workflowSource).toContain('bundle/nsis/*.exe');
-      expect(workflowSource).toContain('bundle/dmg/*.dmg');
-      expect(workflowSource).toContain('bundle/appimage/*.AppImage');
-      expect(workflowSource).toContain('bundle/deb/*.deb');
+      expect(workflowSource).toContain('stage-desktop-release.mjs');
+      expect(workflowSource).toContain('x86_64-apple-darwin');
+      expect(workflowSource).toContain('aarch64-apple-darwin');
+      expect(workflowSource).toContain('appimage,deb,rpm');
       expect(workflowSource).toContain('compression-level: 0');
       expect(workflowSource).not.toContain('bundle/**/*');
     }
+    expect(source).toContain('PureTavern-$RELEASE_VERSION-android-universal.apk');
+    expect(source).toContain('PureTavern-$RELEASE_VERSION-ios-unsigned.ipa');
+    expect(androidSource).toContain('android-universal.apk');
+    expect(iosSource).toContain('ios-unsigned.ipa');
+    expect(stagingSource).toContain('desktopReleaseAssetNames');
+    expect(stagingSource).toContain('pure-tavern-desktop.exe');
+    expect(stagingSource).toContain("'appimage'");
+    expect(stagingSource).toContain("'rpm'");
   });
 });

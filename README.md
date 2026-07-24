@@ -115,7 +115,7 @@ pnpm desktop:dev
 pnpm desktop:build
 ```
 
-桌面产物位于 `apps/desktop/src-tauri/target/release`。GitHub Actions 的 **Build Desktop Bundles** workflow 仅手动触发，可分别生成 Windows NSIS、macOS DMG、Linux AppImage 和 DEB 测试包。
+桌面产物位于 `apps/desktop/src-tauri/target/release`。GitHub Actions 的 **Build Desktop Bundles** workflow 仅手动触发，可生成 Windows x64 NSIS 安装版与便携 EXE、macOS x64/ARM64 DMG，以及 Linux x64 AppImage、DEB 和 RPM 测试包。
 
 ### VS Code 扩展
 
@@ -139,20 +139,24 @@ GitHub Actions 的 **Build Test Release** workflow 用于手动创建一次完�
 
 CI 会先构建并验证以下产物：
 
-- 通用 Web `dist` ZIP；
-- Android Debug APK；
-- Windows NSIS；
-- macOS DMG；
-- Linux AppImage 与 DEB；
-- iOS unsigned IPA；
-- VS Code VSIX。
+- `PureTavern-<version>-web.zip`；
+- `PureTavern-<version>-android-universal.apk`（测试签名）；
+- `PureTavern-<version>-windows-x64-setup.exe`；
+- `PureTavern-<version>-windows-x64-portable.exe`；
+- `PureTavern-<version>-macos-x64.dmg`；
+- `PureTavern-<version>-macos-arm64.dmg`；
+- `PureTavern-<version>-linux-x64.AppImage`；
+- `PureTavern-<version>-linux-x64.deb`；
+- `PureTavern-<version>-linux-x64.rpm`；
+- `PureTavern-<version>-ios-unsigned.ipa`；
+- `PureTavern-VSCode-<version>.vsix`。
 
 只有全部平台成功后，CI 才会：
 
 1. 创建 `chore(test-release): 0.2.0` 版本提交；
 2. 创建 `test-v0.2.0` annotated tag；
 3. 创建标题为 `0.2.0 Test`、正文为空的 GitHub Prerelease；
-4. 上传全部平台包、VSIX 和 `PureTavern-0.2.0-web.zip`。
+4. 上传上述全部标准化平台包。
 
 构建期间如果 `main` 已前移，发布阶段会拒绝提交和打 Tag，避免用过期源码创建 Release。当前测试版移动端和桌面端没有正式发布者签名：Android 为 Debug APK，iOS 为 unsigned IPA，桌面包会触发对应系统的未签名应用警告。
 
