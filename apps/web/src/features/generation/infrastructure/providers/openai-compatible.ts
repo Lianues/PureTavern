@@ -137,6 +137,9 @@ function buildOpenAiBody(request: LegacyGenerationRequest): Record<string, unkno
   }
   if (request.chat_completion_source === 'custom') {
     Object.assign(body, parseCustomBody(request.custom_include_body));
+    for (const key of parseCustomExclusions(request.custom_exclude_body)) {
+      delete body[key];
+    }
   }
   return compactObject(body);
 }
@@ -207,6 +210,14 @@ function parseCustomBody(value: unknown): Record<string, unknown> {
     delete parsed[key];
   }
   return parsed;
+}
+
+function parseCustomExclusions(value: unknown): string[] {
+  const parsed = parseObject(value);
+  return Object.keys(parsed).filter((key) => {
+    const flag = parsed[key];
+    return flag === true || flag === 1 || flag === 'true';
+  });
 }
 
 function parseObject(value: unknown): Record<string, unknown> {
