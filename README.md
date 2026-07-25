@@ -103,6 +103,26 @@ pnpm ios:open # 仅 macOS
 
 GitHub Actions 的 **Build iOS IPA** workflow 仅手动触发，在 macOS runner 生成 unsigned IPA。未签名 IPA 需要用户自行签名；App Store/TestFlight 发布必须配置 Apple Developer 证书和 Provisioning Profile。
 
+### HarmonyOS NEXT HAP
+
+HarmonyOS NEXT 6.0.2(22) ArkTS Stage 外壳位于 `apps/harmony`，只消费 `apps/web/dist`。ArkWeb 通过 `https://puretavern.local/` 本地同源和 rawfile 请求拦截加载完整 Web 产物，业务 Feature Modules 不感知鸿蒙平台。
+
+```bash
+# 构建 Web 并同步到 Harmony rawfile
+pnpm harmony:sync
+
+# 已安装 DevEco/Harmony CLI 时构建 HAP
+pnpm harmony:build
+```
+
+GitHub Actions 的 **Build HarmonyOS NEXT HAP** workflow 仅手动触发，在 `ubuntu-22.04` 安装固定版本 HarmonyOS Linux command-line-tools 并生成：
+
+```text
+PureTavern-<version>-harmonyos-next-arm64-unsigned.hap
+```
+
+该 HAP 默认未签名。安装到真机或发布到应用市场前，必须配置 HarmonyOS 调试或发布签名；证书、Profile、密钥库和密码不得提交到仓库。
+
 ### 桌面端
 
 Tauri 2 桌面外壳位于 `apps/desktop`，同样只消费 `apps/web/dist`。一套外壳支持 Windows、macOS 和 Linux，Feature Modules 不感知桌面平台。

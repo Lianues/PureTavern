@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 const PACKAGE_FILES = Object.freeze([
   'package.json',
   'apps/desktop/package.json',
+  'apps/harmony/package.json',
   'apps/mobile/package.json',
   'apps/server/package.json',
   'apps/vscode-extension/package.json',
@@ -22,6 +23,15 @@ export function assertReleaseVersion(version) {
     );
   }
   return version;
+}
+
+export function harmonyVersionCode(version) {
+  const [major, minor, patch] = assertReleaseVersion(version).split('.').map(Number);
+  const code = major * 1_000_000 + minor * 1_000 + patch + 1;
+  if (!Number.isSafeInteger(code) || code > 2_147_483_647) {
+    throw new Error(`Release version cannot be represented as a HarmonyOS versionCode: ${version}`);
+  }
+  return code;
 }
 
 async function updateJson(root, relativePath, mutate) {
@@ -45,6 +55,7 @@ async function replaceText(root, relativePath, pattern, replacement, expectedCou
 
 export async function applyReleaseVersion(root, requestedVersion) {
   const version = assertReleaseVersion(requestedVersion);
+  const harmonyCode = harmonyVersionCode(version);
 
   await Promise.all(
     PACKAGE_FILES.map((relativePath) =>
@@ -68,6 +79,24 @@ export async function applyReleaseVersion(root, requestedVersion) {
     root,
     'apps/desktop/src-tauri/Cargo.lock',
     /(\[\[package\]\]\r?\nname = "pure-tavern-desktop"\r?\nversion = ")[^"]+("\r?\n)/gu,
+    `$1${version}$2`,
+  );
+  await replaceText(
+    root,
+    'apps/harmony/AppScope/app.json5',
+    /((?:["']?versionCode["']?)\s*:\s*)\d+/gu,
+    `$1${harmonyCode}`,
+  );
+  await replaceText(
+    root,
+    'apps/harmony/AppScope/app.json5',
+    /((?:["']?versionName["']?)\s*:\s*["'])[^"']+(["'])/gu,
+    `$1${version}$2`,
+  );
+  await replaceText(
+    root,
+    'apps/harmony/entry/oh-package.json5',
+    /((?:["']?version["']?)\s*:\s*["'])[^"']+(["'])/gu,
     `$1${version}$2`,
   );
   await replaceText(

@@ -1,0 +1,16 @@
+{
+  "string": [
+    {
+      "name": "app_name",
+      "value": "PureTavern"
+    },
+    {
+      "name": "module_description",
+      "value": "PureTavern HarmonyOS NEXT client"
+    },
+    {
+      "name": "permission_internet_reason",
+      "value": "PureTavern needs network access for user-configured AI providers and external resources."
+    }
+  ]
+}

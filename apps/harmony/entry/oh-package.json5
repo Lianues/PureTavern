@@ -1,0 +1,9 @@
+{
+  name: 'entry',
+  version: '0.1.0',
+  description: 'PureTavern HarmonyOS NEXT entry module',
+  main: '',
+  author: 'Limerence',
+  license: 'AGPL-3.0-only',
+  dependencies: {},
+}

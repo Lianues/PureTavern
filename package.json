@@ -24,6 +24,8 @@
     "android:debug": "pnpm build && pnpm --filter @pure-tavern/mobile build:android:debug",
     "ios:sync": "pnpm build && pnpm --filter @pure-tavern/mobile sync:ios",
     "ios:open": "pnpm build && pnpm --filter @pure-tavern/mobile open:ios",
+    "harmony:sync": "pnpm build && pnpm --dir apps/harmony sync:web",
+    "harmony:build": "pnpm build && pnpm --dir apps/harmony build:hap",
     "desktop:dev": "pnpm --filter @pure-tavern/desktop dev:desktop",
     "desktop:build": "pnpm --filter @pure-tavern/desktop build:desktop",
     "vscode:build": "pnpm build && pnpm --dir apps/vscode-extension build:extension",

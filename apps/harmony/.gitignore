@@ -1,0 +1,7 @@
+.hvigor
+oh_modules
+oh-package-lock.json5
+entry/.preview
+entry/build
+entry/src/main/resources/rawfile/web
+entry/src/main/resources/rawfile/web-manifest.json

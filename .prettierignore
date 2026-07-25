@@ -5,6 +5,11 @@ apps/web/.generated/**
 apps/web/index.html
 apps/mobile/android/**
 apps/mobile/ios/**
+apps/harmony/.hvigor/**
+apps/harmony/oh_modules/**
+apps/harmony/entry/build/**
+apps/harmony/entry/src/main/ets/**
+apps/harmony/entry/src/main/resources/rawfile/**
 apps/desktop/src-tauri/target/**
 apps/desktop/src-tauri/gen/schemas/**
 SillyTavern-1.18.0/**

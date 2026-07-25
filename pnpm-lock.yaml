@@ -39,6 +39,8 @@ importers:
         specifier: 2.11.4
         version: 2.11.4
 
+  apps/harmony: {}
+
   apps/mobile:
     dependencies:
       '@capacitor/android':

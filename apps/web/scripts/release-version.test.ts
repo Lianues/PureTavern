@@ -7,11 +7,13 @@ import { describe, expect, it } from 'vitest';
 import {
   applyReleaseVersion,
   assertReleaseVersion,
+  harmonyVersionCode,
 } from '../../../scripts/set-release-version.mjs';
 
 const PACKAGE_FILES = [
   'package.json',
   'apps/desktop/package.json',
+  'apps/harmony/package.json',
   'apps/mobile/package.json',
   'apps/server/package.json',
   'apps/vscode-extension/package.json',
@@ -31,6 +33,8 @@ describe('test release versioning', () => {
     expect(assertReleaseVersion('1.2.3')).toBe('1.2.3');
     expect(() => assertReleaseVersion('v1.2.3')).toThrow(/stable SemVer/u);
     expect(() => assertReleaseVersion('1.2.3-beta.1')).toThrow(/stable SemVer/u);
+    expect(harmonyVersionCode('0.1.0')).toBe(1001);
+    expect(harmonyVersionCode('1.2.3')).toBe(1_002_004);
   });
 
   it('updates every release-owned version without touching unrelated package versions', async () => {
@@ -42,6 +46,16 @@ describe('test release versioning', () => {
         ),
       );
       await fixtureFile(root, 'apps/desktop/src-tauri/tauri.conf.json', '{"version":"0.1.0"}\n');
+      await fixtureFile(
+        root,
+        'apps/harmony/AppScope/app.json5',
+        "{ app: { versionCode: 1001, versionName: '0.1.0' } }\n",
+      );
+      await fixtureFile(
+        root,
+        'apps/harmony/entry/oh-package.json5',
+        "{ name: 'entry', version: '0.1.0' }\n",
+      );
       await fixtureFile(
         root,
         'apps/desktop/src-tauri/Cargo.toml',
@@ -79,6 +93,12 @@ describe('test release versioning', () => {
         const value = JSON.parse(await readFile(path.join(root, relativePath), 'utf8'));
         expect(value.version).toBe('1.2.3');
       }
+      expect(await readFile(path.join(root, 'apps/harmony/AppScope/app.json5'), 'utf8')).toBe(
+        "{ app: { versionCode: 1002004, versionName: '1.2.3' } }\n",
+      );
+      expect(await readFile(path.join(root, 'apps/harmony/entry/oh-package.json5'), 'utf8')).toBe(
+        "{ name: 'entry', version: '1.2.3' }\n",
+      );
       expect(await readFile(path.join(root, 'apps/desktop/src-tauri/Cargo.lock'), 'utf8')).toBe(
         '[[package]]\nname = "dependency"\nversion = "0.1.0"\n\n[[package]]\nname = "pure-tavern-desktop"\nversion = "1.2.3"\n',
       );

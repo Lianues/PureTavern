@@ -1,0 +1,1 @@
+# PureTavern HarmonyOS NEXT release obfuscation is intentionally disabled.

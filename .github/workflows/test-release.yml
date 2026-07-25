@@ -424,6 +424,9 @@ jobs:
             apps/desktop/src-tauri/Cargo.lock \
             apps/desktop/src-tauri/Cargo.toml \
             apps/desktop/src-tauri/tauri.conf.json \
+            apps/harmony/AppScope/app.json5 \
+            apps/harmony/entry/oh-package.json5 \
+            apps/harmony/package.json \
             apps/mobile/android/app/build.gradle \
             apps/mobile/ios/App/App.xcodeproj/project.pbxproj \
             apps/mobile/package.json \

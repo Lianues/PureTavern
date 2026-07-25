@@ -1,0 +1,6 @@
+{
+  modelVersion: '6.0.2',
+  description: 'PureTavern HarmonyOS NEXT application shell',
+  dependencies: {},
+  devDependencies: {},
+}
