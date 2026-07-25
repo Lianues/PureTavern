@@ -15,6 +15,7 @@ const [
   loader,
   syncScript,
   buildScript,
+  discoveryScript,
   stageScript,
   workflow,
   packageJson,
@@ -28,6 +29,7 @@ const [
   readFile(path.join(harmonyRoot, 'entry/src/main/ets/web/LocalWebAssetLoader.ets'), 'utf8'),
   readFile(path.join(harmonyRoot, 'scripts/sync-web-assets.mjs'), 'utf8'),
   readFile(path.join(harmonyRoot, 'scripts/build-hap.mjs'), 'utf8'),
+  readFile(path.join(harmonyRoot, 'scripts/discover-toolchain.mjs'), 'utf8'),
   readFile(path.join(harmonyRoot, 'scripts/stage-hap.mjs'), 'utf8'),
   readFile(path.join(workspaceRoot, '.github/workflows/harmony-hap.yml'), 'utf8'),
   readFile(path.join(harmonyRoot, 'package.json'), 'utf8'),
@@ -57,6 +59,8 @@ assert.match(loader, /application\/wasm/u);
 assert.match(syncScript, /apps\/web\/dist/u);
 assert.match(syncScript, /pure-tavern-assets-service-worker\.js/u);
 assert.match(buildScript, /assembleHap/u);
+assert.match(discoveryScript, /sanitizeHarmonyTools/u);
+assert.match(discoveryScript, /AppleDouble metadata entries/u);
 assert.match(stageScript, /harmonyos-next-arm64-unsigned\.hap/u);
 assert.match(workflow, /^\s*workflow_dispatch:\s*$/mu);
 assert.doesNotMatch(workflow, /^\s*push:\s*$/mu);

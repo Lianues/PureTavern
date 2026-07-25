@@ -1,10 +1,13 @@
-import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
-import { discoverHarmonyTools } from '../../harmony/scripts/harmony-toolchain.mjs';
+import {
+  discoverHarmonyTools,
+  sanitizeHarmonyTools,
+} from '../../harmony/scripts/harmony-toolchain.mjs';
 import { harmonyReleaseAssetName, stageHarmonyHap } from '../../harmony/scripts/stage-hap.mjs';
 import { syncWebAssets } from '../../harmony/scripts/sync-web-assets.mjs';
 
@@ -49,6 +52,22 @@ describe('HarmonyOS NEXT shell tooling', () => {
       await mkdir(bin, { recursive: true });
       await writeFile(path.join(bin, 'hmos-lite'), '#!/bin/sh\n');
       await writeFile(path.join(bin, 'ohpm'), '#!/bin/sh\n');
+      const signingPart = path.join(
+        root,
+        'command-line-tools',
+        'hvigor',
+        'res',
+        'material',
+        'fd',
+        '0',
+      );
+      await mkdir(signingPart, { recursive: true });
+      await writeFile(path.join(signingPart, 'key'), 'valid signing material');
+      await writeFile(path.join(signingPart, '._key'), 'AppleDouble metadata');
+      await writeFile(path.join(root, '.DS_Store'), 'Finder metadata');
+      await expect(sanitizeHarmonyTools([root])).resolves.toBe(2);
+      await expect(readdir(signingPart)).resolves.toEqual(['key']);
+
       const tools = await discoverHarmonyTools([root]);
       expect(path.basename(tools.hvigor)).toBe('hmos-lite');
       expect(path.basename(tools.ohpm)).toBe('ohpm');

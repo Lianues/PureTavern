@@ -48,7 +48,7 @@ jobs:
       - name: Install pinned HarmonyOS Linux command-line tools
         run: npm install --prefix "$RUNNER_TEMP/hmos-cli" "@hmtools/hmos-cli-lite-linux@$HMOS_CLI_VERSION"
 
-      - name: Discover hvigor and ohpm
+      - name: Sanitize and discover hvigor and ohpm
         run: node apps/harmony/scripts/discover-toolchain.mjs "$RUNNER_TEMP/hmos-cli/node_modules/@hmtools/hmos-cli-lite-linux" >> "$GITHUB_ENV"
 
       - name: Install Harmony project dependencies

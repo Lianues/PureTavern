@@ -1,4 +1,4 @@
-import { chmod, readdir, stat } from 'node:fs/promises';
+import { chmod, readdir, rm, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
 
@@ -17,6 +17,34 @@ async function walk(root, depth = 0) {
     else if (entry.isFile()) files.push(target);
   }
   return files;
+}
+
+function isAppleMetadata(name) {
+  return (
+    name === '.DS_Store' || name === '.AppleDouble' || name === '__MACOSX' || name.startsWith('._')
+  );
+}
+
+async function removeAppleMetadata(root, depth = 0) {
+  if (depth > 24) return 0;
+  const entries = await readdir(root, { withFileTypes: true }).catch(() => []);
+  let removed = 0;
+  for (const entry of entries) {
+    const target = path.join(root, entry.name);
+    if (isAppleMetadata(entry.name)) {
+      await rm(target, { recursive: true, force: true });
+      removed += 1;
+    } else if (entry.isDirectory()) {
+      removed += await removeAppleMetadata(target, depth + 1);
+    }
+  }
+  return removed;
+}
+
+export async function sanitizeHarmonyTools(searchRoots) {
+  let removed = 0;
+  for (const root of searchRoots) removed += await removeAppleMetadata(path.resolve(root));
+  return removed;
 }
 
 function scoreCandidate(filePath, tool) {
