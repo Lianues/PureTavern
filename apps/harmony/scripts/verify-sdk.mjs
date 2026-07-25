@@ -41,15 +41,20 @@ export async function verifyHarmonySdk({ hvigorPath, projectRoot }) {
   const buildProfile = await readFile(path.join(projectRoot, 'build-profile.json5'), 'utf8');
   const compileTarget = readConfiguredTarget(buildProfile, 'compileSdkVersion');
   const compatibleTarget = readConfiguredTarget(buildProfile, 'compatibleSdkVersion');
+  const targetTarget = readConfiguredTarget(buildProfile, 'targetSdkVersion');
 
-  if (compileTarget !== installedTarget || compatibleTarget !== installedTarget) {
+  if (
+    compileTarget !== installedTarget ||
+    compatibleTarget !== installedTarget ||
+    targetTarget !== installedTarget
+  ) {
     throw new Error(
       `HarmonyOS SDK target mismatch: CLI provides ${installedTarget}, ` +
-        `but build-profile.json5 requests compile=${compileTarget}, compatible=${compatibleTarget}.`,
+        `but build-profile.json5 requests compile=${compileTarget}, compatible=${compatibleTarget}, target=${targetTarget}.`,
     );
   }
 
-  return { compatibleTarget, compileTarget, installedTarget, sdkPackagePath };
+  return { compatibleTarget, compileTarget, installedTarget, sdkPackagePath, targetTarget };
 }
 
 async function main() {

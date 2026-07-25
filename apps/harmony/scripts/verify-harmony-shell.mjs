@@ -42,6 +42,7 @@ assert.match(appScope, /bundleName\s*:\s*['"]com\.puretavern\.harmony['"]/u);
 assert.match(appScope, /versionName\s*:\s*['"]0\.1\.0['"]/u);
 assert.match(buildProfile, /compileSdkVersion\s*:\s*['"]6\.1\.0\(23\)['"]/u);
 assert.match(buildProfile, /compatibleSdkVersion\s*:\s*['"]6\.1\.0\(23\)['"]/u);
+assert.match(buildProfile, /targetSdkVersion\s*:\s*['"]6\.1\.0\(23\)['"]/u);
 assert.match(buildProfile, /signingConfigs\s*:\s*\[\]/u);
 assert.match(moduleProfile, /['"]ohos\.permission\.INTERNET['"]/u);
 assert.match(
@@ -64,7 +65,10 @@ assert.match(buildScript, /assembleHap/u);
 assert.match(buildScript, /verifyHarmonySdk/u);
 assert.match(discoveryScript, /sanitizeHarmonyTools/u);
 assert.match(discoveryScript, /AppleDouble metadata entries/u);
+assert.match(discoveryScript, /patchOptionalImageTranscoder/u);
+assert.match(discoveryScript, /eager HarmonyOS image transcoder/u);
 assert.match(sdkScript, /HarmonyOS SDK target mismatch/u);
+assert.match(sdkScript, /targetSdkVersion/u);
 assert.match(sdkScript, /sdk-pkg\.json/u);
 assert.match(stageScript, /harmonyos-next-arm64-unsigned\.hap/u);
 assert.match(workflow, /^\s*workflow_dispatch:\s*$/mu);

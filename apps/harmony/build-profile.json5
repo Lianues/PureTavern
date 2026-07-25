@@ -6,6 +6,7 @@
         name: 'default',
         compileSdkVersion: '6.1.0(23)',
         compatibleSdkVersion: '6.1.0(23)',
+        targetSdkVersion: '6.1.0(23)',
         runtimeOS: 'HarmonyOS',
         buildOption: {
           strictMode: {

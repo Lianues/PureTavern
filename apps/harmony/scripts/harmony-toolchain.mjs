@@ -1,4 +1,4 @@
-import { chmod, readdir, rm, stat } from 'node:fs/promises';
+import { chmod, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
 
@@ -6,6 +6,12 @@ const TOOL_NAMES = Object.freeze({
   hvigor: new Set(['hmos-lite', 'hvigorw', 'hvigorw.js', 'hvigorw.bat']),
   ohpm: new Set(['ohpm', 'ohpm.js', 'ohpm.bat']),
 });
+
+const TRANSCODER_SOURCE_SUFFIX = '/hvigor/hvigor-ohos-plugin/src/tasks/process-resource.js';
+const EAGER_TRANSCODER_SETUP =
+  'if(i.setExtensionPath(this.sdkInfo.getLibimageTranscoderShared()),o){';
+const OPTIONAL_TRANSCODER_SETUP =
+  'if(o){i.setExtensionPath(this.sdkInfo.getLibimageTranscoderShared());';
 
 async function walk(root, depth = 0) {
   if (depth > 8) return [];
@@ -45,6 +51,32 @@ export async function sanitizeHarmonyTools(searchRoots) {
   let removed = 0;
   for (const root of searchRoots) removed += await removeAppleMetadata(path.resolve(root));
   return removed;
+}
+
+export async function patchOptionalImageTranscoder(searchRoots) {
+  const files = (await Promise.all(searchRoots.map((root) => walk(path.resolve(root))))).flat();
+  const candidates = files.filter((filePath) =>
+    filePath.replaceAll('\\', '/').endsWith(TRANSCODER_SOURCE_SUFFIX),
+  );
+  if (candidates.length === 0) {
+    throw new Error(`Could not locate HarmonyOS process-resource.js under: ${searchRoots}`);
+  }
+
+  let patched = 0;
+  for (const candidate of candidates) {
+    const source = await readFile(candidate, 'utf8');
+    if (source.includes(OPTIONAL_TRANSCODER_SETUP)) continue;
+    if (!source.includes(EAGER_TRANSCODER_SETUP)) {
+      throw new Error(`Unsupported HarmonyOS image transcoder setup in: ${candidate}`);
+    }
+    await writeFile(
+      candidate,
+      source.replace(EAGER_TRANSCODER_SETUP, OPTIONAL_TRANSCODER_SETUP),
+      'utf8',
+    );
+    patched += 1;
+  }
+  return { files: candidates, patched };
 }
 
 function scoreCandidate(filePath, tool) {

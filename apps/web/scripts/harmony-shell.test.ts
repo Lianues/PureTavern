@@ -6,6 +6,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   discoverHarmonyTools,
+  patchOptionalImageTranscoder,
   sanitizeHarmonyTools,
 } from '../../harmony/scripts/harmony-toolchain.mjs';
 import { harmonyReleaseAssetName, stageHarmonyHap } from '../../harmony/scripts/stage-hap.mjs';
@@ -69,6 +70,26 @@ describe('HarmonyOS NEXT shell tooling', () => {
       await expect(sanitizeHarmonyTools([root])).resolves.toBe(2);
       await expect(readdir(signingPart)).resolves.toEqual(['key']);
 
+      const processResource = path.join(
+        root,
+        'command-line-tools',
+        'hvigor',
+        'hvigor-ohos-plugin',
+        'src',
+        'tasks',
+        'process-resource.js',
+      );
+      await mkdir(path.dirname(processResource), { recursive: true });
+      await writeFile(
+        processResource,
+        'const i={setExtensionPath(){}};const o=false;if(i.setExtensionPath(this.sdkInfo.getLibimageTranscoderShared()),o){run();}',
+      );
+      await expect(patchOptionalImageTranscoder([root])).resolves.toMatchObject({ patched: 1 });
+      await expect(readFile(processResource, 'utf8')).resolves.toContain(
+        'if(o){i.setExtensionPath(this.sdkInfo.getLibimageTranscoderShared());',
+      );
+      await expect(patchOptionalImageTranscoder([root])).resolves.toMatchObject({ patched: 0 });
+
       const tools = await discoverHarmonyTools([root]);
       expect(path.basename(tools.hvigor)).toBe('hmos-lite');
       expect(path.basename(tools.ohpm)).toBe('ohpm');
@@ -83,14 +104,14 @@ describe('HarmonyOS NEXT shell tooling', () => {
       );
       await writeFile(
         path.join(projectRoot, 'build-profile.json5'),
-        "{ app: { products: [{ compileSdkVersion: '6.1.0(23)', compatibleSdkVersion: '6.1.0(23)' }] } }",
+        "{ app: { products: [{ compileSdkVersion: '6.1.0(23)', compatibleSdkVersion: '6.1.0(23)', targetSdkVersion: '6.1.0(23)' }] } }",
       );
       await expect(
         verifyHarmonySdk({ hvigorPath: tools.hvigor, projectRoot }),
       ).resolves.toMatchObject({ installedTarget: '6.1.0(23)' });
       await writeFile(
         path.join(projectRoot, 'build-profile.json5'),
-        "{ app: { products: [{ compileSdkVersion: '6.0.2(22)', compatibleSdkVersion: '6.0.2(22)' }] } }",
+        "{ app: { products: [{ compileSdkVersion: '6.0.2(22)', compatibleSdkVersion: '6.0.2(22)', targetSdkVersion: '6.0.2(22)' }] } }",
       );
       await expect(verifyHarmonySdk({ hvigorPath: tools.hvigor, projectRoot })).rejects.toThrow(
         /CLI provides 6\.1\.0\(23\).*compile=6\.0\.2\(22\)/u,

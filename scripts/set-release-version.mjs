@@ -95,12 +95,6 @@ export async function applyReleaseVersion(root, requestedVersion) {
   );
   await replaceText(
     root,
-    'apps/harmony/entry/oh-package.json5',
-    /((?:["']?version["']?)\s*:\s*["'])[^"']+(["'])/gu,
-    `$1${version}$2`,
-  );
-  await replaceText(
-    root,
     'apps/mobile/android/app/build.gradle',
     /(def pureTavernVersionName = System\.getenv\('PURE_TAVERN_VERSION_NAME'\) \?: ')[^']+(')/gu,
     `$1${version}$2`,

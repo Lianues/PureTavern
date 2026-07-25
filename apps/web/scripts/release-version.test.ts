@@ -54,7 +54,7 @@ describe('test release versioning', () => {
       await fixtureFile(
         root,
         'apps/harmony/entry/oh-package.json5',
-        "{ name: 'entry', version: '0.1.0' }\n",
+        "{ name: 'entry', version: '1.0.0' }\n",
       );
       await fixtureFile(
         root,
@@ -97,7 +97,7 @@ describe('test release versioning', () => {
         "{ app: { versionCode: 1002004, versionName: '1.2.3' } }\n",
       );
       expect(await readFile(path.join(root, 'apps/harmony/entry/oh-package.json5'), 'utf8')).toBe(
-        "{ name: 'entry', version: '1.2.3' }\n",
+        "{ name: 'entry', version: '1.0.0' }\n",
       );
       expect(await readFile(path.join(root, 'apps/desktop/src-tauri/Cargo.lock'), 'utf8')).toBe(
         '[[package]]\nname = "dependency"\nversion = "0.1.0"\n\n[[package]]\nname = "pure-tavern-desktop"\nversion = "1.2.3"\n',

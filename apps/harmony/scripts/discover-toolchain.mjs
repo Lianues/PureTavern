@@ -1,7 +1,11 @@
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { discoverHarmonyTools, sanitizeHarmonyTools } from './harmony-toolchain.mjs';
+import {
+  discoverHarmonyTools,
+  patchOptionalImageTranscoder,
+  sanitizeHarmonyTools,
+} from './harmony-toolchain.mjs';
 
 const defaultRoot = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -15,6 +19,12 @@ const removed = await sanitizeHarmonyTools(roots);
 if (removed > 0) {
   console.error(`Removed ${removed} AppleDouble metadata entries from HarmonyOS CLI tools.`);
 }
+const transcoderPatch = await patchOptionalImageTranscoder(roots);
+console.error(
+  transcoderPatch.patched > 0
+    ? `Patched ${transcoderPatch.patched} eager HarmonyOS image transcoder setup(s).`
+    : 'HarmonyOS image transcoder setup is already optional.',
+);
 const tools = await discoverHarmonyTools(roots);
 console.error(`Discovered HarmonyOS hvigor: ${tools.hvigor}`);
 console.error(`Discovered HarmonyOS ohpm: ${tools.ohpm}`);
