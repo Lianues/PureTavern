@@ -2,11 +2,6 @@ name: Build HarmonyOS NEXT HAP
 
 on:
   workflow_dispatch:
-    inputs:
-      version:
-        description: Stable version without a v prefix (for example 0.2.0)
-        required: true
-        type: string
 
 permissions:
   contents: read
@@ -16,7 +11,6 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  RELEASE_VERSION: ${{ inputs.version }}
   HMOS_CLI_VERSION: 0.0.1
 
 jobs:
@@ -43,6 +37,9 @@ jobs:
       - name: Install workspace dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Read package version
+        run: node -p '"RELEASE_VERSION=" + require("./package.json").version' >> "$GITHUB_ENV"
+
       - name: Apply version and build generic web app
         run: |
           node scripts/set-release-version.mjs "$RELEASE_VERSION"
@@ -66,7 +63,7 @@ jobs:
       - name: Upload HarmonyOS NEXT HAP
         uses: actions/upload-artifact@v4
         with:
-          name: PureTavern-harmonyos-next-arm64-unsigned-${{ inputs.version }}
+          name: PureTavern-harmonyos-next-arm64-unsigned-${{ github.run_number }}
           path: release/*.hap
           if-no-files-found: error
           compression-level: 0

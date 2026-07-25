@@ -115,7 +115,7 @@ pnpm harmony:sync
 pnpm harmony:build
 ```
 
-GitHub Actions 的 **Build HarmonyOS NEXT HAP** workflow 仅手动触发，在 `ubuntu-22.04` 安装固定版本 HarmonyOS Linux command-line-tools 并生成：
+GitHub Actions 的 **Build HarmonyOS NEXT HAP** workflow 仅手动触发，不需要填写版本号；它会自动读取根 `package.json` 的当前版本，在 `ubuntu-22.04` 安装固定版本 HarmonyOS Linux command-line-tools 并生成：
 
 ```text
 PureTavern-<version>-harmonyos-next-arm64-unsigned.hap
