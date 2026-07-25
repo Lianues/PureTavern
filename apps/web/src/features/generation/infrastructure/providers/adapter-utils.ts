@@ -81,9 +81,16 @@ export function getRequest(signal?: AbortSignal, headers?: HeadersInit): Request
 
 export async function requireOk(response: Response): Promise<Response> {
   if (response.ok) return response;
+  let detail = '';
+  try {
+    const text = await response.text();
+    detail = text ? ` ${text.trim().slice(0, 500)}` : '';
+  } catch {
+    // Ignore body read errors; fall back to status-only message.
+  }
   throw new GenerationProviderError(
     'provider-error',
-    `The provider returned HTTP ${response.status}.`,
+    `The provider returned HTTP ${response.status}.${detail}`,
     response.status >= 400 && response.status <= 599 ? response.status : 502,
   );
 }
