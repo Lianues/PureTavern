@@ -16,6 +16,7 @@ const [
   syncScript,
   buildScript,
   discoveryScript,
+  sdkScript,
   stageScript,
   workflow,
   packageJson,
@@ -30,6 +31,7 @@ const [
   readFile(path.join(harmonyRoot, 'scripts/sync-web-assets.mjs'), 'utf8'),
   readFile(path.join(harmonyRoot, 'scripts/build-hap.mjs'), 'utf8'),
   readFile(path.join(harmonyRoot, 'scripts/discover-toolchain.mjs'), 'utf8'),
+  readFile(path.join(harmonyRoot, 'scripts/verify-sdk.mjs'), 'utf8'),
   readFile(path.join(harmonyRoot, 'scripts/stage-hap.mjs'), 'utf8'),
   readFile(path.join(workspaceRoot, '.github/workflows/harmony-hap.yml'), 'utf8'),
   readFile(path.join(harmonyRoot, 'package.json'), 'utf8'),
@@ -38,8 +40,8 @@ const [
 
 assert.match(appScope, /bundleName\s*:\s*['"]com\.puretavern\.harmony['"]/u);
 assert.match(appScope, /versionName\s*:\s*['"]0\.1\.0['"]/u);
-assert.match(buildProfile, /compileSdkVersion\s*:\s*['"]6\.0\.2\(22\)['"]/u);
-assert.match(buildProfile, /compatibleSdkVersion\s*:\s*['"]6\.0\.2\(22\)['"]/u);
+assert.match(buildProfile, /compileSdkVersion\s*:\s*['"]6\.1\.0\(23\)['"]/u);
+assert.match(buildProfile, /compatibleSdkVersion\s*:\s*['"]6\.1\.0\(23\)['"]/u);
 assert.match(buildProfile, /signingConfigs\s*:\s*\[\]/u);
 assert.match(moduleProfile, /['"]ohos\.permission\.INTERNET['"]/u);
 assert.match(
@@ -59,8 +61,11 @@ assert.match(loader, /application\/wasm/u);
 assert.match(syncScript, /apps\/web\/dist/u);
 assert.match(syncScript, /pure-tavern-assets-service-worker\.js/u);
 assert.match(buildScript, /assembleHap/u);
+assert.match(buildScript, /verifyHarmonySdk/u);
 assert.match(discoveryScript, /sanitizeHarmonyTools/u);
 assert.match(discoveryScript, /AppleDouble metadata entries/u);
+assert.match(sdkScript, /HarmonyOS SDK target mismatch/u);
+assert.match(sdkScript, /sdk-pkg\.json/u);
 assert.match(stageScript, /harmonyos-next-arm64-unsigned\.hap/u);
 assert.match(workflow, /^\s*workflow_dispatch:\s*$/mu);
 assert.doesNotMatch(workflow, /^\s*push:\s*$/mu);
@@ -70,6 +75,8 @@ assert.match(workflow, /require\("\.\/package\.json"\)\.version/u);
 assert.match(workflow, /runs-on: ubuntu-22\.04/u);
 assert.match(workflow, /@hmtools\/hmos-cli-lite-linux@\$HMOS_CLI_VERSION/u);
 assert.match(workflow, /HMOS_CLI_VERSION: 0\.0\.1/u);
+assert.match(workflow, /name: Verify bundled HarmonyOS SDK/u);
+assert.match(workflow, /scripts\/verify-sdk\.mjs/u);
 assert.match(workflow, /github\.run_number/u);
 assert.match(workflow, /release\/\*\.hap/u);
 assert.match(JSON.parse(packageJson).scripts['build:hap'], /sync-web-assets\.mjs/u);

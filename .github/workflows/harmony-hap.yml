@@ -51,6 +51,9 @@ jobs:
       - name: Sanitize and discover hvigor and ohpm
         run: node apps/harmony/scripts/discover-toolchain.mjs "$RUNNER_TEMP/hmos-cli/node_modules/@hmtools/hmos-cli-lite-linux" >> "$GITHUB_ENV"
 
+      - name: Verify bundled HarmonyOS SDK
+        run: node apps/harmony/scripts/verify-sdk.mjs
+
       - name: Install Harmony project dependencies
         run: node apps/harmony/scripts/install-ohpm.mjs
 

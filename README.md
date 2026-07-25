@@ -105,7 +105,7 @@ GitHub Actions 的 **Build iOS IPA** workflow 仅手动触发，在 macOS runner
 
 ### HarmonyOS NEXT HAP
 
-HarmonyOS NEXT 6.0.2(22) ArkTS Stage 外壳位于 `apps/harmony`，只消费 `apps/web/dist`。ArkWeb 通过 `https://puretavern.local/` 本地同源和 rawfile 请求拦截加载完整 Web 产物，业务 Feature Modules 不感知鸿蒙平台。
+HarmonyOS NEXT 6.1.0(23) ArkTS Stage 外壳位于 `apps/harmony`，只消费 `apps/web/dist`。ArkWeb 通过 `https://puretavern.local/` 本地同源和 rawfile 请求拦截加载完整 Web 产物，业务 Feature Modules 不感知鸿蒙平台。
 
 ```bash
 # 构建 Web 并同步到 Harmony rawfile

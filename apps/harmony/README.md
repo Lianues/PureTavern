@@ -1,6 +1,6 @@
 # PureTavern HarmonyOS NEXT shell
 
-This directory is a platform-only ArkTS Stage-model shell for HarmonyOS NEXT 6.0.2(22). It does not contain PureTavern feature logic. The shell consumes the production output from `apps/web/dist`.
+This directory is a platform-only ArkTS Stage-model shell for HarmonyOS NEXT 6.1.0(23). It does not contain PureTavern feature logic. The shell consumes the production output from `apps/web/dist`.
 
 ## Local commands
 
@@ -18,7 +18,7 @@ HARMONY_OHPM=/path/to/ohpm \
 pnpm --dir apps/harmony build:hap
 ```
 
-The repository also provides the manual **Build HarmonyOS NEXT HAP** GitHub workflow. It installs the pinned Linux command-line-tools package on `ubuntu-22.04`, builds the Web app, synchronizes rawfiles, invokes hvigor, and uploads:
+The repository also provides the manual **Build HarmonyOS NEXT HAP** GitHub workflow. It installs the pinned Linux command-line-tools package on `ubuntu-22.04`, removes invalid AppleDouble metadata from that package, verifies its bundled HarmonyOS 6.1.0(23) SDK, builds the Web app, synchronizes rawfiles, invokes hvigor, and uploads:
 
 ```text
 PureTavern-<version>-harmonyos-next-arm64-unsigned.hap

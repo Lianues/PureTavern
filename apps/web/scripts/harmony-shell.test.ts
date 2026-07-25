@@ -10,6 +10,7 @@ import {
 } from '../../harmony/scripts/harmony-toolchain.mjs';
 import { harmonyReleaseAssetName, stageHarmonyHap } from '../../harmony/scripts/stage-hap.mjs';
 import { syncWebAssets } from '../../harmony/scripts/sync-web-assets.mjs';
+import { verifyHarmonySdk } from '../../harmony/scripts/verify-sdk.mjs';
 
 async function temporaryRoot() {
   return mkdtemp(path.join(tmpdir(), 'pure-tavern-harmony-'));
@@ -71,6 +72,29 @@ describe('HarmonyOS NEXT shell tooling', () => {
       const tools = await discoverHarmonyTools([root]);
       expect(path.basename(tools.hvigor)).toBe('hmos-lite');
       expect(path.basename(tools.ohpm)).toBe('ohpm');
+
+      const sdkRoot = path.join(root, 'command-line-tools', 'sdk', 'default');
+      const projectRoot = path.join(root, 'project');
+      await mkdir(sdkRoot, { recursive: true });
+      await mkdir(projectRoot, { recursive: true });
+      await writeFile(
+        path.join(sdkRoot, 'sdk-pkg.json'),
+        JSON.stringify({ data: { apiVersion: '23', platformVersion: '6.1.0' } }),
+      );
+      await writeFile(
+        path.join(projectRoot, 'build-profile.json5'),
+        "{ app: { products: [{ compileSdkVersion: '6.1.0(23)', compatibleSdkVersion: '6.1.0(23)' }] } }",
+      );
+      await expect(
+        verifyHarmonySdk({ hvigorPath: tools.hvigor, projectRoot }),
+      ).resolves.toMatchObject({ installedTarget: '6.1.0(23)' });
+      await writeFile(
+        path.join(projectRoot, 'build-profile.json5'),
+        "{ app: { products: [{ compileSdkVersion: '6.0.2(22)', compatibleSdkVersion: '6.0.2(22)' }] } }",
+      );
+      await expect(verifyHarmonySdk({ hvigorPath: tools.hvigor, projectRoot })).rejects.toThrow(
+        /CLI provides 6\.1\.0\(23\).*compile=6\.0\.2\(22\)/u,
+      );
 
       const buildRoot = path.join(root, 'entry', 'build');
       const outputRoot = path.join(root, 'release');
