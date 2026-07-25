@@ -1,7 +1,7 @@
 import { common } from '@kit.AbilityKit';
 import { WEB_ASSET_PATHS } from '../generated/WebAssetManifest';
 
-const APP_HOST: string = 'puretavern.local';
+const APP_ORIGIN: string = 'https://puretavern.local';
 const RAWFILE_ROOT: string = 'web/';
 
 const MIME_TYPES: Map<string, string> = new Map([
@@ -63,19 +63,30 @@ export class LocalWebAssetLoader {
   }
 
   private resolveAssetPath(requestUrl: string): string | null {
-    let url: URL;
-    try {
-      url = new URL(requestUrl);
-    } catch (_error) {
+    if (!requestUrl.startsWith(APP_ORIGIN)) {
       return null;
     }
-    if (url.protocol !== 'https:' || url.hostname !== APP_HOST) {
-      return null;
+    const suffix = requestUrl.slice(APP_ORIGIN.length);
+    if (suffix.length > 0) {
+      const boundary = suffix.charAt(0);
+      if (boundary !== '/' && boundary !== '?' && boundary !== '#') {
+        return null;
+      }
     }
 
-    let pathname: string;
+    let pathname = suffix.startsWith('/') ? suffix : '/';
+    let pathEnd = pathname.length;
+    const queryIndex = pathname.indexOf('?');
+    const fragmentIndex = pathname.indexOf('#');
+    if (queryIndex >= 0 && queryIndex < pathEnd) {
+      pathEnd = queryIndex;
+    }
+    if (fragmentIndex >= 0 && fragmentIndex < pathEnd) {
+      pathEnd = fragmentIndex;
+    }
+    pathname = pathname.slice(0, pathEnd);
     try {
-      pathname = decodeURIComponent(url.pathname);
+      pathname = decodeURIComponent(pathname);
     } catch (_error) {
       return '';
     }
