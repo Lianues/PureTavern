@@ -1,3 +1,5 @@
+import { parse as parseYaml } from 'yaml';
+
 import {
   GenerationProviderError,
   type LegacyGenerationRequest,
@@ -190,7 +192,7 @@ function requiredSetting(value: unknown, label: string): string {
 }
 
 function parseCustomHeaders(value: unknown): Record<string, string> {
-  const parsed = parseObject(value);
+  const parsed = parseCustomMerge(value);
   return Object.fromEntries(
     Object.entries(parsed)
       .filter(([, header]) => typeof header === 'string')
@@ -199,7 +201,7 @@ function parseCustomHeaders(value: unknown): Record<string, string> {
 }
 
 function parseCustomBody(value: unknown): Record<string, unknown> {
-  const parsed = parseObject(value);
+  const parsed = parseCustomMerge(value);
   for (const key of [
     'chat_completion_source',
     'custom_url',
@@ -213,23 +215,39 @@ function parseCustomBody(value: unknown): Record<string, unknown> {
 }
 
 function parseCustomExclusions(value: unknown): string[] {
-  const parsed = parseObject(value);
-  return Object.keys(parsed).filter((key) => {
-    const flag = parsed[key];
-    return flag === true || flag === 1 || flag === 'true';
-  });
+  const parsed = parseCustomYaml(value);
+  if (Array.isArray(parsed)) {
+    return parsed
+      .filter((key): key is string | number => typeof key === 'string' || typeof key === 'number')
+      .map(String);
+  }
+  if (isRecord(parsed)) return Object.keys(parsed);
+  return typeof parsed === 'string' && parsed ? [parsed] : [];
 }
 
-function parseObject(value: unknown): Record<string, unknown> {
-  if (!value) return {};
-  if (typeof value === 'object' && !Array.isArray(value)) return value as Record<string, unknown>;
-  if (typeof value !== 'string' || !value.trim()) return {};
-  try {
-    const parsed = JSON.parse(value) as unknown;
-    return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
-      ? (parsed as Record<string, unknown>)
-      : {};
-  } catch {
-    return {};
+function parseCustomMerge(value: unknown): Record<string, unknown> {
+  const parsed = parseCustomYaml(value);
+  const result: Record<string, unknown> = {};
+  if (Array.isArray(parsed)) {
+    for (const item of parsed) {
+      if (isRecord(item)) Object.assign(result, item);
+    }
+  } else if (isRecord(parsed)) {
+    Object.assign(result, parsed);
   }
+  return result;
+}
+
+function parseCustomYaml(value: unknown): unknown {
+  if (typeof value !== 'string') return value;
+  if (!value.trim()) return undefined;
+  try {
+    return parseYaml(value) as unknown;
+  } catch {
+    return undefined;
+  }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 }

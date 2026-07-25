@@ -91,6 +91,97 @@ describe('GenerationService provider adapters', () => {
     expect(body).not.toHaveProperty('reverse_proxy');
   });
 
+  it('applies Legacy YAML custom headers, body entries and exclusions', async () => {
+    let sentUrl = '';
+    let sentInit: RequestInit = {};
+    const nativeFetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      sentUrl = String(input);
+      sentInit = init ?? {};
+      return new Response(JSON.stringify({ choices: [{ message: { content: 'ok' } }] }), {
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }) as typeof window.fetch;
+    const service = createService(nativeFetch);
+
+    await service.generate({
+      chat_completion_source: 'custom',
+      custom_url: 'https://custom.example/v1',
+      model: 'custom-model',
+      messages: [{ role: 'user', content: 'Hi' }],
+      reasoning_effort: 'high',
+      verbosity: 'high',
+      custom_include_headers: 'X-PureTavern-Test: enabled',
+      custom_include_body: '- top_k: 42\n- reasoning_effort: low\n- secret_id: must-not-leak',
+      custom_exclude_body: '- reasoning_effort\n- verbosity',
+    });
+
+    expect(sentUrl).toBe('https://custom.example/v1/chat/completions');
+    expect(new Headers(sentInit.headers).get('X-PureTavern-Test')).toBe('enabled');
+    const body = JSON.parse(String(sentInit.body)) as Record<string, unknown>;
+    expect(body).toMatchObject({ model: 'custom-model', top_k: 42 });
+    expect(body).not.toHaveProperty('reasoning_effort');
+    expect(body).not.toHaveProperty('verbosity');
+    expect(body).not.toHaveProperty('secret_id');
+  });
+
+  it('accepts YAML object and scalar custom exclusion variants', async () => {
+    const bodies: Record<string, unknown>[] = [];
+    const nativeFetch = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      bodies.push(JSON.parse(String(init?.body)) as Record<string, unknown>);
+      return new Response(JSON.stringify({ choices: [{ message: { content: 'ok' } }] }));
+    }) as typeof window.fetch;
+    const service = createService(nativeFetch);
+    const base = {
+      chat_completion_source: 'custom',
+      custom_url: 'https://custom.example/v1',
+      model: 'custom-model',
+      messages: [{ role: 'user', content: 'Hi' }],
+    };
+
+    await service.generate({
+      ...base,
+      temperature: 0.4,
+      seed: 42,
+      custom_exclude_body: 'temperature: false\nseed: null',
+    });
+    await service.generate({
+      ...base,
+      top_p: 0.9,
+      custom_exclude_body: 'top_p',
+    });
+
+    expect(bodies[0]).not.toHaveProperty('temperature');
+    expect(bodies[0]).not.toHaveProperty('seed');
+    expect(bodies[1]).not.toHaveProperty('top_p');
+  });
+
+  it('surfaces provider error details while capping the returned text', async () => {
+    const providerDetail = `reasoning_effort is not supported: ${'x'.repeat(600)}-tail`;
+    const nativeFetch = vi.fn(
+      async () =>
+        new Response(JSON.stringify({ error: { message: providerDetail } }), {
+          status: 400,
+          statusText: 'Bad Request',
+          headers: { 'Content-Type': 'application/json' },
+        }),
+    ) as typeof window.fetch;
+    const service = createService(nativeFetch);
+
+    const error = await service
+      .generate({
+        chat_completion_source: 'custom',
+        custom_url: 'https://custom.example/v1',
+        model: 'custom-model',
+        messages: [{ role: 'user', content: 'Hi' }],
+      })
+      .catch((caught: unknown) => caught);
+
+    expect(error).toMatchObject({ code: 'provider-error', status: 400 });
+    expect((error as Error).message).toContain('reasoning_effort is not supported');
+    expect((error as Error).message).not.toContain('-tail');
+    expect((error as Error).message.length).toBeLessThanOrEqual(540);
+  });
+
   it('converts Anthropic, Google and Cohere text chat bodies', async () => {
     const calls: Array<{ url: string; body: Record<string, unknown>; headers: Headers }> = [];
     const nativeFetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
