@@ -1,7 +1,7 @@
 apply plugin: 'com.android.application'
 
-def pureTavernVersionCode = (System.getenv('PURE_TAVERN_VERSION_CODE') ?: '1').toInteger()
-def pureTavernVersionName = System.getenv('PURE_TAVERN_VERSION_NAME') ?: '0.1.0'
+def pureTavernVersionCode = (System.getenv('PURE_TAVERN_VERSION_CODE') ?: '1002').toInteger()
+def pureTavernVersionName = System.getenv('PURE_TAVERN_VERSION_NAME') ?: '0.1.1'
 
 android {
     namespace = "com.puretavern.app"

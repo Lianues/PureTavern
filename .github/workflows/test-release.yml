@@ -432,6 +432,7 @@ jobs:
             apps/mobile/package.json \
             apps/server/package.json \
             apps/vscode-extension/package.json \
+            apps/vscode-extension/README.md \
             apps/web/package.json \
             apps/web/src/features/import-export/application/archive-service.ts \
             apps/web/src/legacy-hook/bootstrap.ts \

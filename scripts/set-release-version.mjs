@@ -55,7 +55,7 @@ async function replaceText(root, relativePath, pattern, replacement, expectedCou
 
 export async function applyReleaseVersion(root, requestedVersion) {
   const version = assertReleaseVersion(requestedVersion);
-  const harmonyCode = harmonyVersionCode(version);
+  const releaseCode = harmonyVersionCode(version);
 
   await Promise.all(
     PACKAGE_FILES.map((relativePath) =>
@@ -85,7 +85,7 @@ export async function applyReleaseVersion(root, requestedVersion) {
     root,
     'apps/harmony/AppScope/app.json5',
     /((?:["']?versionCode["']?)\s*:\s*)\d+/gu,
-    `$1${harmonyCode}`,
+    `$1${releaseCode}`,
   );
   await replaceText(
     root,
@@ -96,8 +96,21 @@ export async function applyReleaseVersion(root, requestedVersion) {
   await replaceText(
     root,
     'apps/mobile/android/app/build.gradle',
+    /(def pureTavernVersionCode = \(System\.getenv\('PURE_TAVERN_VERSION_CODE'\) \?: ')[^']+('\)\.toInteger\(\))/gu,
+    `$1${releaseCode}$2`,
+  );
+  await replaceText(
+    root,
+    'apps/mobile/android/app/build.gradle',
     /(def pureTavernVersionName = System\.getenv\('PURE_TAVERN_VERSION_NAME'\) \?: ')[^']+(')/gu,
     `$1${version}$2`,
+  );
+  await replaceText(
+    root,
+    'apps/mobile/ios/App/App.xcodeproj/project.pbxproj',
+    /CURRENT_PROJECT_VERSION = [^;]+;/gu,
+    `CURRENT_PROJECT_VERSION = ${releaseCode};`,
+    2,
   );
   await replaceText(
     root,
@@ -105,6 +118,12 @@ export async function applyReleaseVersion(root, requestedVersion) {
     /MARKETING_VERSION = [^;]+;/gu,
     `MARKETING_VERSION = ${version};`,
     2,
+  );
+  await replaceText(
+    root,
+    'apps/vscode-extension/README.md',
+    /(PureTavern-VSCode-)[0-9]+\.[0-9]+\.[0-9]+(\.vsix)/gu,
+    `$1${version}$2`,
   );
   await replaceText(
     root,

@@ -57,6 +57,7 @@ describe('manual test release workflow', () => {
     expect(source).toContain('PureTavern-$RELEASE_VERSION-web.zip');
     expect(source).toContain('release-vscode');
     expect(source).toContain('apps/vscode-extension/release/*.vsix');
+    expect(source).toContain('apps/vscode-extension/README.md');
     expect(source).toContain('TAG="test-v$RELEASE_VERSION"');
     expect(source).toContain('TITLE="$RELEASE_VERSION Test"');
     expect(source).toContain('git commit --allow-empty');
@@ -79,6 +80,9 @@ describe('manual test release workflow', () => {
     expect(source).toContain('PureTavern-$RELEASE_VERSION-android-universal.apk');
     expect(source).toContain('PureTavern-$RELEASE_VERSION-ios-unsigned.ipa');
     expect(androidSource).toContain('android-universal.apk');
+    expect(androidSource).toContain('require("./package.json").version');
+    expect(androidSource).toContain('-ci.');
+    expect(androidSource).not.toContain('0.1.0-ci.');
     expect(iosSource).toContain('ios-unsigned.ipa');
     expect(stagingSource).toContain('desktopReleaseAssetNames');
     expect(stagingSource).toContain('pure-tavern-desktop.exe');

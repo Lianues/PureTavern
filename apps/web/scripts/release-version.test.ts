@@ -29,6 +29,11 @@ async function fixtureFile(root: string, relativePath: string, content: string) 
 }
 
 describe('test release versioning', () => {
+  it('exposes one root command for updating every release version', async () => {
+    const rootPackage = JSON.parse(await readFile('../../package.json', 'utf8'));
+    expect(rootPackage.scripts['version:set']).toBe('node scripts/set-release-version.mjs');
+  });
+
   it('accepts stable versions and rejects prefixed or prerelease versions', () => {
     expect(assertReleaseVersion('1.2.3')).toBe('1.2.3');
     expect(() => assertReleaseVersion('v1.2.3')).toThrow(/stable SemVer/u);
@@ -69,12 +74,17 @@ describe('test release versioning', () => {
       await fixtureFile(
         root,
         'apps/mobile/android/app/build.gradle',
-        "def pureTavernVersionName = System.getenv('PURE_TAVERN_VERSION_NAME') ?: '0.1.0'\n",
+        "def pureTavernVersionCode = (System.getenv('PURE_TAVERN_VERSION_CODE') ?: '1').toInteger()\ndef pureTavernVersionName = System.getenv('PURE_TAVERN_VERSION_NAME') ?: '0.1.0'\n",
       );
       await fixtureFile(
         root,
         'apps/mobile/ios/App/App.xcodeproj/project.pbxproj',
-        'MARKETING_VERSION = 0.1.0;\nMARKETING_VERSION = 0.1.0;\n',
+        'CURRENT_PROJECT_VERSION = 1;\nMARKETING_VERSION = 0.1.0;\nCURRENT_PROJECT_VERSION = 1;\nMARKETING_VERSION = 0.1.0;\n',
+      );
+      await fixtureFile(
+        root,
+        'apps/vscode-extension/README.md',
+        'code --install-extension apps/vscode-extension/release/PureTavern-VSCode-0.1.0.vsix\n',
       );
       await fixtureFile(
         root,
@@ -102,12 +112,20 @@ describe('test release versioning', () => {
       expect(await readFile(path.join(root, 'apps/desktop/src-tauri/Cargo.lock'), 'utf8')).toBe(
         '[[package]]\nname = "dependency"\nversion = "0.1.0"\n\n[[package]]\nname = "pure-tavern-desktop"\nversion = "1.2.3"\n',
       );
+      expect(await readFile(path.join(root, 'apps/mobile/android/app/build.gradle'), 'utf8')).toBe(
+        "def pureTavernVersionCode = (System.getenv('PURE_TAVERN_VERSION_CODE') ?: '1002004').toInteger()\ndef pureTavernVersionName = System.getenv('PURE_TAVERN_VERSION_NAME') ?: '1.2.3'\n",
+      );
       expect(
         await readFile(
           path.join(root, 'apps/mobile/ios/App/App.xcodeproj/project.pbxproj'),
           'utf8',
         ),
-      ).toBe('MARKETING_VERSION = 1.2.3;\nMARKETING_VERSION = 1.2.3;\n');
+      ).toBe(
+        'CURRENT_PROJECT_VERSION = 1002004;\nMARKETING_VERSION = 1.2.3;\nCURRENT_PROJECT_VERSION = 1002004;\nMARKETING_VERSION = 1.2.3;\n',
+      );
+      expect(await readFile(path.join(root, 'apps/vscode-extension/README.md'), 'utf8')).toContain(
+        'PureTavern-VSCode-1.2.3.vsix',
+      );
     } finally {
       await rm(root, { recursive: true, force: true });
     }

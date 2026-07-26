@@ -32,7 +32,7 @@ void database.then((state) => {
 });
 
 globalThis.__PURE_TAVERN__ = {
-  hookVersion: '0.1.0',
+  hookVersion: '0.1.1',
   buildId: RUNTIME_BUILD_ID,
   upstreamVersion: 'loading',
   upstreamMetadata,

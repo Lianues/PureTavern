@@ -3,6 +3,8 @@ import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 
+import { harmonyVersionCode } from '../../../scripts/set-release-version.mjs';
+
 const harmonyRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const workspaceRoot = path.resolve(harmonyRoot, '../..');
 
@@ -42,8 +44,10 @@ const [
   readFile(path.join(harmonyRoot, 'entry/src/main/resources/base/media/app_icon.png')),
 ]);
 
+const harmonyPackage = JSON.parse(packageJson);
 assert.match(appScope, /bundleName\s*:\s*['"]com\.puretavern\.harmony['"]/u);
-assert.match(appScope, /versionName\s*:\s*['"]0\.1\.0['"]/u);
+assert.ok(appScope.includes(`versionName: '${harmonyPackage.version}'`));
+assert.ok(appScope.includes(`versionCode: ${harmonyVersionCode(harmonyPackage.version)}`));
 assert.match(
   buildProfile,
   /name\s*:\s*['"]default['"][\s\S]*?compileSdkVersion\s*:\s*['"]6\.1\.1\(24\)['"][\s\S]*?compatibleSdkVersion\s*:\s*['"]6\.1\.0\(23\)['"][\s\S]*?targetSdkVersion\s*:\s*['"]6\.1\.1\(24\)['"]/u,

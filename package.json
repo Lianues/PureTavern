@@ -1,6 +1,6 @@
 {
   "name": "pure-tavern",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "type": "module",
   "packageManager": "pnpm@10.17.1",
@@ -13,6 +13,7 @@
     "lint": "eslint .",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
+    "version:set": "node scripts/set-release-version.mjs",
     "legacy:prepare": "node apps/web/scripts/prepare-legacy-runtime.mjs",
     "legacy:sync": "node apps/web/scripts/sync-legacy.mjs",
     "legacy:sync:check": "node apps/web/scripts/sync-legacy.mjs --check",
