@@ -1,6 +1,6 @@
 {
   app: {
-    bundleName: 'com.puretavern.harmony',
+    bundleName: 'com.puretavern.app',
     vendor: 'Limerence',
     versionCode: 1002,
     versionName: '0.1.1',

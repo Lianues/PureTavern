@@ -8,6 +8,7 @@
     "sync:android": "cap sync android",
     "open:android": "cap sync android && cap open android",
     "build:android:debug": "cap sync android && node scripts/run-gradle.mjs assembleDebug",
+    "build:android:release": "cap sync android && node scripts/run-gradle.mjs assembleRelease",
     "sync:ios": "cap sync ios",
     "open:ios": "cap sync ios && cap open ios"
   },

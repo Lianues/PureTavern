@@ -2,6 +2,8 @@ apply plugin: 'com.android.application'
 
 def pureTavernVersionCode = (System.getenv('PURE_TAVERN_VERSION_CODE') ?: '1002').toInteger()
 def pureTavernVersionName = System.getenv('PURE_TAVERN_VERSION_NAME') ?: '0.1.1'
+def pureTavernKeystorePath = (System.getenv('PURE_TAVERN_KEYSTORE_PATH') ?: '').trim()
+def pureTavernReleaseSigned = !pureTavernKeystorePath.isEmpty()
 
 android {
     namespace = "com.puretavern.app"
@@ -19,10 +21,26 @@ android {
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    signingConfigs {
+        // Only declared when PURE_TAVERN_KEYSTORE_PATH is provided, so debug builds and
+        // contributor checkouts keep working without any signing material.
+        if (pureTavernReleaseSigned) {
+            release {
+                storeFile file(pureTavernKeystorePath)
+                storePassword System.getenv('PURE_TAVERN_KEYSTORE_PASSWORD')
+                keyAlias System.getenv('PURE_TAVERN_KEY_ALIAS')
+                keyPassword System.getenv('PURE_TAVERN_KEY_PASSWORD')
+                    ?: System.getenv('PURE_TAVERN_KEYSTORE_PASSWORD')
+            }
+        }
+    }
     buildTypes {
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+            if (pureTavernReleaseSigned) {
+                signingConfig signingConfigs.release
+            }
         }
     }
 }

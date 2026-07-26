@@ -45,7 +45,8 @@ const [
 ]);
 
 const harmonyPackage = JSON.parse(packageJson);
-assert.match(appScope, /bundleName\s*:\s*['"]com\.puretavern\.harmony['"]/u);
+// Huawei rejects bundle names containing the reserved word "harmony".
+assert.match(appScope, /bundleName\s*:\s*['"]com\.puretavern\.app['"]/u);
 assert.ok(appScope.includes(`versionName: '${harmonyPackage.version}'`));
 assert.ok(appScope.includes(`versionCode: ${harmonyVersionCode(harmonyPackage.version)}`));
 assert.match(

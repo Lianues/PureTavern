@@ -1,0 +1,630 @@
+name: Build Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Stable version without a v prefix (for example 0.2.0)
+        required: true
+        type: string
+      draft:
+        description: Publish the GitHub release as a draft
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: write
+
+concurrency:
+  group: pure-tavern-release
+  cancel-in-progress: false
+
+env:
+  RELEASE_VERSION: ${{ inputs.version }}
+
+jobs:
+  preflight:
+    name: Validate release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Validate version, branch and tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if [[ "$GITHUB_REF" != "refs/heads/main" ]]; then
+            echo "Releases must run from main." >&2
+            exit 1
+          fi
+          node scripts/set-release-version.mjs "$RELEASE_VERSION" --check
+          TAG="v$RELEASE_VERSION"
+          if git ls-remote --exit-code --tags origin "refs/tags/$TAG" >/dev/null 2>&1; then
+            echo "Tag $TAG already exists." >&2
+            exit 1
+          fi
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "Release $TAG already exists." >&2
+            exit 1
+          fi
+
+      - name: Require Android signing secrets
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+        run: |
+          set -euo pipefail
+          missing=()
+          [[ -n "$ANDROID_KEYSTORE_BASE64" ]] || missing+=(ANDROID_KEYSTORE_BASE64)
+          [[ -n "$ANDROID_KEYSTORE_PASSWORD" ]] || missing+=(ANDROID_KEYSTORE_PASSWORD)
+          [[ -n "$ANDROID_KEY_ALIAS" ]] || missing+=(ANDROID_KEY_ALIAS)
+          if [[ "${#missing[@]}" -gt 0 ]]; then
+            echo "Missing repository secrets: ${missing[*]}" >&2
+            echo "See signing/README.md for how to create and upload them." >&2
+            exit 1
+          fi
+
+      - name: Report desktop signing mode
+        env:
+          WINDOWS_CERTIFICATE: ${{ secrets.WINDOWS_CERTIFICATE }}
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+        run: |
+          set -euo pipefail
+          [[ -n "$WINDOWS_CERTIFICATE" ]] \
+            && echo "Windows: Authenticode signing enabled." \
+            || echo "Windows: no certificate configured, bundles will be UNSIGNED."
+          [[ -n "$APPLE_CERTIFICATE" ]] \
+            && echo "macOS: Developer ID signing enabled." \
+            || echo "macOS: no certificate configured, bundles will be UNSIGNED."
+          echo "Linux: bundles are never code signed."
+
+  web:
+    name: Build web bundle
+    needs: preflight
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.17.1
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Apply version and build web
+        run: |
+          node scripts/set-release-version.mjs "$RELEASE_VERSION"
+          pnpm build
+
+      - name: Upload reusable web build
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-dist
+          path: apps/web/dist
+          include-hidden-files: true
+          retention-days: 1
+
+  android:
+    name: Android signed APK
+    needs: [preflight, web]
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.17.1
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Set up Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+          cache: gradle
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android SDK 36
+        run: sdkmanager 'platforms;android-36' 'build-tools;36.0.0'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Download web build
+        uses: actions/download-artifact@v4
+        with:
+          name: web-dist
+          path: apps/web/dist
+
+      - name: Decode release keystore
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          set -euo pipefail
+          KEYSTORE="$RUNNER_TEMP/pure-tavern-release.keystore"
+          printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$KEYSTORE"
+          if [[ ! -s "$KEYSTORE" ]]; then
+            echo "Decoded keystore is empty; check ANDROID_KEYSTORE_BASE64." >&2
+            exit 1
+          fi
+          echo "PURE_TAVERN_KEYSTORE_PATH=$KEYSTORE" >> "$GITHUB_ENV"
+
+      # versionCode and versionName are derived from the release version by
+      # set-release-version.mjs, so no PURE_TAVERN_VERSION_* overrides here.
+      - name: Apply version and build signed APK
+        env:
+          PURE_TAVERN_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          PURE_TAVERN_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          PURE_TAVERN_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          node scripts/set-release-version.mjs "$RELEASE_VERSION"
+          pnpm --filter @pure-tavern/mobile build:android:release
+
+      - name: Verify APK signature
+        run: |
+          set -euo pipefail
+          APK=apps/mobile/android/app/build/outputs/apk/release/app-release.apk
+          if [[ ! -f "$APK" ]]; then
+            echo "Signed APK not found; Gradle produced an unsigned release build." >&2
+            ls -l apps/mobile/android/app/build/outputs/apk/release >&2 || true
+            exit 1
+          fi
+          "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose --print-certs "$APK"
+
+      - name: Stage Android package
+        run: |
+          set -euo pipefail
+          mkdir -p release
+          cp apps/mobile/android/app/build/outputs/apk/release/app-release.apk \
+            "release/PureTavern-$RELEASE_VERSION-android-universal.apk"
+
+      - name: Remove keystore from runner
+        if: always()
+        run: rm -f "$RUNNER_TEMP/pure-tavern-release.keystore"
+
+      - name: Upload Android release package
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-android
+          path: release/*.apk
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 7
+
+  desktop:
+    name: ${{ matrix.name }} package
+    needs: [preflight, web]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    defaults:
+      run:
+        shell: bash
+    env:
+      # The secrets context is unavailable in step-level `if`, so surface presence as job env.
+      WINDOWS_CERTIFICATE_CONFIGURED: ${{ secrets.WINDOWS_CERTIFICATE != '' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Windows x64
+            os: windows-latest
+            platform: windows
+            arch: x64
+            bundles: nsis
+            rust_target: ''
+            target_args: ''
+            release_root: apps/desktop/src-tauri/target/release
+          - name: macOS x64
+            os: macos-latest
+            platform: macos
+            arch: x64
+            bundles: dmg
+            rust_target: x86_64-apple-darwin
+            target_args: --target x86_64-apple-darwin
+            release_root: apps/desktop/src-tauri/target/x86_64-apple-darwin/release
+          - name: macOS arm64
+            os: macos-latest
+            platform: macos
+            arch: arm64
+            bundles: dmg
+            rust_target: aarch64-apple-darwin
+            target_args: --target aarch64-apple-darwin
+            release_root: apps/desktop/src-tauri/target/aarch64-apple-darwin/release
+          - name: Linux x64
+            os: ubuntu-22.04
+            platform: linux
+            arch: x64
+            bundles: appimage,deb,rpm
+            rust_target: ''
+            target_args: ''
+            release_root: apps/desktop/src-tauri/target/release
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.17.1
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust build
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: apps/desktop/src-tauri -> target
+
+      - name: Install explicit Rust target
+        if: matrix.rust_target != ''
+        run: rustup target add "${{ matrix.rust_target }}"
+
+      - name: Install Linux system dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf rpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Download web build
+        uses: actions/download-artifact@v4
+        with:
+          name: web-dist
+          path: apps/web/dist
+
+      - name: Import Windows code signing certificate
+        if: matrix.platform == 'windows' && env.WINDOWS_CERTIFICATE_CONFIGURED == 'true'
+        shell: pwsh
+        env:
+          WINDOWS_CERTIFICATE: ${{ secrets.WINDOWS_CERTIFICATE }}
+          WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
+        run: |
+          $pfx = Join-Path $env:RUNNER_TEMP 'pure-tavern-code-signing.pfx'
+          [IO.File]::WriteAllBytes($pfx, [Convert]::FromBase64String($env:WINDOWS_CERTIFICATE))
+          $password = ConvertTo-SecureString -String $env:WINDOWS_CERTIFICATE_PASSWORD -AsPlainText -Force
+          $cert = Import-PfxCertificate -FilePath $pfx -CertStoreLocation Cert:\CurrentUser\My -Password $password
+          Remove-Item $pfx -Force
+          "WINDOWS_CERTIFICATE_THUMBPRINT=$($cert.Thumbprint)" >> $env:GITHUB_ENV
+
+      - name: Resolve desktop signing mode
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          TIMESTAMP_URL: ${{ vars.WINDOWS_TIMESTAMP_URL }}
+        run: |
+          set -eo pipefail
+          SIGNED=false
+          if [[ "${{ matrix.platform }}" == windows && -n "${WINDOWS_CERTIFICATE_THUMBPRINT:-}" ]]; then
+            node scripts/apply-windows-signing.mjs "$WINDOWS_CERTIFICATE_THUMBPRINT" "${TIMESTAMP_URL:-}"
+            SIGNED=true
+          fi
+          if [[ "${{ matrix.platform }}" == macos && -n "${APPLE_CERTIFICATE:-}" ]]; then
+            SIGNED=true
+          fi
+          if [[ "$SIGNED" == true ]]; then
+            echo "DESKTOP_SIGN_ARGS=" >> "$GITHUB_ENV"
+          else
+            echo "::warning::${{ matrix.name }} bundles are not code signed."
+            echo "DESKTOP_SIGN_ARGS=--no-sign" >> "$GITHUB_ENV"
+          fi
+
+      - name: Apply version and build desktop package
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          set -eo pipefail
+          node scripts/set-release-version.mjs "$RELEASE_VERSION"
+          pnpm --filter @pure-tavern/desktop exec tauri build --ci $DESKTOP_SIGN_ARGS \
+            --bundles "${{ matrix.bundles }}" ${{ matrix.target_args }}
+
+      - name: Stage normalized desktop assets
+        run: node scripts/stage-desktop-release.mjs "${{ matrix.platform }}" "${{ matrix.arch }}" "$RELEASE_VERSION" "${{ matrix.release_root }}" release
+
+      - name: Upload desktop release package
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-desktop-${{ matrix.platform }}-${{ matrix.arch }}
+          path: release/*
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 7
+
+  # iOS and HarmonyOS ship unsigned on purpose: Apple requires a paid Developer
+  # Program membership, and Huawei only permits installs through AppGallery or a
+  # UDID-bound testing profile. Neither can produce an artifact users install directly.
+  ios:
+    name: iOS unsigned IPA
+    needs: [preflight, web]
+    runs-on: macos-latest
+    timeout-minutes: 45
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.17.1
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Download web build
+        uses: actions/download-artifact@v4
+        with:
+          name: web-dist
+          path: apps/web/dist
+
+      - name: Apply version and sync iOS
+        run: |
+          node scripts/set-release-version.mjs "$RELEASE_VERSION"
+          pnpm --filter @pure-tavern/mobile sync:ios
+
+      - name: Build unsigned iOS application
+        run: |
+          xcodebuild \
+            -project apps/mobile/ios/App/App.xcodeproj \
+            -scheme App \
+            -configuration Release \
+            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath apps/mobile/ios/DerivedData \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            DEVELOPMENT_TEAM='' \
+            build
+
+      - name: Package unsigned IPA
+        run: |
+          set -euo pipefail
+          mkdir -p apps/mobile/ios/output/Payload
+          cp -R apps/mobile/ios/DerivedData/Build/Products/Release-iphoneos/App.app apps/mobile/ios/output/Payload/
+          cd apps/mobile/ios/output
+          /usr/bin/ditto -c -k --sequesterRsrc --keepParent Payload "PureTavern-$RELEASE_VERSION-ios-unsigned.ipa"
+
+      - name: Upload iOS release package
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-ios
+          path: apps/mobile/ios/output/*.ipa
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 7
+
+  harmony:
+    name: HarmonyOS NEXT unsigned HAP
+    needs: [preflight, web]
+    runs-on: ubuntu-22.04
+    timeout-minutes: 60
+    env:
+      HARMONY_PRODUCT: ci
+      HMOS_CLI_VERSION: 0.0.1
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.17.1
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Download web build
+        uses: actions/download-artifact@v4
+        with:
+          name: web-dist
+          path: apps/web/dist
+
+      - name: Apply version
+        run: node scripts/set-release-version.mjs "$RELEASE_VERSION"
+
+      - name: Install pinned HarmonyOS Linux command-line tools
+        run: npm install --prefix "$RUNNER_TEMP/hmos-cli" "@hmtools/hmos-cli-lite-linux@$HMOS_CLI_VERSION"
+
+      - name: Sanitize and discover hvigor and ohpm
+        run: node apps/harmony/scripts/discover-toolchain.mjs "$RUNNER_TEMP/hmos-cli/node_modules/@hmtools/hmos-cli-lite-linux" >> "$GITHUB_ENV"
+
+      - name: Verify bundled HarmonyOS SDK
+        run: node apps/harmony/scripts/verify-sdk.mjs
+
+      - name: Install Harmony project dependencies
+        run: node apps/harmony/scripts/install-ohpm.mjs
+
+      - name: Build unsigned release HAP
+        run: pnpm --dir apps/harmony build:hap
+
+      - name: Stage normalized HAP
+        run: node apps/harmony/scripts/stage-hap.mjs "$RELEASE_VERSION" apps/harmony/entry/build release
+
+      - name: Upload HarmonyOS release package
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-harmony
+          path: release/*.hap
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 7
+
+  publish:
+    name: Commit, tag and publish release
+    needs: [preflight, web, android, desktop, ios, harmony]
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      RELEASE_DRAFT: ${{ inputs.draft }}
+      WINDOWS_SIGNED: ${{ secrets.WINDOWS_CERTIFICATE != '' }}
+      MACOS_SIGNED: ${{ secrets.APPLE_CERTIFICATE != '' }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Download release packages
+        uses: actions/download-artifact@v4
+        with:
+          pattern: release-*
+          path: release-assets
+          merge-multiple: true
+
+      - name: Verify main has not moved
+        run: |
+          set -euo pipefail
+          git fetch origin main --tags
+          if [[ "$(git rev-parse origin/main)" != "$GITHUB_SHA" ]]; then
+            echo "origin/main changed while packages were building; refusing to tag stale artifacts." >&2
+            exit 1
+          fi
+          TAG="v$RELEASE_VERSION"
+          if git rev-parse "$TAG" >/dev/null 2>&1; then
+            echo "Tag $TAG already exists." >&2
+            exit 1
+          fi
+
+      - name: Create version commit and release tag
+        run: |
+          set -euo pipefail
+          node scripts/set-release-version.mjs "$RELEASE_VERSION"
+          git diff --check
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \
+            package.json \
+            apps/desktop/package.json \
+            apps/desktop/src-tauri/Cargo.lock \
+            apps/desktop/src-tauri/Cargo.toml \
+            apps/desktop/src-tauri/tauri.conf.json \
+            apps/harmony/AppScope/app.json5 \
+            apps/harmony/entry/oh-package.json5 \
+            apps/harmony/package.json \
+            apps/mobile/android/app/build.gradle \
+            apps/mobile/ios/App/App.xcodeproj/project.pbxproj \
+            apps/mobile/package.json \
+            apps/server/package.json \
+            apps/vscode-extension/package.json \
+            apps/vscode-extension/README.md \
+            apps/web/package.json \
+            apps/web/src/features/import-export/application/archive-service.ts \
+            apps/web/src/legacy-hook/bootstrap.ts \
+            packages/contracts/package.json \
+            packages/shared/package.json
+          git commit --allow-empty -m "chore(release): $RELEASE_VERSION"
+          TAG="v$RELEASE_VERSION"
+          git tag -a "$TAG" -m "PureTavern $RELEASE_VERSION"
+          git push --atomic origin HEAD:main "refs/tags/$TAG"
+
+      - name: Generate checksums and release notes
+        run: |
+          set -euo pipefail
+          cd release-assets
+          sha256sum -- * > "$RUNNER_TEMP/SHA256SUMS.txt"
+          mv "$RUNNER_TEMP/SHA256SUMS.txt" SHA256SUMS.txt
+          cd ..
+          {
+            echo "## PureTavern $RELEASE_VERSION"
+            echo
+            echo "### 签名状态"
+            echo
+            echo "- Android APK：已使用正式发布密钥签名（可用 \`apksigner verify --print-certs\` 校验）。"
+            [[ "$WINDOWS_SIGNED" == true ]] \
+              && echo "- Windows：已 Authenticode 签名。" \
+              || echo "- Windows：**未签名**，首次运行 SmartScreen 会拦截，点「更多信息 → 仍要运行」即可，之后不再提示。"
+            [[ "$MACOS_SIGNED" == true ]] \
+              && echo "- macOS：已使用 Developer ID 签名并公证。" \
+              || {
+                echo "- macOS：**未签名未公证**。首次打开被拦截后，前往「系统设置 → 隐私与安全性」点击「仍要打开」；"
+                echo "  若提示「已损坏，无法打开」，在终端执行 \`xattr -dr com.apple.quarantine /Applications/PureTavern.app\`。"
+              }
+            echo "- Linux：按惯例不做代码签名，请用 SHA256SUMS.txt 校验。"
+            echo "- iOS：**未签名**，需自行签名后安装（如 AltStore / Sideloadly）。"
+            echo "- HarmonyOS：**未签名**，纯血鸿蒙默认拒绝未签名包，需自行签名或借助第三方安装工具。"
+            echo
+            echo "### 校验"
+            echo
+            echo '```'
+            cat release-assets/SHA256SUMS.txt
+            echo '```'
+          } > release-notes.md
+
+      - name: Create release
+        run: |
+          set -euo pipefail
+          TAG="v$RELEASE_VERSION"
+          mapfile -d '' ASSETS < <(find release-assets -type f -print0)
+          if [[ "${#ASSETS[@]}" -eq 0 ]]; then
+            echo "No release packages were downloaded." >&2
+            exit 1
+          fi
+          # make_latest is ignored for drafts and gh rejects the combination.
+          MODE_ARGS=(--latest)
+          if [[ "$RELEASE_DRAFT" == true ]]; then
+            MODE_ARGS=(--draft)
+          fi
+          gh release create "$TAG" "${ASSETS[@]}" \
+            --verify-tag \
+            --title "PureTavern $RELEASE_VERSION" \
+            --notes-file release-notes.md \
+            "${MODE_ARGS[@]}"

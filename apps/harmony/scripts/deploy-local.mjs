@@ -5,7 +5,7 @@ import path from 'node:path';
 import { assertFile, runHarmonyExecutable } from './harmony-toolchain.mjs';
 
 const harmonyRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const bundleName = 'com.puretavern.harmony';
+const bundleName = 'com.puretavern.app';
 const abilityName = 'EntryAbility';
 
 async function findHaps(root) {

@@ -23,6 +23,7 @@
     "android:sync": "pnpm build && pnpm --filter @pure-tavern/mobile sync:android",
     "android:open": "pnpm build && pnpm --filter @pure-tavern/mobile open:android",
     "android:debug": "pnpm build && pnpm --filter @pure-tavern/mobile build:android:debug",
+    "android:release": "pnpm build && pnpm --filter @pure-tavern/mobile build:android:release",
     "ios:sync": "pnpm build && pnpm --filter @pure-tavern/mobile sync:ios",
     "ios:open": "pnpm build && pnpm --filter @pure-tavern/mobile open:ios",
     "harmony:sync": "pnpm build && pnpm --dir apps/harmony sync:web",

@@ -1,0 +1,4 @@
+# Signing material must never be committed. Only the docs in this directory are tracked.
+*
+!.gitignore
+!README.md

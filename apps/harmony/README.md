@@ -41,7 +41,7 @@ $env:HARMONY_TARGET = '127.0.0.1:5555'
 pnpm harmony:deploy
 ```
 
-`HARMONY_TARGET` may be omitted when exactly one installable device is connected. The deployment script installs the newest HAP under `entry/build` and starts `com.puretavern.harmony/EntryAbility`.
+`HARMONY_TARGET` may be omitted when exactly one installable device is connected. The deployment script installs the newest HAP under `entry/build` and starts `com.puretavern.app/EntryAbility`.
 
 ## Hosted HAP
 
