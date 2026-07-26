@@ -18,7 +18,7 @@ The original warning is shown before a non-official repository is installed. Onc
 
 ## Supported remote sources
 
-- Public GitHub repository install/update uses jsDelivr's CORS file catalog/CDN directly. An omitted branch resolves through jsDelivr `HEAD`, so package installation does not consume GitHub's unauthenticated REST quota. GitHub REST is consulted only when the user explicitly opens the branch/tag list; that UI degrades to the current ref when rate-limited. An explicitly entered branch or tag also stays entirely on jsDelivr.
+- Public GitHub repository install/update prefers jsDelivr's CORS file catalog and single-file CDN. An omitted branch resolves through jsDelivr `HEAD`, so ordinary installation consumes no GitHub REST quota. If the jsDelivr catalog is unavailable or rejects an oversized package, the gateway makes one recursive GitHub Tree API request, filters non-runtime source maps/Finder metadata, and still downloads each file from jsDelivr first. A failed jsDelivr file request falls back to `raw.githubusercontent.com`, which supports browser CORS and does not consume GitHub REST's 60-requests/hour/IP core quota. Truncated trees and existing package/file safety limits remain hard failures. The branch/tag UI also uses GitHub REST and degrades to the current ref when rate-limited; rate-limit errors expose the remaining count and reset time when GitHub provides them.
 - Public GitLab repository URLs use GitLab's CORS REST/archive endpoints.
 - Direct HTTPS `.zip` URLs are supported when the host permits browser CORS. HTTP is accepted only for localhost development and browser tests.
 

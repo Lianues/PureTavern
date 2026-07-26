@@ -2,7 +2,6 @@ import {
   DEFAULT_EXTENSION_PACKAGE_LIMITS,
   extractExtensionZip,
   sha256Hex,
-  type ExtensionPackageFile,
   type ExtensionPackageLimits,
 } from '../application/package-validator';
 import type { RemoteExtensionSource } from '../domain/extension';
@@ -25,6 +24,12 @@ interface GitLabLocation {
   projectPath: string;
   repositoryUrl: string;
   folderName: string;
+}
+
+interface RemoteFileEntry {
+  path: string;
+  hash: string;
+  size: number;
 }
 
 type RemoteLocation = GitHubLocation | GitLabLocation | DirectZipLocation;
@@ -135,17 +140,18 @@ export class CorsExtensionSourceGateway implements ExtensionSourceGateway {
   ): Promise<ExtensionSourceSnapshot> {
     const resolvedRef = requestedRef || 'HEAD';
     const packagePath = jsDelivrPackagePath(location.owner, location.repository, resolvedRef);
-    const listingUrl = `https://data.jsdelivr.com/v1/package/gh/${packagePath}/flat`;
-    const listing = await this.#fetchJson<unknown>(listingUrl, signal);
-    const entries = parseJsDelivrListing(listing, limits);
-    const files = await mapWithConcurrency(entries, 6, async (entry) => {
-      const url = `https://cdn.jsdelivr.net/gh/${packagePath}${encodeFilePath(entry.path)}`;
-      const response = await this.#request(url, signal);
-      return {
-        path: entry.path,
-        data: await readBoundedBlob(response, limits.maxFileBytes),
-      } satisfies ExtensionPackageFile;
-    });
+    const entries = await this.#fetchGitHubEntries(location, resolvedRef, limits, signal);
+    const files = await mapWithConcurrency(entries, 6, async (entry) => ({
+      path: entry.path,
+      data: await this.#fetchGitHubFile(
+        location,
+        resolvedRef,
+        packagePath,
+        entry.path,
+        limits.maxFileBytes,
+        signal,
+      ),
+    }));
     const revision = await sha256Hex(
       new TextEncoder().encode(
         entries
@@ -163,6 +169,51 @@ export class CorsExtensionSourceGateway implements ExtensionSourceGateway {
       folderName: location.folderName,
       files,
     };
+  }
+
+  async #fetchGitHubEntries(
+    location: GitHubLocation,
+    resolvedRef: string,
+    limits: ExtensionPackageLimits,
+    signal?: AbortSignal,
+  ): Promise<RemoteFileEntry[]> {
+    const packagePath = jsDelivrPackagePath(location.owner, location.repository, resolvedRef);
+    try {
+      const listing = await this.#fetchJson<unknown>(
+        `https://data.jsdelivr.com/v1/package/gh/${packagePath}/flat`,
+        signal,
+      );
+      return parseJsDelivrListing(listing, limits);
+    } catch (error) {
+      if (!isRecoverableCatalogError(error)) throw error;
+    }
+
+    const tree = await this.#fetchJson<unknown>(
+      `https://api.github.com/repos/${encodeURIComponent(location.owner)}/${encodeURIComponent(location.repository)}/git/trees/${encodeURIComponent(resolvedRef)}?recursive=1`,
+      signal,
+    );
+    return parseGitHubTree(tree, limits);
+  }
+
+  async #fetchGitHubFile(
+    location: GitHubLocation,
+    resolvedRef: string,
+    packagePath: string,
+    filePath: string,
+    maxFileBytes: number,
+    signal?: AbortSignal,
+  ): Promise<Blob> {
+    const jsDelivrUrl = `https://cdn.jsdelivr.net/gh/${packagePath}${encodeFilePath(filePath)}`;
+    try {
+      const response = await this.#request(jsDelivrUrl, signal);
+      return await readBoundedBlob(response, maxFileBytes);
+    } catch (error) {
+      if (!isRecoverableFileError(error)) throw error;
+    }
+
+    const rawUrl = `https://raw.githubusercontent.com/${encodeURIComponent(location.owner)}/${encodeURIComponent(location.repository)}/${encodeRefPath(resolvedRef)}${encodeFilePath(filePath)}`;
+    const response = await this.#request(rawUrl, signal);
+    return readBoundedBlob(response, maxFileBytes);
   }
 
   async #fetchGitLabSnapshot(
@@ -256,7 +307,7 @@ export class CorsExtensionSourceGateway implements ExtensionSourceGateway {
     if (!response.ok) {
       throw new ExtensionSourceError(
         response.status === 403 || response.status === 429 ? 'rate-limit' : 'http',
-        `Extension source request failed: HTTP ${response.status} ${response.statusText} (${url})`,
+        `Extension source request failed: HTTP ${response.status} ${response.statusText} (${url})${githubRateLimitHint(url, response)}`,
       );
     }
     return response;
@@ -325,47 +376,115 @@ export function parseSourceLocation(rawUrl: string): RemoteLocation {
   };
 }
 
-function parseJsDelivrListing(
-  value: unknown,
-  limits: ExtensionPackageLimits,
-): { path: string; hash: string; size: number }[] {
+function parseJsDelivrListing(value: unknown, limits: ExtensionPackageLimits): RemoteFileEntry[] {
   if (!isRecord(value) || !Array.isArray(value.files)) {
     throw new ExtensionSourceError('listing', 'jsDelivr did not return a package file listing.');
   }
-  if (value.files.length === 0 || value.files.length > limits.maxFiles) {
-    throw new ExtensionSourceError('file-count', 'Remote extension file count is outside limits.');
-  }
-  let total = 0;
-  const seen = new Set<string>();
-  return value.files.map((entry) => {
+  const entries = value.files.map((entry) => {
     if (
       !isRecord(entry) ||
       typeof entry.name !== 'string' ||
       typeof entry.hash !== 'string' ||
-      typeof entry.size !== 'number' ||
-      !Number.isSafeInteger(entry.size) ||
-      entry.size < 0
+      typeof entry.size !== 'number'
     ) {
       throw new ExtensionSourceError('listing', 'Remote extension listing contains invalid files.');
     }
-    const path = entry.name.replace(/^\/+/, '');
-    if (!path || path.length > limits.maxPathLength) {
-      throw new ExtensionSourceError('listing', `Remote extension path is invalid: ${entry.name}`);
+    return { path: entry.name, hash: entry.hash, size: entry.size };
+  });
+  return validateRemoteEntries(entries, limits);
+}
+
+function parseGitHubTree(value: unknown, limits: ExtensionPackageLimits): RemoteFileEntry[] {
+  if (!isRecord(value) || !Array.isArray(value.tree)) {
+    throw new ExtensionSourceError('listing', 'GitHub did not return a repository tree.');
+  }
+  if (value.truncated !== false) {
+    throw new ExtensionSourceError(
+      'listing-truncated',
+      'GitHub returned a truncated repository tree; extension installation was stopped.',
+    );
+  }
+  const entries: RemoteFileEntry[] = [];
+  for (const entry of value.tree) {
+    if (!isRecord(entry) || entry.type !== 'blob') continue;
+    if (
+      typeof entry.path !== 'string' ||
+      typeof entry.sha !== 'string' ||
+      typeof entry.size !== 'number' ||
+      (entry.mode !== '100644' && entry.mode !== '100755')
+    ) {
+      throw new ExtensionSourceError('listing', 'GitHub repository tree contains invalid files.');
     }
-    const key = path.normalize('NFKC').toLocaleLowerCase('en-US');
+    entries.push({ path: entry.path, hash: entry.sha, size: entry.size });
+  }
+  return validateRemoteEntries(entries, limits);
+}
+
+function validateRemoteEntries(
+  input: readonly RemoteFileEntry[],
+  limits: ExtensionPackageLimits,
+): RemoteFileEntry[] {
+  const entries = input
+    .map((entry) => ({ ...entry, path: normalizeRemotePath(entry.path, limits.maxPathLength) }))
+    .filter((entry) => !isIgnoredRemoteFile(entry.path));
+  if (entries.length === 0 || entries.length > limits.maxFiles) {
+    throw new ExtensionSourceError('file-count', 'Remote extension file count is outside limits.');
+  }
+
+  let total = 0;
+  const seen = new Set<string>();
+  for (const entry of entries) {
+    if (
+      !entry.hash ||
+      !Number.isSafeInteger(entry.size) ||
+      entry.size < 0 ||
+      entry.size > limits.maxFileBytes
+    ) {
+      throw new ExtensionSourceError('package-size', 'Remote extension file exceeds size limits.');
+    }
+    const key = entry.path.normalize('NFKC').toLocaleLowerCase('en-US');
     if (seen.has(key)) {
-      throw new ExtensionSourceError('listing', `Remote extension has duplicate paths: ${path}`);
+      throw new ExtensionSourceError(
+        'listing',
+        `Remote extension has duplicate paths: ${entry.path}`,
+      );
     }
     seen.add(key);
     total += entry.size;
-    if (entry.size > limits.maxFileBytes || total > limits.maxTotalBytes) {
+    if (total > limits.maxTotalBytes) {
       throw new ExtensionSourceError(
         'package-size',
         'Remote extension exceeds package size limits.',
       );
     }
-    return { path, hash: entry.hash, size: entry.size };
-  });
+  }
+  return entries;
+}
+
+function normalizeRemotePath(value: string, maxPathLength: number): string {
+  const path = value.replace(/^\/+/, '');
+  const segments = path.split('/');
+  if (
+    !path ||
+    path.length > maxPathLength ||
+    path.includes('\\') ||
+    hasControlCharacters(path) ||
+    /^[a-zA-Z]:/u.test(path) ||
+    segments.some((segment) => !segment || segment === '.' || segment === '..')
+  ) {
+    throw new ExtensionSourceError('listing', `Remote extension path is invalid: ${value}`);
+  }
+  return path;
+}
+
+function isIgnoredRemoteFile(path: string): boolean {
+  const normalized = path.toLocaleLowerCase('en-US');
+  return (
+    normalized.endsWith('.map') ||
+    normalized === '.ds_store' ||
+    normalized.endsWith('/.ds_store') ||
+    normalized.startsWith('__macosx/')
+  );
 }
 
 function githubRef(value: unknown, label: string): ExtensionSourceRef | null {
@@ -502,6 +621,33 @@ function jsDelivrPackagePath(owner: string, repository: string, ref: string): st
 
 function encodeFilePath(value: string): string {
   return `/${value.split('/').map(encodeURIComponent).join('/')}`;
+}
+
+function encodeRefPath(value: string): string {
+  return value.split('/').map(encodeURIComponent).join('/');
+}
+
+function isRecoverableCatalogError(error: unknown): boolean {
+  return (
+    error instanceof ExtensionSourceError &&
+    ['network', 'rate-limit', 'http', 'invalid-json', 'listing'].includes(error.code)
+  );
+}
+
+function isRecoverableFileError(error: unknown): boolean {
+  return (
+    error instanceof ExtensionSourceError && ['network', 'rate-limit', 'http'].includes(error.code)
+  );
+}
+
+function githubRateLimitHint(url: string, response: Response): string {
+  if (!url.startsWith('https://api.github.com/')) return '';
+  const remaining = response.headers.get('x-ratelimit-remaining');
+  const reset = Number(response.headers.get('x-ratelimit-reset') ?? '');
+  const resetDate = Number.isFinite(reset) && reset > 0 ? new Date(reset * 1000) : null;
+  const resetAt = resetDate && Number.isFinite(resetDate.getTime()) ? resetDate.toISOString() : '';
+  if (remaining === null && !resetAt) return '';
+  return ` GitHub REST remaining=${remaining ?? 'unknown'}${resetAt ? `, resets=${resetAt}` : ''}.`;
 }
 
 function hasControlCharacters(value: string): boolean {
