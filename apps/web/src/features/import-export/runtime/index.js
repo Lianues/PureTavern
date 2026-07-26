@@ -41,8 +41,11 @@ function selectedModules() {
   );
 }
 
+// 敏感模块（Secrets / API key）自己就是那个开关：勾上它即代表同意导出明文。
 function includeSecrets() {
-  return document.querySelector('#ptdm-include-secrets')?.checked === true;
+  return (
+    document.querySelector('#ptdm-modules input[data-module][data-sensitive]:checked') !== null
+  );
 }
 
 function notify(type, message) {
@@ -111,10 +114,10 @@ function renderInspection() {
   modules.replaceChildren();
   for (const module of inspection.modules) {
     const row = document.createElement('label');
-    row.className = 'ptdm-module-row';
-    const checked = !module.sensitive;
+    // 敏感模块用红色行 + ⚠️ 自带警告，默认也勾上：备份通常是给自己用的，缺了 API key 就不完整。
+    row.className = module.sensitive ? 'ptdm-module-row ptdm-danger' : 'ptdm-module-row';
     row.innerHTML = `
-      <span><input type="checkbox" data-module="${module.moduleId}" ${checked ? 'checked' : ''}>
+      <span><input type="checkbox" data-module="${module.moduleId}"${module.sensitive ? ' data-sensitive' : ''} checked>
         <strong></strong>${module.sensitive ? ' ⚠️' : ''}</span>
       <span class="ptdm-module-meta">${module.recordCount} records · ${module.blobCount} blobs · ${formatBytes(module.totalBytes)}</span>`;
     row.querySelector('strong').textContent = module.displayName;
@@ -443,7 +446,7 @@ function createUi() {
     <div class="ptdm-body">
       <div id="ptdm-summary" class="ptdm-grid"></div>
       <progress id="ptdm-quota" class="ptdm-progress" max="100" value="0"></progress>
-      <section class="ptdm-section"><h3>模块</h3><div id="ptdm-modules"></div><label class="ptdm-danger"><input id="ptdm-include-secrets" type="checkbox"> 包含明文 Secrets（危险，不加密）</label></section>
+      <section class="ptdm-section"><h3>模块</h3><div id="ptdm-modules"></div></section>
       <section class="ptdm-section"><h3>手动导出</h3><div class="ptdm-toolbar"><button id="ptdm-export" class="menu_button">导出 ZIP</button><button id="ptdm-create-backup" class="menu_button">创建本地恢复点</button></div></section>
       <section class="ptdm-section"><h3>导入与恢复</h3><div class="ptdm-toolbar"><input id="ptdm-import-file" class="ptdm-hidden" type="file" accept=".zip,application/zip,application/x-zip-compressed"><label for="ptdm-import-file" class="menu_button ptdm-file-picker">选择数据 ZIP</label><span id="ptdm-import-file-name" class="ptdm-muted" title="尚未选择文件">尚未选择文件</span><select id="ptdm-strategy"><option value="merge">合并并覆盖冲突</option><option value="skip">跳过冲突</option><option value="replace-module">替换选中模块</option><option value="replace-all">替换归档模块</option></select><button id="ptdm-import-confirm" class="menu_button" disabled>执行导入</button></div><pre id="ptdm-preview" class="ptdm-report ptdm-hidden"></pre><pre id="ptdm-report" class="ptdm-report ptdm-hidden"></pre></section>
       <section class="ptdm-section"><h3>本地恢复点</h3><div id="ptdm-backups"></div></section>
@@ -484,18 +487,6 @@ function createUi() {
       notify('error', error.message);
     }
   });
-  dialog.querySelector('#ptdm-include-secrets').addEventListener('change', async (event) => {
-    if (
-      event.target.checked &&
-      !(await confirmAction('Secrets 会以明文写入 ZIP。任何取得文件的人都能读取。确定吗？', {
-        confirmLabel: '仍然包含',
-        danger: true,
-      }))
-    ) {
-      event.target.checked = false;
-    }
-  });
-
   globalThis.__PURE_TAVERN_DATA_MANAGEMENT__ = {
     installed: true,
     open: () => entry.querySelector('button').click(),

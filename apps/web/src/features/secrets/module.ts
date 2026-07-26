@@ -16,7 +16,7 @@ export const secretsFeature: FeatureModule = {
     const { router, records, capabilities } = context;
     registerArchiveModule(context, {
       moduleId: 'secrets',
-      displayName: 'Secrets (plaintext)',
+      displayName: 'Secrets (api key)',
       sensitive: true,
       defaultSelected: false,
     });

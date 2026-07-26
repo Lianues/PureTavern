@@ -2,8 +2,8 @@ import type { ArchiveConflictStrategy } from '@pure-tavern/contracts';
 
 export const ARCHIVE_MANIFEST_PATH = 'manifest.json';
 
-// 每条文件描述符在 manifest 里约 450 字节，maxFiles 条约 9 MB；再加上历史归档把 blob metadata
-// 内联进 manifest 的额外体积，上限必须留出足够余量，否则会出现导得出、导不回的备份。
+// 每条文件描述符在 manifest 里约 450 字节，maxFiles 条约 9 MB，blob 的 metadata 也内联在其中，
+// 上限必须留出足够余量，否则会出现导得出、导不回的备份。
 export const DEFAULT_ARCHIVE_LIMITS = Object.freeze({
   maxArchiveBytes: 512 * 1024 * 1024,
   maxFiles: 20_000,

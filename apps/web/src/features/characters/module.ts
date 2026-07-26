@@ -19,11 +19,9 @@ export const charactersFeature: FeatureModule = {
     const { router, nativeFetch, records, blobs, capabilities } = context;
     registerArchiveModule(context, { moduleId: 'characters', displayName: 'Characters' });
     const repository = new ResilientCharacterRepository(new IndexedDbCharacterRepository(records));
-    const assetStore = new IndexedDbCharacterAssetRepository(blobs);
-    const assets = new ResilientCharacterAssetRepository(assetStore);
-    void assetStore.purgeLegacyCardMetadata().catch((error: unknown) => {
-      console.warn('[PureTavern Characters] Legacy card metadata cleanup failed.', error);
-    });
+    const assets = new ResilientCharacterAssetRepository(
+      new IndexedDbCharacterAssetRepository(blobs),
+    );
     const avatarWorkerReady =
       capabilities.get(assetServiceWorkerCapability)?.ready ?? Promise.resolve('skipped');
     const service = new CharacterService(
