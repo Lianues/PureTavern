@@ -41,6 +41,32 @@ describe('chat completion provider registry', () => {
     });
     expect(descriptors.find((entry) => entry.source === 'custom')?.keyOptional).toBe(true);
   });
+
+  it('supports reverse proxy for every source the legacy frontend allowlist sends', () => {
+    // Sources listed in `proxySupportedSources` in
+    // apps/web/legacy/upstream/public/scripts/openai.js. The frontend sends
+    // `reverse_proxy` + `proxy_password` for these sources, so the backend
+    // MUST mark them supportsReverseProxy=true to honor the override and to
+    // avoid #resolveCredential leaking the proxy password to the default
+    // endpoint. Keep this list in sync with the frontend allowlist.
+    const frontendAllowlist = [
+      'claude',
+      'openai',
+      'mistralai',
+      'makersuite',
+      'vertexai',
+      'deepseek',
+      'xai',
+      'zai',
+      'moonshot',
+    ] as const;
+    const descriptors = listProviderDescriptors();
+    const backendSupported = new Set(
+      descriptors.filter((entry) => entry.supportsReverseProxy).map((entry) => entry.source),
+    );
+    const missing = frontendAllowlist.filter((source) => !backendSupported.has(source));
+    expect(missing).toEqual([]);
+  });
 });
 
 describe('GenerationService provider adapters', () => {
