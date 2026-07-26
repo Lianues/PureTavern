@@ -6,6 +6,7 @@ import type {
   BackupDescriptor,
 } from '@pure-tavern/contracts';
 
+import { APP_VERSION } from '@/platform/runtime/app-version';
 import type { ModuleRecordStore } from '@/platform/storage/app-storage';
 
 import {
@@ -62,7 +63,7 @@ export class ArchiveService implements ArchiveExporter, ArchiveImporter {
     this.#participants = participants;
     this.#backups = backups;
     this.#journal = journal;
-    this.#appVersion = options.appVersion ?? '0.1.1';
+    this.#appVersion = options.appVersion ?? APP_VERSION;
     this.#upstreamVersion = options.upstreamVersion ?? '1.18.0';
     this.#clock = options.clock ?? (() => new Date());
     this.#createId = options.createId ?? (() => crypto.randomUUID());

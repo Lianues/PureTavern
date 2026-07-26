@@ -7,6 +7,7 @@ import {
 } from '../platform/legacy/compatibility-router';
 import { registerCoreLegacyRoutes } from '../platform/legacy/register-core-routes';
 import { loadUpstreamMetadata } from '../platform/legacy/upstream-metadata';
+import { APP_VERSION } from '../platform/runtime/app-version';
 import { RUNTIME_BUILD_ID } from '../platform/runtime/build-id';
 import { installLegacyBranding } from '../platform/runtime/legacy-branding';
 import { installRuntimeUpdateWatcher } from '../platform/runtime/runtime-update';
@@ -32,7 +33,7 @@ void database.then((state) => {
 });
 
 globalThis.__PURE_TAVERN__ = {
-  hookVersion: '0.1.1',
+  hookVersion: APP_VERSION,
   buildId: RUNTIME_BUILD_ID,
   upstreamVersion: 'loading',
   upstreamMetadata,

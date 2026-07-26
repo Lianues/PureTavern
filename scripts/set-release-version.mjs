@@ -125,18 +125,8 @@ export async function applyReleaseVersion(root, requestedVersion) {
     /(PureTavern-VSCode-)[0-9]+\.[0-9]+\.[0-9]+(\.vsix)/gu,
     `$1${version}$2`,
   );
-  await replaceText(
-    root,
-    'apps/web/src/features/import-export/application/archive-service.ts',
-    /(this\.#appVersion = options\.appVersion \?\? ')[^']+(';)/gu,
-    `$1${version}$2`,
-  );
-  await replaceText(
-    root,
-    'apps/web/src/legacy-hook/bootstrap.ts',
-    /(hookVersion: ')[^']+(',)/gu,
-    `$1${version}$2`,
-  );
+  // apps/web reads its version from apps/web/package.json at bundle time
+  // (__PURE_TAVERN_VERSION__), so no web source file hardcodes it.
 
   return {
     version,

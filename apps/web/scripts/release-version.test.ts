@@ -86,12 +86,8 @@ describe('test release versioning', () => {
         'apps/vscode-extension/README.md',
         'code --install-extension apps/vscode-extension/release/PureTavern-VSCode-0.1.0.vsix\n',
       );
-      await fixtureFile(
-        root,
-        'apps/web/src/features/import-export/application/archive-service.ts',
-        "this.#appVersion = options.appVersion ?? '0.1.0';\n",
-      );
-      await fixtureFile(root, 'apps/web/src/legacy-hook/bootstrap.ts', "hookVersion: '0.1.0',\n");
+      // apps/web sources carry no version literal; the bundler injects
+      // __PURE_TAVERN_VERSION__ from apps/web/package.json instead.
 
       await expect(applyReleaseVersion(root, '1.2.3')).resolves.toEqual({
         version: '1.2.3',

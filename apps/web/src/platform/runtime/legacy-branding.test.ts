@@ -8,9 +8,16 @@ afterEach(() => {
 });
 
 describe('Legacy branding runtime', () => {
-  it('formats the product name while retaining the upstream version', () => {
-    expect(formatLegacyBrandVersion('1.18.0')).toBe('PureTavern (SillyTavern 1.18.0)');
-    expect(formatLegacyBrandVersion('  ')).toBe('PureTavern');
+  it('formats the product version while retaining the upstream version', () => {
+    expect(formatLegacyBrandVersion('1.18.0', '0.1.1')).toBe(
+      'PureTavern 0.1.1 (SillyTavern 1.18.0)',
+    );
+    expect(formatLegacyBrandVersion('  ', '0.1.1')).toBe('PureTavern 0.1.1');
+  });
+
+  it('omits the product version when it is not injected at build time', () => {
+    expect(formatLegacyBrandVersion('1.18.0', '')).toBe('PureTavern (SillyTavern 1.18.0)');
+    expect(formatLegacyBrandVersion('  ', '  ')).toBe('PureTavern');
   });
 
   it('brands existing and dynamically rendered Legacy welcome elements', async () => {

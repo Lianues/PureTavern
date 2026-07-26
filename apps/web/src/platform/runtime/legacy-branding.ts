@@ -1,3 +1,5 @@
+import { APP_VERSION } from './app-version';
+
 const PRODUCT_NAME = 'PureTavern';
 const UPSTREAM_NAME = 'SillyTavern';
 const VERSION_SELECTORS = [
@@ -21,9 +23,14 @@ export interface LegacyBrandingMetadata {
   version: string;
 }
 
-export function formatLegacyBrandVersion(version: string): string {
-  const normalized = version.trim();
-  return normalized ? `${PRODUCT_NAME} (${UPSTREAM_NAME} ${normalized})` : PRODUCT_NAME;
+export function formatLegacyBrandVersion(
+  version: string,
+  productVersion: string = APP_VERSION,
+): string {
+  const upstream = version.trim();
+  const product = productVersion.trim();
+  const label = product ? `${PRODUCT_NAME} ${product}` : PRODUCT_NAME;
+  return upstream ? `${label} (${UPSTREAM_NAME} ${upstream})` : label;
 }
 
 export function installLegacyBranding(
@@ -33,7 +40,8 @@ export function installLegacyBranding(
     return () => undefined;
   }
 
-  let versionLabel = PRODUCT_NAME;
+  // Shows "PureTavern <version>" until the upstream metadata resolves.
+  let versionLabel = formatLegacyBrandVersion('');
   const apply = (root: Document | Element) => {
     if (document.title !== PRODUCT_NAME) document.title = PRODUCT_NAME;
     for (const element of selectElements(root, VERSION_SELECTORS)) {

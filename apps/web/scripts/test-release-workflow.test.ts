@@ -43,6 +43,7 @@ describe('manual test release workflow', () => {
       'android',
       'desktop',
       'ios',
+      'harmony',
       'vscode',
       'publish',
     ]);
@@ -52,6 +53,7 @@ describe('manual test release workflow', () => {
       'android',
       'desktop',
       'ios',
+      'harmony',
       'vscode',
     ]);
     expect(source).toContain('PureTavern-$RELEASE_VERSION-web.zip');

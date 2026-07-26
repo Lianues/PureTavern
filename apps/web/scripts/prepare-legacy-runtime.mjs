@@ -58,6 +58,11 @@ const CLOUDFLARE_PAGES_HEADERS = `
 
 export async function prepareLegacyRuntime() {
   const upstreamIndex = await readFile(path.join(upstreamPublicRoot, 'index.html'), 'utf8');
+  // Single source of truth for the release version; scripts/set-release-version.mjs
+  // already rewrites this file, so no version is hardcoded in web sources.
+  const { version: appVersion } = JSON.parse(
+    await readFile(path.join(packageRoot, 'package.json'), 'utf8'),
+  );
   const buildId = randomUUID().replaceAll('-', '');
   const generatedIndex = generateHookedIndex(upstreamIndex, buildId);
 
@@ -156,6 +161,7 @@ export async function prepareLegacyRuntime() {
     logLevel: 'silent',
     define: {
       __PURE_TAVERN_BUILD_ID__: JSON.stringify(buildId),
+      __PURE_TAVERN_VERSION__: JSON.stringify(appVersion),
     },
   });
 
