@@ -617,7 +617,6 @@ jobs:
             apps/desktop/src-tauri/Cargo.toml \
             apps/desktop/src-tauri/tauri.conf.json \
             apps/harmony/AppScope/app.json5 \
-            apps/harmony/entry/oh-package.json5 \
             apps/harmony/package.json \
             apps/mobile/android/app/build.gradle \
             apps/mobile/ios/App/App.xcodeproj/project.pbxproj \
@@ -626,8 +625,6 @@ jobs:
             apps/vscode-extension/package.json \
             apps/vscode-extension/README.md \
             apps/web/package.json \
-            apps/web/src/features/import-export/application/archive-service.ts \
-            apps/web/src/legacy-hook/bootstrap.ts \
             packages/contracts/package.json \
             packages/shared/package.json
           git commit --allow-empty -m "chore(release): $RELEASE_VERSION"
