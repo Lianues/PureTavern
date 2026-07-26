@@ -3,6 +3,7 @@ export const WEB_ASSET_PATHS: Set<string> = new Set([
   "__pure_tavern/default-assets.json",
   "__pure_tavern/default-presets.json",
   "__pure_tavern/default-settings.json",
+  "__pure_tavern/harmony-bootstrap.js",
   "__pure_tavern/legacy-hook.js",
   "__pure_tavern/runtime-marker.js",
   "__pure_tavern/runtime-version.json",

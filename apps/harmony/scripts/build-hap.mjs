@@ -6,14 +6,19 @@ import { verifyHarmonySdk } from './verify-sdk.mjs';
 
 const harmonyRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const executable = await assertFile(process.env.HARMONY_HVIGORW ?? '');
-const sdk = await verifyHarmonySdk({ hvigorPath: executable, projectRoot: harmonyRoot });
-console.log(`Using bundled HarmonyOS SDK ${sdk.installedTarget}.`);
+const productName = process.env.HARMONY_PRODUCT ?? 'default';
+const sdk = await verifyHarmonySdk({
+  hvigorPath: executable,
+  productName,
+  projectRoot: harmonyRoot,
+});
+console.log(`Using HarmonyOS product ${productName} with SDK ${sdk.installedTarget}.`);
 const args = [
   'assembleHap',
   '--mode',
   'module',
   '-p',
-  'product=default',
+  `product=${productName}`,
   '-p',
   'module=entry@default',
   '-p',

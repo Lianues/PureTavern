@@ -26,6 +26,7 @@
     "ios:open": "pnpm build && pnpm --filter @pure-tavern/mobile open:ios",
     "harmony:sync": "pnpm build && pnpm --dir apps/harmony sync:web",
     "harmony:build": "pnpm build && pnpm --dir apps/harmony build:hap",
+    "harmony:deploy": "pnpm --dir apps/harmony deploy:local",
     "desktop:dev": "pnpm --filter @pure-tavern/desktop dev:desktop",
     "desktop:build": "pnpm --filter @pure-tavern/desktop build:desktop",
     "vscode:build": "pnpm build && pnpm --dir apps/vscode-extension build:extension",

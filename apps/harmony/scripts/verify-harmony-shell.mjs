@@ -15,9 +15,11 @@ const [
   loader,
   syncScript,
   buildScript,
+  deployScript,
   discoveryScript,
   sdkScript,
   stageScript,
+  platformBootstrap,
   workflow,
   packageJson,
   icon,
@@ -30,9 +32,11 @@ const [
   readFile(path.join(harmonyRoot, 'entry/src/main/ets/web/LocalWebAssetLoader.ets'), 'utf8'),
   readFile(path.join(harmonyRoot, 'scripts/sync-web-assets.mjs'), 'utf8'),
   readFile(path.join(harmonyRoot, 'scripts/build-hap.mjs'), 'utf8'),
+  readFile(path.join(harmonyRoot, 'scripts/deploy-local.mjs'), 'utf8'),
   readFile(path.join(harmonyRoot, 'scripts/discover-toolchain.mjs'), 'utf8'),
   readFile(path.join(harmonyRoot, 'scripts/verify-sdk.mjs'), 'utf8'),
   readFile(path.join(harmonyRoot, 'scripts/stage-hap.mjs'), 'utf8'),
+  readFile(path.join(harmonyRoot, 'runtime/harmony-bootstrap.js'), 'utf8'),
   readFile(path.join(workspaceRoot, '.github/workflows/harmony-hap.yml'), 'utf8'),
   readFile(path.join(harmonyRoot, 'package.json'), 'utf8'),
   readFile(path.join(harmonyRoot, 'entry/src/main/resources/base/media/app_icon.png')),
@@ -40,9 +44,15 @@ const [
 
 assert.match(appScope, /bundleName\s*:\s*['"]com\.puretavern\.harmony['"]/u);
 assert.match(appScope, /versionName\s*:\s*['"]0\.1\.0['"]/u);
-assert.match(buildProfile, /compileSdkVersion\s*:\s*['"]6\.1\.0\(23\)['"]/u);
-assert.match(buildProfile, /compatibleSdkVersion\s*:\s*['"]6\.1\.0\(23\)['"]/u);
-assert.match(buildProfile, /targetSdkVersion\s*:\s*['"]6\.1\.0\(23\)['"]/u);
+assert.match(
+  buildProfile,
+  /name\s*:\s*['"]default['"][\s\S]*?compileSdkVersion\s*:\s*['"]6\.1\.1\(24\)['"][\s\S]*?compatibleSdkVersion\s*:\s*['"]6\.1\.0\(23\)['"][\s\S]*?targetSdkVersion\s*:\s*['"]6\.1\.1\(24\)['"]/u,
+);
+assert.match(
+  buildProfile,
+  /name\s*:\s*['"]ci['"][\s\S]*?compileSdkVersion\s*:\s*['"]6\.1\.0\(23\)['"][\s\S]*?compatibleSdkVersion\s*:\s*['"]6\.1\.0\(23\)['"][\s\S]*?targetSdkVersion\s*:\s*['"]6\.1\.0\(23\)['"]/u,
+);
+assert.match(buildProfile, /applyToProducts\s*:\s*\[['"]default['"],\s*['"]ci['"]\]/u);
 assert.match(buildProfile, /signingConfigs\s*:\s*\[\]/u);
 assert.match(moduleProfile, /['"]ohos\.permission\.INTERNET['"]/u);
 assert.match(
@@ -54,10 +64,21 @@ assert.match(ability, /setSpecificSystemBarEnabled\('status', false\)/u);
 assert.match(ability, /setSpecificSystemBarEnabled\('navigationIndicator', false\)/u);
 assert.match(page, /https:\/\/puretavern\.local\//u);
 assert.match(page, /onInterceptRequest/u);
+assert.match(page, /registerServiceWorkerSchemeHandler\(\)/u);
 assert.match(page, /domStorageAccess\(true\)/u);
+assert.match(page, /setWebDebuggingAccess\(false\)/u);
+assert.match(page, /initializeWebEngine\(\);[\s\S]*registerServiceWorkerSchemeHandler\(\)/u);
+assert.doesNotMatch(page, /onConsole/u);
 assert.match(page, /DocumentViewPicker/u);
 assert.match(loader, /getRawFileContentSync/u);
 assert.match(loader, /WEB_ASSET_PATHS\.has/u);
+assert.match(loader, /new webview\.WebSchemeHandler\(\)/u);
+assert.match(loader, /setServiceWorkerWebSchemeHandler\(['"]https['"]/u);
+assert.doesNotMatch(loader, /hilog\.info/u);
+assert.match(loader, /handler\.didReceiveResponse\(response\)/u);
+assert.doesNotMatch(loader, /response\.setUrl/u);
+assert.match(loader, /handler\.didReceiveResponseBody/u);
+assert.match(loader, /handler\.didFinish\(\)/u);
 assert.match(loader, /APP_ORIGIN: string = 'https:\/\/puretavern\.local'/u);
 assert.match(loader, /const boundary = suffix\.charAt\(0\)/u);
 assert.match(loader, /boundary !== '#'/u);
@@ -67,8 +88,16 @@ assert.doesNotMatch(loader, /\bURL\b/u);
 assert.match(loader, /application\/wasm/u);
 assert.match(syncScript, /apps\/web\/dist/u);
 assert.match(syncScript, /pure-tavern-assets-service-worker\.js/u);
+assert.match(syncScript, /data-pure-tavern-platform=\\?"harmony\\?"/u);
+assert.match(platformBootstrap, /__PURE_TAVERN_PLATFORM__\s*=\s*['"]harmony['"]/u);
+assert.doesNotMatch(platformBootstrap, /DISABLE_ASSET_SERVICE_WORKER/u);
 assert.match(buildScript, /assembleHap/u);
 assert.match(buildScript, /verifyHarmonySdk/u);
+assert.match(buildScript, /HARMONY_PRODUCT/u);
+assert.match(deployScript, /HARMONY_HDC/u);
+assert.match(deployScript, /HARMONY_TARGET/u);
+assert.match(deployScript, /'install', '-r'/u);
+assert.match(deployScript, /'aa', 'start'/u);
 assert.match(discoveryScript, /sanitizeHarmonyTools/u);
 assert.match(discoveryScript, /AppleDouble metadata entries/u);
 assert.match(discoveryScript, /patchOptionalImageTranscoder/u);
@@ -84,12 +113,14 @@ assert.match(workflow, /name: Read package version/u);
 assert.match(workflow, /require\("\.\/package\.json"\)\.version/u);
 assert.match(workflow, /runs-on: ubuntu-22\.04/u);
 assert.match(workflow, /@hmtools\/hmos-cli-lite-linux@\$HMOS_CLI_VERSION/u);
+assert.match(workflow, /HARMONY_PRODUCT: ci/u);
 assert.match(workflow, /HMOS_CLI_VERSION: 0\.0\.1/u);
 assert.match(workflow, /name: Verify bundled HarmonyOS SDK/u);
 assert.match(workflow, /scripts\/verify-sdk\.mjs/u);
 assert.match(workflow, /github\.run_number/u);
 assert.match(workflow, /release\/\*\.hap/u);
 assert.match(JSON.parse(packageJson).scripts['build:hap'], /sync-web-assets\.mjs/u);
+assert.match(JSON.parse(packageJson).scripts['deploy:local'], /deploy-local\.mjs/u);
 assert.equal(icon.subarray(1, 4).toString('ascii'), 'PNG');
 assert.equal(icon.readUInt32BE(16), 512);
 assert.equal(icon.readUInt32BE(20), 512);

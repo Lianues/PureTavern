@@ -17,6 +17,8 @@ struct PureTavernPage {
 
   aboutToAppear(): void {
     webview.WebviewController.setWebDebuggingAccess(false);
+    webview.WebviewController.initializeWebEngine();
+    this.assetLoader.registerServiceWorkerSchemeHandler();
   }
 
   onBackPress(): boolean {

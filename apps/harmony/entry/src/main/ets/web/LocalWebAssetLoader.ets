@@ -1,8 +1,12 @@
 import { common } from '@kit.AbilityKit';
+import { webview } from '@kit.ArkWeb';
+import { hilog } from '@kit.PerformanceAnalysisKit';
 import { WEB_ASSET_PATHS } from '../generated/WebAssetManifest';
 
 const APP_ORIGIN: string = 'https://puretavern.local';
 const RAWFILE_ROOT: string = 'web/';
+const LOG_DOMAIN: number = 0x5054;
+const LOG_TAG: string = 'PureTavernAssetLoader';
 
 const MIME_TYPES: Map<string, string> = new Map([
   ['css', 'text/css'],
@@ -32,9 +36,19 @@ const MIME_TYPES: Map<string, string> = new Map([
 
 export class LocalWebAssetLoader {
   private readonly context: common.UIAbilityContext;
+  private readonly serviceWorkerSchemeHandler: webview.WebSchemeHandler = new webview.WebSchemeHandler();
 
   constructor(context: common.UIAbilityContext) {
     this.context = context;
+    this.serviceWorkerSchemeHandler.onRequestStart(
+      (request: webview.WebSchemeHandlerRequest, handler: webview.WebResourceHandler): boolean =>
+        this.interceptServiceWorkerRequest(request, handler),
+    );
+  }
+
+  registerServiceWorkerSchemeHandler(): void {
+    webview.WebviewController.clearServiceWorkerWebSchemeHandler();
+    webview.WebviewController.setServiceWorkerWebSchemeHandler('https', this.serviceWorkerSchemeHandler);
   }
 
   intercept(event: OnInterceptRequestEvent): WebResourceResponse | null {
@@ -48,9 +62,9 @@ export class LocalWebAssetLoader {
     }
 
     try {
-      const bytes = this.context.resourceManager.getRawFileContentSync(`${RAWFILE_ROOT}${assetPath}`);
+      const bytes = this.readAsset(assetPath);
       const response = new WebResourceResponse();
-      response.setResponseData(bytes.buffer as ArrayBuffer);
+      response.setResponseData(this.copyBytes(bytes));
       response.setResponseMimeType(this.mimeType(assetPath));
       response.setResponseEncoding('utf-8');
       response.setResponseCode(200);
@@ -60,6 +74,74 @@ export class LocalWebAssetLoader {
       console.error(`PureTavern rawfile read failed: ${assetPath}; ${JSON.stringify(error)}`);
       return this.errorResponse(500, 'Internal Server Error');
     }
+  }
+
+  private interceptServiceWorkerRequest(
+    request: webview.WebSchemeHandlerRequest,
+    handler: webview.WebResourceHandler,
+  ): boolean {
+    const requestUrl = request.getRequestUrl();
+    const assetPath = this.resolveAssetPath(requestUrl);
+    if (assetPath === null) {
+      return false;
+    }
+
+    if (!WEB_ASSET_PATHS.has(assetPath)) {
+      this.finishSchemeResponse(handler, assetPath, 404, 'Not Found', new Uint8Array());
+      return true;
+    }
+
+    try {
+      const bytes = this.readAsset(assetPath);
+      this.finishSchemeResponse(handler, assetPath, 200, 'OK', bytes);
+    } catch (error) {
+      hilog.error(
+        LOG_DOMAIN,
+        LOG_TAG,
+        'service-worker rawfile read failed %{public}s %{public}s',
+        assetPath,
+        JSON.stringify(error),
+      );
+      this.finishSchemeResponse(
+        handler,
+        assetPath,
+        500,
+        'Internal Server Error',
+        new Uint8Array(),
+      );
+    }
+    return true;
+  }
+
+  private finishSchemeResponse(
+    handler: webview.WebResourceHandler,
+    assetPath: string,
+    status: number,
+    statusText: string,
+    bytes: Uint8Array,
+  ): void {
+    const response = new webview.WebSchemeHandlerResponse();
+    response.setStatus(status);
+    response.setStatusText(statusText);
+    response.setMimeType(status === 200 ? this.mimeType(assetPath) : 'text/plain');
+    response.setEncoding('utf-8');
+    response.setHeaderByName('Cache-Control', 'no-store', true);
+    response.setHeaderByName('Content-Length', bytes.byteLength.toString(), true);
+    handler.didReceiveResponse(response);
+    if (bytes.byteLength > 0) {
+      handler.didReceiveResponseBody(this.copyBytes(bytes));
+    }
+    handler.didFinish();
+  }
+
+  private readAsset(assetPath: string): Uint8Array {
+    return this.context.resourceManager.getRawFileContentSync(`${RAWFILE_ROOT}${assetPath}`);
+  }
+
+  private copyBytes(bytes: Uint8Array): ArrayBuffer {
+    const copy = new Uint8Array(bytes.byteLength);
+    copy.set(bytes);
+    return copy.buffer as ArrayBuffer;
   }
 
   private resolveAssetPath(requestUrl: string): string | null {

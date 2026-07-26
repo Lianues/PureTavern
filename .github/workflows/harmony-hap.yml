@@ -11,6 +11,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
+  HARMONY_PRODUCT: ci
   HMOS_CLI_VERSION: 0.0.1
 
 jobs:

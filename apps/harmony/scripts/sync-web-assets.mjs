@@ -4,6 +4,9 @@ import { fileURLToPath } from 'node:url';
 
 const harmonyRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const workspaceRoot = path.resolve(harmonyRoot, '../..');
+const HARMONY_BOOTSTRAP_PATH = '__pure_tavern/harmony-bootstrap.js';
+const HARMONY_BOOTSTRAP_TAG =
+  '<script src="/__pure_tavern/harmony-bootstrap.js" data-pure-tavern-platform="harmony"></script>';
 
 async function listFiles(root, relative = '') {
   const directory = path.join(root, relative);
@@ -17,7 +20,12 @@ async function listFiles(root, relative = '') {
   return files;
 }
 
-export async function syncWebAssets({ sourceRoot, targetRoot, manifestSource }) {
+export async function syncWebAssets({
+  sourceRoot,
+  targetRoot,
+  manifestSource,
+  bootstrapSource = null,
+}) {
   const source = path.resolve(sourceRoot);
   const target = path.resolve(targetRoot);
   const index = path.join(source, 'index.html');
@@ -31,6 +39,24 @@ export async function syncWebAssets({ sourceRoot, targetRoot, manifestSource }) 
   await rm(target, { recursive: true, force: true });
   await mkdir(path.dirname(target), { recursive: true });
   await cp(source, target, { recursive: true, force: true });
+
+  if (bootstrapSource) {
+    const bootstrapTarget = path.join(target, HARMONY_BOOTSTRAP_PATH);
+    await mkdir(path.dirname(bootstrapTarget), { recursive: true });
+    await cp(path.resolve(bootstrapSource), bootstrapTarget, { force: true });
+
+    const indexText = await readFile(index, 'utf8');
+    if (!indexText.includes(HARMONY_BOOTSTRAP_TAG)) {
+      if (!indexText.includes('<head>')) {
+        throw new Error('Harmony web sync could not locate the document head.');
+      }
+      await writeFile(
+        path.join(target, 'index.html'),
+        indexText.replace('<head>', `<head>\n    ${HARMONY_BOOTSTRAP_TAG}`),
+        'utf8',
+      );
+    }
+  }
 
   const paths = await listFiles(target);
   const sizes = await Promise.all(
@@ -70,7 +96,12 @@ async function main() {
     harmonyRoot,
     'entry/src/main/ets/generated/WebAssetManifest.ets',
   );
-  const result = await syncWebAssets({ sourceRoot, targetRoot, manifestSource });
+  const result = await syncWebAssets({
+    sourceRoot,
+    targetRoot,
+    manifestSource,
+    bootstrapSource: path.join(harmonyRoot, 'runtime/harmony-bootstrap.js'),
+  });
   const indexText = await readFile(path.join(targetRoot, 'index.html'), 'utf8');
   if (!indexText.includes('<title>PureTavern</title>')) {
     throw new Error('Harmony web assets do not contain the branded PureTavern index.');
