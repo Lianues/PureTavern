@@ -116,6 +116,13 @@ jobs:
           node scripts/set-release-version.mjs "$RELEASE_VERSION"
           pnpm build
 
+      - name: Package generic web ZIP
+        run: |
+          set -euo pipefail
+          mkdir -p release
+          cd apps/web/dist
+          zip -qr "$GITHUB_WORKSPACE/release/PureTavern-$RELEASE_VERSION-web.zip" .
+
       - name: Upload reusable web build
         uses: actions/upload-artifact@v4
         with:
@@ -123,6 +130,14 @@ jobs:
           path: apps/web/dist
           include-hidden-files: true
           retention-days: 1
+
+      - name: Upload web release package
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-web
+          path: release/*.zip
+          if-no-files-found: error
+          retention-days: 7
 
   android:
     name: Android signed APK
@@ -503,9 +518,53 @@ jobs:
           compression-level: 0
           retention-days: 7
 
+  vscode:
+    name: VS Code extension VSIX
+    needs: [preflight, web]
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.17.1
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Download web build
+        uses: actions/download-artifact@v4
+        with:
+          name: web-dist
+          path: apps/web/dist
+
+      - name: Apply version and package VSIX
+        run: |
+          set -euo pipefail
+          node scripts/set-release-version.mjs "$RELEASE_VERSION"
+          pnpm --dir apps/vscode-extension build:extension
+          pnpm --dir apps/vscode-extension package:vsix
+
+      - name: Upload VS Code release package
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-vscode
+          path: apps/vscode-extension/release/*.vsix
+          if-no-files-found: error
+          retention-days: 7
+
   publish:
     name: Commit, tag and publish release
-    needs: [preflight, web, android, desktop, ios, harmony]
+    needs: [preflight, web, android, desktop, ios, harmony, vscode]
     runs-on: ubuntu-latest
     env:
       GH_TOKEN: ${{ github.token }}
