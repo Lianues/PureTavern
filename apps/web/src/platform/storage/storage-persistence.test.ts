@@ -71,4 +71,22 @@ describe('StoragePersistence', () => {
       requested: false,
     });
   });
+
+  it('reports the native container so the panel can drop an un-actionable warning', async () => {
+    // Android WebView：接口在，但永远给不了授权。
+    const persistence = new StoragePersistence(manager({}), () => 'native-app');
+    await expect(persistence.ensure()).resolves.toMatchObject({
+      mode: 'best-effort',
+      container: 'native-app',
+    });
+  });
+
+  it('re-detects the container on every read', () => {
+    // 启动早期原生桥可能还没注入，缓存判定结果会让安卓端一直被当成普通浏览器。
+    let container: 'browser' | 'native-app' = 'browser';
+    const persistence = new StoragePersistence(manager({}), () => container);
+    expect(persistence.state.container).toBe('browser');
+    container = 'native-app';
+    expect(persistence.state.container).toBe('native-app');
+  });
 });

@@ -1,12 +1,33 @@
 export type StoragePersistenceMode = 'persistent' | 'best-effort' | 'unsupported' | 'unknown';
 
+/**
+ * 数据实际躺在哪里。这决定了「没拿到持久化」到底意味着什么：
+ * 浏览器里是几百个源抢一个配额池，随时可能被 LRU 淘汰；
+ * 原生壳里是应用私有目录，系统不会自动清理，只有用户清除应用数据或卸载才会没。
+ */
+export type StorageContainer = 'browser' | 'native-app';
+
 export interface StoragePersistenceState {
   mode: StoragePersistenceMode;
+  container: StorageContainer;
   /** 浏览器是否提供 StorageManager 的持久化接口。 */
   supported: boolean;
   /** 是否已经向浏览器发起过申请（申请只需要一次，之后读状态即可）。 */
   requested: boolean;
   message: string | null;
+}
+
+interface CapacitorGlobal {
+  isNativePlatform?: () => boolean;
+}
+
+export function detectStorageContainer(): StorageContainer {
+  const capacitor = (globalThis as { Capacitor?: CapacitorGlobal }).Capacitor;
+  try {
+    return capacitor?.isNativePlatform?.() ? 'native-app' : 'browser';
+  } catch {
+    return 'browser';
+  }
 }
 
 /**
@@ -23,11 +44,16 @@ export interface StoragePersistenceState {
  */
 export class StoragePersistence {
   readonly #storage: StorageManager | undefined;
-  #state: StoragePersistenceState;
+  readonly #detectContainer: () => StorageContainer;
+  #state: Omit<StoragePersistenceState, 'container'>;
   #pending: Promise<StoragePersistenceState> | null = null;
 
-  constructor(storage: StorageManager | undefined = globalThis.navigator?.storage) {
+  constructor(
+    storage: StorageManager | undefined = globalThis.navigator?.storage,
+    detectContainer: () => StorageContainer = detectStorageContainer,
+  ) {
     this.#storage = storage;
+    this.#detectContainer = detectContainer;
     const supported =
       typeof storage?.persist === 'function' && typeof storage?.persisted === 'function';
     this.#state = {
@@ -38,8 +64,12 @@ export class StoragePersistence {
     };
   }
 
+  /**
+   * 每次读取时重新判定容器：启动早期原生桥可能还没注入，
+   * 缓存下来会让安卓端一直被当成普通浏览器。
+   */
   get state(): StoragePersistenceState {
-    return { ...this.#state };
+    return { ...this.#state, container: this.#detectContainer() };
   }
 
   /** 幂等：重复调用只会复用第一次的申请结果。 */
@@ -59,7 +89,8 @@ export class StoragePersistence {
         requested: true,
         message: persisted
           ? null
-          : 'The browser declined persistent storage; data may be evicted when disk space runs low.',
+          : // Android WebView 里这条路永远走不通：接口在，但没有可以授予的流程。
+            'Persistent storage was not granted; data may be evicted when disk space runs low.',
       };
     } catch (error) {
       this.#state = {

@@ -31,9 +31,17 @@ const INSPECTION = {
     },
   ],
   quota: { usage: 10, quota: 100 },
-  persistence: { mode: 'best-effort', supported: true, requested: true, message: 'declined' },
+  persistence: {
+    mode: 'best-effort',
+    container: 'browser',
+    supported: true,
+    requested: true,
+    message: 'declined',
+  },
   backupTransport: { kind: 'browser-local' },
 };
+
+const BEST_EFFORT = { ...INSPECTION.persistence };
 
 const PREVIEW = {
   manifest: { archiveId: 'tauri-tavern-1', createdAt: '2026-07-26T00:00:00.000Z' },
@@ -160,9 +168,33 @@ describe('PureTavern data management panel', () => {
     expect(notice.textContent).toContain('可能在不通知的情况下清除本站的全部数据');
   });
 
+  it('does not raise an un-actionable alarm inside the native shell', async () => {
+    INSPECTION.persistence = {
+      mode: 'best-effort',
+      container: 'native-app',
+      supported: true,
+      requested: true,
+      message: 'declined',
+    };
+    try {
+      buttonLabelled('打开数据管理').click();
+      await settle();
+
+      // WebView 永远拿不到持久化授权，标红只会训练用户无视警告。
+      expect(query('#ptdm-summary').textContent).toContain('应用私有存储');
+      expect(query('#ptdm-summary').querySelector('.ptdm-danger')).toBeNull();
+      const notice = query('#ptdm-persistence');
+      expect(notice.classList.contains('ptdm-danger')).toBe(false);
+      expect(notice.textContent).toContain('清除应用数据');
+    } finally {
+      INSPECTION.persistence = { ...BEST_EFFORT };
+    }
+  });
+
   it('stays quiet once storage is persistent', async () => {
     INSPECTION.persistence = {
       mode: 'persistent',
+      container: 'browser',
       supported: true,
       requested: true,
       message: null,
@@ -174,12 +206,7 @@ describe('PureTavern data management panel', () => {
       expect(query('#ptdm-summary').textContent).toContain('持久化');
       expect(query('#ptdm-persistence').classList.contains('ptdm-hidden')).toBe(true);
     } finally {
-      INSPECTION.persistence = {
-        mode: 'best-effort',
-        supported: true,
-        requested: true,
-        message: 'declined',
-      };
+      INSPECTION.persistence = { ...BEST_EFFORT };
     }
   });
 

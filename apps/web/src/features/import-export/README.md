@@ -59,12 +59,17 @@ Secrets are excluded by default. Explicit inclusion produces a plaintext archive
 
 ## Durability
 
-The app requests persistent storage at startup and again whenever the panel is opened. Without it
-the origin is best-effort: a browser under disk pressure may evict the whole database without
-notice, which would defeat the point of a local-first app. The panel shows the current mode and
-turns red when it is not persistent, because that state is a real risk to the user's data rather
-than a detail. Firefox also exempts persistent origins from its per-site group limit, so the
-reported quota can change once persistence is granted.
+The app requests persistent storage at startup and again whenever the panel is opened. In a browser,
+failing to get it means best-effort: a browser under disk pressure may evict the whole database
+without notice, so the panel turns that state red.
+
+Inside the Capacitor shell the warning is deliberately suppressed. Android WebView exposes
+`persist()` but has no flow that can ever grant it, and the data lives in the app's private
+directory rather than a shared browser profile, so the browser-eviction risk the warning describes
+does not apply. A permanent red alarm the user cannot act on only teaches them to ignore warnings.
+The panel reports `应用私有存储` there and names the risks that are real on that platform: clearing
+app data, or uninstalling. Container detection is re-evaluated on every read because the native
+bridge may not be injected yet during early startup.
 
 Archive limits exist to reject malformed or hostile packages, not to cap how much a user may keep.
 A full library is legitimately several gigabytes. The practical ceiling is browser memory: decoding

@@ -140,10 +140,20 @@ function renderInspection() {
 }
 
 // 「尽力而为」不是提示音，是浏览器真的可能在磁盘紧张时把整个库清掉，所以这一格要能变红。
+// 但原生壳里数据在应用私有目录，WebView 又永远给不了持久化授权 —— 在那里标红等于天天喊狼来了，
+// 用户既处理不了，警告本身也没描述真实风险，久了就会连真警告一起无视。
 function describePersistence(persistence) {
+  if (persistence?.mode === 'persistent') {
+    return { label: '持久化', danger: false, hint: '' };
+  }
+  if (persistence?.container === 'native-app') {
+    return {
+      label: '应用私有存储',
+      danger: false,
+      hint: '数据保存在应用私有目录，系统不会自动清理；但「清除应用数据」或卸载应用会全部删除，建议定期导出 ZIP 备份到本地磁盘。',
+    };
+  }
   switch (persistence?.mode) {
-    case 'persistent':
-      return { label: '持久化', danger: false, hint: '' };
     case 'best-effort':
       return {
         label: '尽力而为',
