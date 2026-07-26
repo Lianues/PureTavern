@@ -330,6 +330,68 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
+  harmony:
+    name: HarmonyOS NEXT unsigned HAP
+    needs: [preflight, web]
+    runs-on: ubuntu-22.04
+    timeout-minutes: 60
+    env:
+      HARMONY_PRODUCT: ci
+      HMOS_CLI_VERSION: 0.0.1
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.17.1
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Download generic web build
+        uses: actions/download-artifact@v4
+        with:
+          name: web-dist
+          path: apps/web/dist
+
+      - name: Apply version
+        run: node scripts/set-release-version.mjs "$RELEASE_VERSION"
+
+      - name: Install pinned HarmonyOS Linux command-line tools
+        run: npm install --prefix "$RUNNER_TEMP/hmos-cli" "@hmtools/hmos-cli-lite-linux@$HMOS_CLI_VERSION"
+
+      - name: Sanitize and discover hvigor and ohpm
+        run: node apps/harmony/scripts/discover-toolchain.mjs "$RUNNER_TEMP/hmos-cli/node_modules/@hmtools/hmos-cli-lite-linux" >> "$GITHUB_ENV"
+
+      - name: Verify bundled HarmonyOS SDK
+        run: node apps/harmony/scripts/verify-sdk.mjs
+
+      - name: Install Harmony project dependencies
+        run: node apps/harmony/scripts/install-ohpm.mjs
+
+      - name: Build unsigned release HAP
+        run: pnpm --dir apps/harmony build:hap
+
+      - name: Stage normalized HAP
+        run: node apps/harmony/scripts/stage-hap.mjs "$RELEASE_VERSION" apps/harmony/entry/build release
+
+      - name: Upload HarmonyOS release package
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-harmony
+          path: release/*.hap
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 7
+
   vscode:
     name: VS Code extension test VSIX
     needs: [preflight, web]
@@ -375,7 +437,7 @@ jobs:
 
   publish:
     name: Commit, tag and publish test release
-    needs: [preflight, web, android, desktop, ios, vscode]
+    needs: [preflight, web, android, desktop, ios, harmony, vscode]
     runs-on: ubuntu-latest
     env:
       GH_TOKEN: ${{ github.token }}
