@@ -14,7 +14,7 @@ From the repository root:
 
 ```bash
 pnpm vscode:package
-code --install-extension apps/vscode-extension/release/PureTavern-VSCode-0.1.1.vsix
+code --install-extension apps/vscode-extension/release/PureTavern-VSCode-0.1.2.vsix
 ```
 
 Repository: <https://github.com/Lianues/PureTavern>
