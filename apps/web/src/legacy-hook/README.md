@@ -7,6 +7,7 @@
 - 通过 `features/registry.ts` 安装各功能模块；
 - 初始化固定 records/blobs 存储平台；
 - 暴露 `globalThis.__PURE_TAVERN__` 聚合诊断；
+- 在移动端放宽原版文件输入的 `accept`（`platform/runtime/legacy-file-accept.ts`），否则 `.jsonl` 等无 MIME 映射的扩展名在系统选择器里选不中；
 - 通过构建 ID、`runtime-version.json` 和运行时 watcher 检测新部署，版本变化时自动刷新一次并防止刷新循环。
 
 功能代码禁止继续加入本目录。每个模块必须把装配、Repository、Legacy routes、契约声明和测试放在 `src/features/<module>/**`。

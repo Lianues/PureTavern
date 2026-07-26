@@ -10,6 +10,7 @@ import { loadUpstreamMetadata } from '../platform/legacy/upstream-metadata';
 import { APP_VERSION } from '../platform/runtime/app-version';
 import { RUNTIME_BUILD_ID } from '../platform/runtime/build-id';
 import { installLegacyBranding } from '../platform/runtime/legacy-branding';
+import { installLegacyFileAccept } from '../platform/runtime/legacy-file-accept';
 import { installRuntimeUpdateWatcher } from '../platform/runtime/runtime-update';
 import { appStorage } from '../platform/storage/app-storage';
 import { initializeStorageSafely } from '../platform/storage/initialize-storage';
@@ -19,6 +20,8 @@ const router = new CompatibilityRouter();
 const nativeFetch = installCompatibilityFetch(router);
 const upstreamMetadata = loadUpstreamMetadata(nativeFetch);
 installLegacyBranding(upstreamMetadata);
+// 手机上的系统选择器只认 MIME，不放宽的话 .jsonl 之类的扩展名在导入时根本选不中。
+installLegacyFileAccept();
 registerCoreLegacyRoutes(router, upstreamMetadata);
 
 const features = installFeatureModules(featureModules, {
