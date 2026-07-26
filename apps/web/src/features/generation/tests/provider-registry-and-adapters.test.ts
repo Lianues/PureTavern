@@ -300,6 +300,50 @@ describe('GenerationService provider adapters', () => {
     expect(calls[0]).toBe('https://api.z.ai/api/coding/paas/v4/chat/completions');
   });
 
+  it('does not use proxy_password as credential when source lacks supportsReverseProxy', async () => {
+    const calls: Array<{ headers: Headers }> = [];
+    const nativeFetch = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      calls.push({ headers: new Headers(init?.headers) });
+      return new Response(JSON.stringify({ choices: [{ message: { content: 'ok' } }] }), {
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }) as typeof window.fetch;
+    const service = createService(nativeFetch);
+
+    await service.generate({
+      chat_completion_source: 'openrouter',
+      reverse_proxy: 'https://proxy.example/v1',
+      proxy_password: 'must-not-be-used',
+      model: 'openrouter-model',
+      messages: [{ role: 'user', content: 'Hi' }],
+    });
+
+    expect(calls[0]!.headers.get('Authorization')).toBe(
+      'Bearer credential-for-api_key_openrouter',
+    );
+  });
+
+  it('uses proxy_password as credential when source supports reverse proxy', async () => {
+    const calls: Array<{ headers: Headers }> = [];
+    const nativeFetch = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      calls.push({ headers: new Headers(init?.headers) });
+      return new Response(JSON.stringify({ choices: [{ message: { content: 'ok' } }] }), {
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }) as typeof window.fetch;
+    const service = createService(nativeFetch);
+
+    await service.generate({
+      chat_completion_source: 'openai',
+      reverse_proxy: 'https://proxy.example/v1',
+      proxy_password: 'proxy-secret',
+      model: 'gpt-4o',
+      messages: [{ role: 'user', content: 'Hi' }],
+    });
+
+    expect(calls[0]!.headers.get('Authorization')).toBe('Bearer proxy-secret');
+  });
+
   it('normalizes Pollinations arrays, Workers results and Azure configured deployments', async () => {
     const nativeFetch = vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
