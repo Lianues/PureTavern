@@ -4,6 +4,7 @@ import type {
   ArchiveModuleImportResult,
   ArchiveModulePreview,
   BackupDescriptor,
+  PureTavernArchiveModule,
 } from '@pure-tavern/contracts';
 
 import { APP_VERSION } from '@/platform/runtime/app-version';
@@ -21,6 +22,7 @@ import type { BackupTransport } from '../ports/backup-transport';
 import { decodeArchive, encodeArchive, type DecodedArchive } from './archive-codec';
 import {
   ArchiveParticipantRegistry,
+  type PortableArchiveEntry,
   type ScopedArchiveParticipant,
 } from './archive-participant-registry';
 
@@ -80,30 +82,7 @@ export class ArchiveService implements ArchiveExporter, ArchiveImporter {
   }
 
   exportArchive(options: ArchiveExportOptions = {}): Promise<ExportedArchive> {
-    return this.#enqueue(async () => {
-      const selected = this.#selectParticipants(options.moduleIds, Boolean(options.includeSecrets));
-      const modules = await Promise.all(selected.map((participant) => participant.inspect()));
-      const entries = (
-        await Promise.all(selected.map((participant) => participant.exportEntries()))
-      ).flat();
-      const createdAt = this.#clock().toISOString();
-      const { blob, manifest } = await encodeArchive(
-        {
-          archiveId: this.#createId(),
-          createdAt,
-          appVersion: this.#appVersion,
-          upstreamVersion: this.#upstreamVersion,
-          includeSecrets: selected.some((participant) => participant.sensitive),
-          modules,
-        },
-        entries,
-      );
-      return {
-        blob,
-        manifest,
-        fileName: `pure-tavern-backup-${createdAt.replace(/[:.]/gu, '-')}.zip`,
-      };
-    });
+    return this.#enqueue(() => this.#exportWithoutQueue(options));
   }
 
   async previewArchive(
@@ -112,6 +91,38 @@ export class ArchiveService implements ArchiveExporter, ArchiveImporter {
   ): Promise<ArchiveImportPreview> {
     const decoded = await decodeArchive(archive);
     return this.#previewDecoded(decoded, options);
+  }
+
+  /**
+   * 收集模块条目但不打包。外部格式（例如 TauriTavern 迁移包）需要的是条目本身，
+   * 而不是我们自己的 zip，所以把这一步单独暴露出来。
+   */
+  collectEntries(
+    options: ArchiveExportOptions = {},
+  ): Promise<{ modules: PureTavernArchiveModule[]; entries: PortableArchiveEntry[] }> {
+    return this.#enqueue(() =>
+      this.#collectEntries(
+        this.#selectParticipants(options.moduleIds, Boolean(options.includeSecrets)),
+      ),
+    );
+  }
+
+  /**
+   * 从外部格式转换出来的条目走这里进入导入流水线，于是冲突预览、恢复点、导入日志和
+   * merge/skip/replace 策略全部复用，不需要为每种外部格式再写一遍。
+   */
+  previewDecodedArchive(
+    decoded: DecodedArchive,
+    options: ArchiveImportOptions = {},
+  ): Promise<ArchiveImportPreview> {
+    return this.#previewDecoded(decoded, options);
+  }
+
+  importDecodedArchive(
+    decoded: DecodedArchive,
+    options: ArchiveImportOptions = {},
+  ): Promise<ArchiveImportReport> {
+    return this.#enqueue(() => this.#importDecoded(decoded, options, 'pre-import'));
   }
 
   importArchive(archive: Blob, options: ArchiveImportOptions = {}): Promise<ArchiveImportReport> {
@@ -158,10 +169,7 @@ export class ArchiveService implements ArchiveExporter, ArchiveImporter {
 
   async #exportWithoutQueue(options: ArchiveExportOptions): Promise<ExportedArchive> {
     const selected = this.#selectParticipants(options.moduleIds, Boolean(options.includeSecrets));
-    const modules = await Promise.all(selected.map((participant) => participant.inspect()));
-    const entries = (
-      await Promise.all(selected.map((participant) => participant.exportEntries()))
-    ).flat();
+    const { modules, entries } = await this.#collectEntries(selected);
     const createdAt = this.#clock().toISOString();
     const { blob, manifest } = await encodeArchive(
       {
@@ -179,6 +187,16 @@ export class ArchiveService implements ArchiveExporter, ArchiveImporter {
       manifest,
       fileName: `pure-tavern-backup-${createdAt.replace(/[:.]/gu, '-')}.zip`,
     };
+  }
+
+  async #collectEntries(
+    selected: readonly ScopedArchiveParticipant[],
+  ): Promise<{ modules: PureTavernArchiveModule[]; entries: PortableArchiveEntry[] }> {
+    const [modules, entries] = await Promise.all([
+      Promise.all(selected.map((participant) => participant.inspect())),
+      Promise.all(selected.map((participant) => participant.exportEntries())),
+    ]);
+    return { modules, entries: entries.flat() };
   }
 
   async #previewDecoded(

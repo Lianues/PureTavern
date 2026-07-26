@@ -1,7 +1,14 @@
 /* global fetch, document, console, URL, setTimeout, location, FormData */
 
 const API = '/api/backups/archive';
-const state = { inspection: null, selectedFile: null, preview: null };
+const TT_API = '/api/backups/tauritavern';
+const state = {
+  inspection: null,
+  selectedFile: null,
+  preview: null,
+  ttFile: null,
+  ttPreview: null,
+};
 
 function headers() {
   return { 'Content-Type': 'application/json' };
@@ -142,6 +149,7 @@ function renderBackups() {
     actions.className = 'ptdm-toolbar';
     actions.append(
       actionButton('下载', () => downloadBackup(backup.id)),
+      actionButton('下载为 TauriTavern 格式', () => downloadBackupAsTauriTavern(backup.id)),
       actionButton('恢复', () => restoreBackup(backup.id), 'menu_button'),
       actionButton('删除', () => deleteBackup(backup.id), 'menu_button ptdm-danger'),
     );
@@ -160,16 +168,58 @@ function actionButton(label, handler, className = 'menu_button') {
   return button;
 }
 
-async function fetchArchive(path, body) {
+async function fetchArchive(path, body, fallbackName = 'pure-tavern-backup.zip') {
   const response = await fetch(path, {
     method: 'POST',
     headers: headers(),
     body: JSON.stringify(body),
   });
-  if (!response.ok) throw new Error(`Archive request failed: HTTP ${response.status}`);
+  if (!response.ok) {
+    const text = await response.text();
+    let message = `Archive request failed: HTTP ${response.status}`;
+    try {
+      message = JSON.parse(text).error || message;
+    } catch {
+      // 非 JSON 的错误体保持默认文案即可。
+    }
+    throw new Error(message);
+  }
   const disposition = response.headers.get('Content-Disposition') || '';
-  const fileName = disposition.match(/filename="([^"]+)"/i)?.[1] || 'pure-tavern-backup.zip';
-  return { blob: await response.blob(), fileName };
+  const fileName = disposition.match(/filename="([^"]+)"/i)?.[1] || fallbackName;
+  return {
+    blob: await response.blob(),
+    fileName,
+    migration: readMigrationHeader(response),
+  };
+}
+
+function readMigrationHeader(response) {
+  const raw = response.headers.get('X-PureTavern-Migration');
+  if (!raw) return null;
+  try {
+    return JSON.parse(decodeURIComponent(raw));
+  } catch {
+    return null;
+  }
+}
+
+function summarizeMigration(migration) {
+  if (!migration) return '';
+  const lines = [`共 ${migration.files} 个文件`];
+  for (const module of migration.modules ?? []) {
+    const parts = [];
+    if (module.files) parts.push(`${module.files} 文件`);
+    if (module.records) parts.push(`${module.records} 记录`);
+    if (module.blobs) parts.push(`${module.blobs} 文件数据`);
+    if (module.skipped) parts.push(`跳过 ${module.skipped}`);
+    lines.push(
+      `${module.moduleId}: ${parts.join(' · ') || '无内容'}${
+        module.notes?.length ? `\n    ${module.notes.join('\n    ')}` : ''
+      }`,
+    );
+  }
+  for (const warning of migration.warnings ?? []) lines.push(`⚠ ${warning}`);
+  return lines.join('\n');
 }
 
 const NATIVE_SAVE_CHUNK_SIZE = 512 * 1024;
@@ -319,6 +369,86 @@ async function exportArchive() {
   }
 }
 
+async function exportTauriTavern() {
+  try {
+    const result = await fetchArchive(
+      `${TT_API}/export`,
+      { moduleIds: selectedModules(), includeSecrets: includeSecrets() },
+      'tauritavern-data.zip',
+    );
+    const saved = await saveBlob(result.blob, result.fileName);
+    notifySavedFile('已导出为 TauriTavern 格式', saved);
+    showReport(summarizeMigration(result.migration) || '（没有可转换的内容）');
+  } catch (error) {
+    notify('error', error.message);
+  }
+}
+
+async function downloadBackupAsTauriTavern(id) {
+  try {
+    const result = await fetchArchive(`${TT_API}/local/download`, { id }, 'tauritavern-data.zip');
+    const saved = await saveBlob(result.blob, result.fileName);
+    notifySavedFile('恢复点已导出为 TauriTavern 格式', saved);
+    showReport(summarizeMigration(result.migration) || '（没有可转换的内容）');
+  } catch (error) {
+    notify('error', error.message);
+  }
+}
+
+async function previewTauriTavernImport(file) {
+  // 与原生归档同理：预览失败必须回到「未选择」，否则确认按钮会指向一个没通过校验的包。
+  state.ttFile = null;
+  state.ttPreview = null;
+  document.querySelector('#ptdm-tt-import-confirm').disabled = true;
+  document.querySelector('#ptdm-tt-preview').classList.add('ptdm-hidden');
+
+  const form = new FormData();
+  form.set('file', file);
+  form.set('includeSecrets', String(includeSecrets()));
+  form.set('strategy', document.querySelector('#ptdm-strategy').value);
+  const response = await fetch(`${TT_API}/import/preview`, { method: 'POST', body: form });
+  const payload = await response.json();
+  if (!response.ok) throw new Error(payload.error || `Preview failed: HTTP ${response.status}`);
+
+  state.ttPreview = payload;
+  state.ttFile = file;
+  const target = document.querySelector('#ptdm-tt-preview');
+  target.classList.remove('ptdm-hidden');
+  target.textContent = [
+    `TauriTavern 数据包：${payload.migration.files} 个文件`,
+    `将写入 ${payload.modules.length} 个模块 · ${formatBytes(payload.totalBytes)}`,
+    ...payload.modules.map(
+      (module) =>
+        `${module.selected ? '✓' : '–'} ${module.displayName}: ${module.incomingRecords} records, ${module.incomingBlobs} blobs, ${module.conflicts} conflicts${module.warnings.length ? ` (${module.warnings.join('; ')})` : ''}`,
+    ),
+    '',
+    summarizeMigration(payload.migration),
+  ].join('\n');
+  document.querySelector('#ptdm-tt-import-confirm').disabled = false;
+}
+
+async function importTauriTavern() {
+  if (!state.ttFile) return;
+  if (
+    !(await confirmAction(
+      '将把 TauriTavern 数据写入当前浏览器数据库，导入前会自动创建恢复点。确定继续吗？',
+    ))
+  ) {
+    return;
+  }
+  const form = new FormData();
+  form.set('file', state.ttFile);
+  form.set('includeSecrets', String(includeSecrets()));
+  form.set('strategy', document.querySelector('#ptdm-strategy').value);
+  form.set('createRecoveryPoint', 'true');
+  const response = await fetch(`${TT_API}/import`, { method: 'POST', body: form });
+  const payload = await response.json();
+  if (!response.ok) throw new Error(payload.error || `Import failed: HTTP ${response.status}`);
+  showReport(payload);
+  notify('success', 'TauriTavern 数据导入完成，页面即将刷新。');
+  setTimeout(() => location.reload(), 500);
+}
+
 async function createBackup() {
   try {
     const descriptor = await postJson(`${API}/local/create`, {
@@ -420,7 +550,36 @@ async function importArchive() {
 function showReport(report) {
   const target = document.querySelector('#ptdm-report');
   target.classList.remove('ptdm-hidden');
-  target.textContent = JSON.stringify(report, null, 2);
+  target.textContent = typeof report === 'string' ? report : JSON.stringify(report, null, 2);
+}
+
+function bindFilePicker(dialog, inputSelector, labelSelector, preview) {
+  dialog.querySelector(inputSelector).addEventListener('change', async (event) => {
+    const file = event.target.files?.[0];
+    const fileName = dialog.querySelector(labelSelector);
+    if (!file) {
+      fileName.textContent = '尚未选择文件';
+      fileName.title = '尚未选择文件';
+      return;
+    }
+    fileName.textContent = file.name;
+    fileName.title = file.name;
+    try {
+      await preview(file);
+    } catch (error) {
+      notify('error', error.message);
+    }
+  });
+}
+
+function bindConfirm(dialog, selector, action) {
+  dialog.querySelector(selector).addEventListener('click', async () => {
+    try {
+      await action();
+    } catch (error) {
+      notify('error', error.message);
+    }
+  });
 }
 
 function createUi() {
@@ -447,8 +606,10 @@ function createUi() {
       <div id="ptdm-summary" class="ptdm-grid"></div>
       <progress id="ptdm-quota" class="ptdm-progress" max="100" value="0"></progress>
       <section class="ptdm-section"><h3>模块</h3><div id="ptdm-modules"></div></section>
-      <section class="ptdm-section"><h3>手动导出</h3><div class="ptdm-toolbar"><button id="ptdm-export" class="menu_button">导出 ZIP</button><button id="ptdm-create-backup" class="menu_button">创建本地恢复点</button></div></section>
-      <section class="ptdm-section"><h3>导入与恢复</h3><div class="ptdm-toolbar"><input id="ptdm-import-file" class="ptdm-hidden" type="file" accept=".zip,application/zip,application/x-zip-compressed"><label for="ptdm-import-file" class="menu_button ptdm-file-picker">选择数据 ZIP</label><span id="ptdm-import-file-name" class="ptdm-muted" title="尚未选择文件">尚未选择文件</span><select id="ptdm-strategy"><option value="merge">合并并覆盖冲突</option><option value="skip">跳过冲突</option><option value="replace-module">替换选中模块</option><option value="replace-all">替换归档模块</option></select><button id="ptdm-import-confirm" class="menu_button" disabled>执行导入</button></div><pre id="ptdm-preview" class="ptdm-report ptdm-hidden"></pre><pre id="ptdm-report" class="ptdm-report ptdm-hidden"></pre></section>
+      <section class="ptdm-section"><h3>手动导出</h3><div class="ptdm-toolbar"><button id="ptdm-export" class="menu_button">导出 ZIP</button><button id="ptdm-tt-export" class="menu_button">导出为 TauriTavern 格式</button><button id="ptdm-create-backup" class="menu_button">创建本地恢复点</button></div><div class="ptdm-muted">TauriTavern 格式即 SillyTavern 的 data/default-user 目录，可直接被 TauriTavern 的数据迁移扩展导入。</div></section>
+      <section class="ptdm-section"><h3>导入与恢复</h3><div class="ptdm-toolbar"><input id="ptdm-import-file" class="ptdm-hidden" type="file" accept=".zip,application/zip,application/x-zip-compressed"><label for="ptdm-import-file" class="menu_button ptdm-file-picker">选择数据 ZIP</label><span id="ptdm-import-file-name" class="ptdm-muted" title="尚未选择文件">尚未选择文件</span><select id="ptdm-strategy"><option value="merge">合并并覆盖冲突</option><option value="skip">跳过冲突</option><option value="replace-module">替换选中模块</option><option value="replace-all">替换归档模块</option></select><button id="ptdm-import-confirm" class="menu_button" disabled>执行导入</button></div><pre id="ptdm-preview" class="ptdm-report ptdm-hidden"></pre>
+        <div class="ptdm-toolbar ptdm-interop-row"><input id="ptdm-tt-import-file" class="ptdm-hidden" type="file" accept=".zip,application/zip,application/x-zip-compressed"><label for="ptdm-tt-import-file" class="menu_button ptdm-file-picker">导入 TauriTavern 数据</label><span id="ptdm-tt-import-file-name" class="ptdm-muted" title="尚未选择文件">尚未选择文件</span><button id="ptdm-tt-import-confirm" class="menu_button" disabled>执行 TauriTavern 导入</button></div><div class="ptdm-muted">接受 TauriTavern / SillyTavern 导出的数据包，冲突策略与恢复点沿用上方设置。</div><pre id="ptdm-tt-preview" class="ptdm-report ptdm-hidden"></pre>
+        <pre id="ptdm-report" class="ptdm-report ptdm-hidden"></pre></section>
       <section class="ptdm-section"><h3>本地恢复点</h3><div id="ptdm-backups"></div></section>
     </div>`;
   document.body.appendChild(dialog);
@@ -463,30 +624,17 @@ function createUi() {
   });
   dialog.querySelector('#ptdm-close').addEventListener('click', () => dialog.close());
   dialog.querySelector('#ptdm-export').addEventListener('click', () => void exportArchive());
+  dialog.querySelector('#ptdm-tt-export').addEventListener('click', () => void exportTauriTavern());
   dialog.querySelector('#ptdm-create-backup').addEventListener('click', () => void createBackup());
-  dialog.querySelector('#ptdm-import-file').addEventListener('change', async (event) => {
-    const file = event.target.files?.[0];
-    const fileName = dialog.querySelector('#ptdm-import-file-name');
-    if (!file) {
-      fileName.textContent = '尚未选择文件';
-      fileName.title = '尚未选择文件';
-      return;
-    }
-    fileName.textContent = file.name;
-    fileName.title = file.name;
-    try {
-      await previewImport(file);
-    } catch (error) {
-      notify('error', error.message);
-    }
-  });
-  dialog.querySelector('#ptdm-import-confirm').addEventListener('click', async () => {
-    try {
-      await importArchive();
-    } catch (error) {
-      notify('error', error.message);
-    }
-  });
+  bindFilePicker(dialog, '#ptdm-import-file', '#ptdm-import-file-name', previewImport);
+  bindFilePicker(
+    dialog,
+    '#ptdm-tt-import-file',
+    '#ptdm-tt-import-file-name',
+    previewTauriTavernImport,
+  );
+  bindConfirm(dialog, '#ptdm-import-confirm', importArchive);
+  bindConfirm(dialog, '#ptdm-tt-import-confirm', importTauriTavern);
   globalThis.__PURE_TAVERN_DATA_MANAGEMENT__ = {
     installed: true,
     open: () => entry.querySelector('button').click(),

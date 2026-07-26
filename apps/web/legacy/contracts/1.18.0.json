@@ -2,7 +2,7 @@
   "schemaVersion": 2,
   "project": "SillyTavern",
   "version": "1.18.0",
-  "generatedAt": "2026-07-24T17:41:00.074Z",
+  "generatedAt": "2026-07-26T11:46:02.920Z",
   "source": {
     "publicRoot": "legacy/upstream/public",
     "repositoryRoot": "legacy/upstream"
@@ -5027,6 +5027,34 @@
           "category": "browser-data-capability",
           "responseKind": "indexeddb-local-backup-delete-empty-200",
           "migrationStatus": "completed-browser-archive-backup"
+        },
+        {
+          "method": "POST",
+          "pathname": "/api/backups/tauritavern/export",
+          "category": "browser-data-capability",
+          "responseKind": "tauri-tavern-data-directory-zip",
+          "migrationStatus": "completed-tauri-tavern-interop"
+        },
+        {
+          "method": "POST",
+          "pathname": "/api/backups/tauritavern/local/download",
+          "category": "browser-data-capability",
+          "responseKind": "tauri-tavern-data-directory-zip",
+          "migrationStatus": "completed-tauri-tavern-interop"
+        },
+        {
+          "method": "POST",
+          "pathname": "/api/backups/tauritavern/import/preview",
+          "category": "browser-data-capability",
+          "responseKind": "validated-archive-conflict-preview-json",
+          "migrationStatus": "completed-tauri-tavern-interop"
+        },
+        {
+          "method": "POST",
+          "pathname": "/api/backups/tauritavern/import",
+          "category": "browser-data-capability",
+          "responseKind": "recoverable-module-import-report-json",
+          "migrationStatus": "completed-tauri-tavern-interop"
         },
         {
           "method": "POST",

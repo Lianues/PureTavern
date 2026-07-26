@@ -2,10 +2,12 @@ import type { FeatureModule } from '@/platform/features/feature-module';
 import { registerArchiveModule } from '@/platform/features/register-archive-module';
 import {
   assetServiceWorkerCapability,
+  characterCardMigrationCapability,
   characterIdentityCapability,
   chatOwnerLifecycleCapability,
 } from '@/platform/features/standard-capabilities';
 
+import { CharacterCardCodec } from './application/character-card-codec';
 import { CharacterService } from './application/character-service';
 import { IndexedDbCharacterAssetRepository } from './infrastructure/indexeddb-character-asset-repository';
 import { IndexedDbCharacterRepository } from './infrastructure/indexeddb-character-repository';
@@ -24,6 +26,7 @@ export const charactersFeature: FeatureModule = {
     );
     const avatarWorkerReady =
       capabilities.get(assetServiceWorkerCapability)?.ready ?? Promise.resolve('skipped');
+    const codec = new CharacterCardCodec();
     const service = new CharacterService(
       repository,
       assets,
@@ -33,7 +36,7 @@ export const charactersFeature: FeatureModule = {
         return response.blob();
       },
       avatarWorkerReady,
-      undefined,
+      codec,
       async (ownerId) => {
         await capabilities.get(chatOwnerLifecycleCapability)?.deleteChatsForOwner(ownerId);
       },
@@ -42,6 +45,9 @@ export const charactersFeature: FeatureModule = {
     capabilities.register(characterIdentityCapability, {
       resolveAvatarUrl: (avatarUrl) => service.resolveStableIdentity(avatarUrl),
       getAvatarUrl: (ownerId) => service.getAvatarForStableIdentity(ownerId),
+    });
+    capabilities.register(characterCardMigrationCapability, {
+      readCardFromPng: (bytes) => codec.readPngCard(bytes),
     });
 
     registerCharactersLegacyRoutes(router, service);

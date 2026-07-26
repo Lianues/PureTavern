@@ -8,10 +8,13 @@ import {
   type ArchiveExportOptions,
   type ArchiveImportOptions,
 } from '../domain/archive';
+import { TauriTavernFormatError } from '../tauri-tavern/domain/data-tree';
+import type { TauriTavernMigrationService } from '../tauri-tavern/application/tauri-tavern-service';
 
 export function registerImportExportLegacyRoutes(
   router: CompatibilityRouter,
   service: ArchiveService,
+  tauriTavern: TauriTavernMigrationService,
 ): void {
   router.register('POST', '/api/backups/archive/inspect', async () =>
     jsonResponse(await service.inspect()),
@@ -93,6 +96,48 @@ export function registerImportExportLegacyRoutes(
     }
   });
 
+  // TauriTavern（= SillyTavern 的 data 目录）互通。导入方向刻意复用同一条归档流水线，
+  // 所以冲突预览、导入前恢复点和四种冲突策略在这里和原生归档完全一致。
+  router.register('POST', '/api/backups/tauritavern/export', async (request) => {
+    try {
+      const options = readExportOptions(await readOptionalJson(request));
+      const exported = await tauriTavern.exportPackage(options);
+      return archiveResponse(exported.blob, exported.fileName, exported.migration);
+    } catch (error) {
+      return archiveErrorResponse(error);
+    }
+  });
+
+  router.register('POST', '/api/backups/tauritavern/local/download', async (request) => {
+    try {
+      const body = await readJsonObject(request);
+      const exported = await tauriTavern.exportBackupPackage(requiredId(body.id));
+      return exported
+        ? archiveResponse(exported.blob, exported.fileName, exported.migration)
+        : emptyResponse(404);
+    } catch (error) {
+      return archiveErrorResponse(error);
+    }
+  });
+
+  router.register('POST', '/api/backups/tauritavern/import/preview', async (request) => {
+    try {
+      const { archive, options } = await readImportForm(request);
+      return jsonResponse(await tauriTavern.previewPackage(archive, options));
+    } catch (error) {
+      return archiveErrorResponse(error);
+    }
+  });
+
+  router.register('POST', '/api/backups/tauritavern/import', async (request) => {
+    try {
+      const { archive, options } = await readImportForm(request);
+      return jsonResponse(await tauriTavern.importPackage(archive, options));
+    } catch (error) {
+      return archiveErrorResponse(error);
+    }
+  });
+
   // Automatic per-chat JSONL backups are intentionally removable in M21. Keep the original
   // browser UI safe and empty while the complete manual archive remains the core capability.
   router.register('POST', '/api/backups/chat/get', () => jsonResponse([]));
@@ -100,7 +145,11 @@ export function registerImportExportLegacyRoutes(
   router.register('POST', '/api/backups/chat/delete', () => emptyResponse(404));
 }
 
-async function archiveResponse(archive: Blob, fileName: string): Promise<Response> {
+async function archiveResponse(
+  archive: Blob,
+  fileName: string,
+  summary?: unknown,
+): Promise<Response> {
   const bytes = await archive.arrayBuffer();
   return new Response(bytes, {
     status: 200,
@@ -108,6 +157,10 @@ async function archiveResponse(archive: Blob, fileName: string): Promise<Respons
       'Content-Type': 'application/zip',
       'Content-Length': String(archive.size),
       'Content-Disposition': `attachment; filename="${fileName.replace(/["\\]/gu, '_')}"`,
+      // 响应体就是 zip 本身，转换报告只能走 header。角色名带中文，必须先百分号编码。
+      ...(summary === undefined
+        ? {}
+        : { 'X-PureTavern-Migration': encodeURIComponent(JSON.stringify(summary)) }),
     },
   });
 }
@@ -199,7 +252,7 @@ function requiredId(value: unknown): string {
 }
 
 function archiveErrorResponse(error: unknown): Response {
-  if (error instanceof ArchiveValidationError) {
+  if (error instanceof ArchiveValidationError || error instanceof TauriTavernFormatError) {
     return jsonResponse({ error: error.message, code: error.code, pureTavern: true }, 400);
   }
   return jsonResponse({ error: 'Archive operation failed.', pureTavern: true }, 500);

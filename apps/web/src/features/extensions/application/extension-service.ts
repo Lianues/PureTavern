@@ -15,6 +15,7 @@ import type {
 } from '../ports/extension-source-gateway';
 import {
   DEFAULT_EXTENSION_PACKAGE_LIMITS,
+  MIGRATION_EXTENSION_PACKAGE_LIMITS,
   sha256Hex,
   validateLegacyExtensionPackage,
   type ExtensionPackageLimits,
@@ -164,6 +165,65 @@ export class ExtensionService {
       }
       return installDto(record);
     });
+  }
+
+  /**
+   * 为「从外部迁移包里搬过来的扩展」构造注册表记录。
+   *
+   * 只构造不落盘：调用方（M21 的迁移导入）要把它和其他模块记录一起走归档流水线，
+   * 这样冲突预览、导入前恢复点和冲突策略才对扩展同样生效。校验、id 推导和记录结构
+   * 复用 installRemote 那一套，所以迁移进来的扩展和正常安装的扩展在库里没有区别，
+   * 更新检查也照常可用。
+   */
+  async buildImportedExtension(input: {
+    folderName: string;
+    repositoryUrl: string;
+    requestedRef: string;
+    revision: string;
+    scope: Exclude<ExtensionScope, 'system'>;
+    installedAt: string;
+    files: readonly { path: string; data: Blob }[];
+  }): Promise<{
+    extensionId: string;
+    legacyName: string;
+    record: ExtensionRecord;
+    files: readonly { path: string; data: Blob }[];
+  }> {
+    const repositoryUrl = input.repositoryUrl.trim();
+    if (!repositoryUrl) {
+      throw new TypeError('An imported extension needs a repository URL to derive its identity.');
+    }
+    // 迁移包里的扩展按原样搬运，一个文件都不丢，所以这里用放宽体积的那套上限。
+    const validated = await validateLegacyExtensionPackage(
+      input.files,
+      MIGRATION_EXTENSION_PACKAGE_LIMITS,
+    );
+    const extensionId = await extensionIdForRepository(repositoryUrl);
+    const legacyName = `third-party/${input.folderName}`;
+    const record: ExtensionRecord = {
+      extensionId,
+      legacyName,
+      folderName: input.folderName,
+      trust: 'user-approved-legacy',
+      scope: input.scope,
+      enabled: true,
+      manifest: validated.manifest,
+      source: {
+        kind: 'remote',
+        provider: providerForRepository(repositoryUrl),
+        repositoryUrl,
+        requestedRef: input.requestedRef,
+        resolvedRef: input.requestedRef,
+        revision: input.revision,
+        packageHash: validated.packageHash,
+        fileCount: validated.fileCount,
+        totalBytes: validated.totalBytes,
+      },
+      installedAt: input.installedAt,
+      updatedAt: input.installedAt,
+    };
+    assertExtensionId(extensionId);
+    return { extensionId, legacyName, record, files: validated.files };
   }
 
   async list(): Promise<ExtensionRecord[]> {
@@ -423,6 +483,17 @@ function updateDto(record: ExtensionRecord, isUpToDate: boolean): LegacyUpdateEx
     isUpToDate,
     remoteUrl: source.repositoryUrl,
   };
+}
+
+function providerForRepository(repositoryUrl: string): RemoteExtensionSource['provider'] {
+  try {
+    const host = new URL(repositoryUrl).hostname;
+    if (host === 'github.com') return 'github';
+    if (host === 'gitlab.com') return 'gitlab';
+  } catch {
+    // 非法 URL 交给下面的 cors-zip 兜底，identity 仍由完整字符串决定。
+  }
+  return 'cors-zip';
 }
 
 async function extensionIdForRepository(repositoryUrl: string): Promise<string> {

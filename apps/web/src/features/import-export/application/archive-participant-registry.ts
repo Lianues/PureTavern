@@ -91,6 +91,12 @@ export class ScopedArchiveParticipant {
     };
   }
 
+  /** 只读取某个索引集合，用于外部格式导入时认领已有记录的 id，避免导出一次就多一份数据。 */
+  async listRecords<T = unknown>(collection: string): Promise<{ id: string; value: T }[]> {
+    const records = await this.#registration.records.list<T>(collection);
+    return records.map((record) => ({ id: record.id, value: record.value }));
+  }
+
   async exportEntries(): Promise<PortableArchiveEntry[]> {
     const [records, blobs] = await Promise.all([
       this.#registration.records.listAll(),

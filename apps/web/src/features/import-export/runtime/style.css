@@ -103,6 +103,13 @@
   font-size: 0.9em;
 }
 
+/* 外部格式互通和原生归档共用同一个区块，用一条分隔线把两组操作分开。 */
+.ptdm-interop-row {
+  margin-top: 0.75rem;
+  padding-top: 0.75rem;
+  border-top: 1px dashed color-mix(in srgb, var(--SmartThemeBorderColor) 70%, transparent);
+}
+
 .ptdm-danger {
   color: #ffb4b4;
   border-color: #a33;

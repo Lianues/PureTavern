@@ -13,6 +13,24 @@ export const DEFAULT_EXTENSION_PACKAGE_LIMITS = Object.freeze({
   maxCompressionRatio: 200,
 });
 
+/**
+ * 从本地迁移包里搬运扩展时用的上限。
+ *
+ * 默认那套是为「从不可信远端下载」定的：它要限制网络传输量和解压炸弹。迁移包是用户
+ * 自己机器上已经存在的数据，那层理由不成立，用它去卡只会把用户既有的扩展整个拒之门外
+ * （实测一个 59 MB 的扩展就会被 50 MB 的默认上限挡下）。
+ * 路径安全和 manifest 结构校验一点不放宽，放开的只有体积和数量。
+ */
+export const MIGRATION_EXTENSION_PACKAGE_LIMITS: ExtensionPackageLimits = Object.freeze({
+  maxArchiveBytes: 64 * 1024 * 1024 * 1024,
+  maxFiles: 2_000_000,
+  maxTotalBytes: 64 * 1024 * 1024 * 1024,
+  maxFileBytes: 2 * 1024 * 1024 * 1024,
+  maxManifestBytes: 64 * 1024 * 1024,
+  maxPathLength: 300,
+  maxCompressionRatio: 10_000,
+});
+
 export interface ExtensionPackageLimits {
   maxArchiveBytes: number;
   maxFiles: number;

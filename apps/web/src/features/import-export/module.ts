@@ -1,6 +1,10 @@
 import { defineCapability } from '@/platform/features/capability-registry';
 import type { FeatureInstallContext, FeatureModule } from '@/platform/features/feature-module';
-import { archiveParticipantRegistryCapability } from '@/platform/features/standard-capabilities';
+import {
+  archiveParticipantRegistryCapability,
+  characterCardMigrationCapability,
+  extensionMigrationCapability,
+} from '@/platform/features/standard-capabilities';
 
 import { ArchiveParticipantRegistry } from './application/archive-participant-registry';
 import { ArchiveService } from './application/archive-service';
@@ -10,11 +14,13 @@ import { ResilientBackupRepository } from './infrastructure/resilient-backup-rep
 import { registerImportExportLegacyRoutes } from './legacy/register-routes';
 import type { BackupRepository } from './ports/backup-repository';
 import type { BackupTransport } from './ports/backup-transport';
+import { TauriTavernMigrationService } from './tauri-tavern/application/tauri-tavern-service';
 
 export interface DataManagementRuntimeCapability {
   service: ArchiveService;
   participants: ArchiveParticipantRegistry;
   backupTransport: BackupTransport;
+  tauriTavern: TauriTavernMigrationService;
 }
 
 export const dataManagementRuntimeCapability = defineCapability<DataManagementRuntimeCapability>(
@@ -42,12 +48,18 @@ export function createImportExportFeature(options: ImportExportFeatureOptions = 
         options.createBackupTransport?.(context, repository) ??
         new LocalBackupTransport(repository);
       const service = new ArchiveService(participants, backupTransport, context.records);
+      // characters / extensions 特性可能在本模块之后安装，所以这些能力必须在请求时再取。
+      const tauriTavern = new TauriTavernMigrationService(participants, service, {
+        cardReader: () => context.capabilities.get(characterCardMigrationCapability) ?? null,
+        extensionMigration: () => context.capabilities.get(extensionMigrationCapability) ?? null,
+      });
       context.capabilities.register(dataManagementRuntimeCapability, {
         service,
         participants,
         backupTransport,
+        tauriTavern,
       });
-      registerImportExportLegacyRoutes(context.router, service);
+      registerImportExportLegacyRoutes(context.router, service, tauriTavern);
 
       const participantDiagnostics = {
         get count() {
@@ -66,6 +78,12 @@ export function createImportExportFeature(options: ImportExportFeatureOptions = 
             schemaVersion: 1,
             secretsDefault: 'excluded',
             recoveryPointBeforeImport: true,
+          },
+          interop: {
+            format: 'tauri-tavern-data-directory',
+            root: 'data/default-user',
+            direction: 'import-and-export',
+            sharedImportPipeline: true,
           },
           backupTransport: backupTransport.capabilities,
           optionalBackend: {

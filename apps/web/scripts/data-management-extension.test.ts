@@ -38,4 +38,17 @@ describe('PureTavern data management first-party extension', () => {
     expect(prepareScript).toContain("extensionId: 'pure-tavern.data-management'");
     expect(prepareScript).toContain("sourceKind: 'pure-tavern-first-party'");
   });
+
+  it('offers TauriTavern interop in the export, import and recovery point sections', async () => {
+    const script = await readFile('src/features/import-export/runtime/index.js', 'utf8');
+
+    expect(script).toContain('/api/backups/tauritavern');
+    expect(script).toContain('导出为 TauriTavern 格式');
+    expect(script).toContain('导入 TauriTavern 数据');
+    expect(script).toContain('下载为 TauriTavern 格式');
+    // 三个入口必须各自接到自己的处理函数上，而不是共用原生归档那一套。
+    expect(script).toContain("dialog.querySelector('#ptdm-tt-export')");
+    expect(script).toContain("bindConfirm(dialog, '#ptdm-tt-import-confirm', importTauriTavern)");
+    expect(script).toContain('downloadBackupAsTauriTavern(backup.id)');
+  });
 });

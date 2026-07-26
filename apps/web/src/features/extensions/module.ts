@@ -3,6 +3,7 @@ import type { FeatureInstallContext, FeatureModule } from '@/platform/features/f
 import { registerArchiveModule } from '@/platform/features/register-archive-module';
 import {
   assetServiceWorkerCapability,
+  extensionMigrationCapability,
   extensionPackageAssetsCapability,
   legacyExtensionSettingsCapability,
 } from '@/platform/features/standard-capabilities';
@@ -97,6 +98,9 @@ export function createExtensionsFeature(options: ExtensionsFeatureOptions = {}):
 
       const runtime: ExtensionsRuntimeCapability = { ready, registry, service };
       capabilities.register(extensionsRuntimeCapability, runtime);
+      capabilities.register(extensionMigrationCapability, {
+        buildImportedExtension: (input) => service.buildImportedExtension(input),
+      });
       let unknownDisabledLegacyNames: string[] = [];
       capabilities.register(legacyExtensionSettingsCapability, {
         async getDisabledLegacyNames() {

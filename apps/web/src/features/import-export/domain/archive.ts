@@ -2,16 +2,26 @@ import type { ArchiveConflictStrategy } from '@pure-tavern/contracts';
 
 export const ARCHIVE_MANIFEST_PATH = 'manifest.json';
 
-// 每条文件描述符在 manifest 里约 450 字节，maxFiles 条约 9 MB，blob 的 metadata 也内联在其中，
-// 上限必须留出足够余量，否则会出现导得出、导不回的备份。
+/**
+ * 归档上限只用来挡住畸形和恶意输入，不用来替用户决定他能存多少数据。
+ * 一个用满的库有好几 GB 是正常的，卡在这里只会让用户导不出自己的东西。
+ *
+ * 两条内部约束必须一起动，否则会出现「导得出、导不回」的备份：
+ * - 每条文件描述符在 manifest 里约 450 字节，所以 maxManifestBytes 要能装下 maxFiles 条；
+ * - maxExpandedBytes 要给 maxArchiveBytes 留出解压后的余量。
+ *
+ * 真正的天花板不在这里，而是浏览器内存：解包会把整个归档读进内存再解压，
+ * 所以多 GB 的包会先撞上内存而不是这些数字。
+ */
 export const DEFAULT_ARCHIVE_LIMITS = Object.freeze({
-  maxArchiveBytes: 512 * 1024 * 1024,
-  maxFiles: 20_000,
-  maxExpandedBytes: 1024 * 1024 * 1024,
-  maxFileBytes: 512 * 1024 * 1024,
-  maxManifestBytes: 32 * 1024 * 1024,
+  maxArchiveBytes: 64 * 1024 * 1024 * 1024,
+  maxFiles: 2_000_000,
+  maxExpandedBytes: 128 * 1024 * 1024 * 1024,
+  // 单文件受浏览器 ArrayBuffer 上限约束，再大也读不进来。
+  maxFileBytes: 2 * 1024 * 1024 * 1024,
+  maxManifestBytes: 4 * 1024 * 1024 * 1024,
   maxPathLength: 500,
-  maxCompressionRatio: 250,
+  maxCompressionRatio: 10_000,
 });
 
 export interface ArchiveLimits {
