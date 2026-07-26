@@ -258,6 +258,48 @@ describe('GenerationService provider adapters', () => {
     expect(calls[2]!.body).toMatchObject({ model: 'command-browser', max_tokens: 100 });
   });
 
+  it('honors zai reverse_proxy over the zai_endpoint=coding default', async () => {
+    const calls: string[] = [];
+    const nativeFetch = vi.fn(async (input: RequestInfo | URL) => {
+      calls.push(String(input));
+      return new Response(JSON.stringify({ choices: [{ message: { content: 'ok' } }] }), {
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }) as typeof window.fetch;
+    const service = createService(nativeFetch);
+
+    await service.generate({
+      chat_completion_source: 'zai',
+      zai_endpoint: 'coding',
+      reverse_proxy: 'https://proxy.example/v1',
+      proxy_password: 'proxy-secret',
+      model: 'glm-4.6',
+      messages: [{ role: 'user', content: 'Hi' }],
+    });
+
+    expect(calls[0]).toBe('https://proxy.example/v1/chat/completions');
+  });
+
+  it('still routes zai to the coding endpoint when no reverse_proxy is set', async () => {
+    const calls: string[] = [];
+    const nativeFetch = vi.fn(async (input: RequestInfo | URL) => {
+      calls.push(String(input));
+      return new Response(JSON.stringify({ choices: [{ message: { content: 'ok' } }] }), {
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }) as typeof window.fetch;
+    const service = createService(nativeFetch);
+
+    await service.generate({
+      chat_completion_source: 'zai',
+      zai_endpoint: 'coding',
+      model: 'glm-4.6',
+      messages: [{ role: 'user', content: 'Hi' }],
+    });
+
+    expect(calls[0]).toBe('https://api.z.ai/api/coding/paas/v4/chat/completions');
+  });
+
   it('normalizes Pollinations arrays, Workers results and Azure configured deployments', async () => {
     const nativeFetch = vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
