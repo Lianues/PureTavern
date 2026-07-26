@@ -9,6 +9,11 @@ import type {
 
 import { APP_VERSION } from '@/platform/runtime/app-version';
 import type { ModuleRecordStore } from '@/platform/storage/app-storage';
+import {
+  storagePersistence,
+  type StoragePersistence,
+  type StoragePersistenceState,
+} from '@/platform/storage/storage-persistence';
 
 import {
   ArchiveValidationError,
@@ -36,12 +41,15 @@ export interface ArchiveServiceOptions {
   clock?: () => Date;
   createId?: () => string;
   backupRetention?: number;
+  persistence?: StoragePersistence;
 }
 
 export interface DataManagementInspection {
   modules: Awaited<ReturnType<ScopedArchiveParticipant['inspect']>>[];
   backups: BackupDescriptor[];
   quota: { usage: number | null; quota: number | null };
+  /** 浏览器是否承诺不回收这个源的数据。best-effort 意味着磁盘紧张时可能被整库清空。 */
+  persistence: StoragePersistenceState;
   backupTransport: BackupTransport['capabilities'];
 }
 
@@ -54,6 +62,7 @@ export class ArchiveService implements ArchiveExporter, ArchiveImporter {
   readonly #clock: () => Date;
   readonly #createId: () => string;
   readonly #backupRetention: number;
+  readonly #persistence: StoragePersistence;
   #tail: Promise<void> = Promise.resolve();
 
   constructor(
@@ -70,15 +79,18 @@ export class ArchiveService implements ArchiveExporter, ArchiveImporter {
     this.#clock = options.clock ?? (() => new Date());
     this.#createId = options.createId ?? (() => crypto.randomUUID());
     this.#backupRetention = options.backupRetention ?? DEFAULT_BACKUP_RETENTION;
+    this.#persistence = options.persistence ?? storagePersistence;
   }
 
   async inspect(): Promise<DataManagementInspection> {
-    const [modules, backups, quota] = await Promise.all([
+    const [modules, backups, quota, persistence] = await Promise.all([
       Promise.all(this.#participants.list().map((participant) => participant.inspect())),
       this.#backups.list(),
       storageEstimate(),
+      // 打开面板时再补一次申请：首次启动可能因为站点参与度不足被拒，用户主动来看数据时值得重试。
+      this.#persistence.ensure(),
     ]);
-    return { modules, backups, quota, backupTransport: this.#backups.capabilities };
+    return { modules, backups, quota, persistence, backupTransport: this.#backups.capabilities };
   }
 
   exportArchive(options: ArchiveExportOptions = {}): Promise<ExportedArchive> {

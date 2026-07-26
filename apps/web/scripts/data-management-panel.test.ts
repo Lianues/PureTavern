@@ -31,6 +31,7 @@ const INSPECTION = {
     },
   ],
   quota: { usage: 10, quota: 100 },
+  persistence: { mode: 'best-effort', supported: true, requested: true, message: 'declined' },
   backupTransport: { kind: 'browser-local' },
 };
 
@@ -146,6 +147,40 @@ describe('PureTavern data management panel', () => {
     expect(query<HTMLButtonElement>('#ptdm-tt-import-confirm').disabled).toBe(true);
     // 恢复点每一行都要有自己的 TauriTavern 导出入口。
     expect(query('#ptdm-backups').textContent).toContain('下载为 TauriTavern 格式');
+  });
+
+  it('warns when the browser has not granted persistent storage', async () => {
+    buttonLabelled('打开数据管理').click();
+    await settle();
+
+    expect(query('#ptdm-summary').textContent).toContain('尽力而为');
+    const notice = query('#ptdm-persistence');
+    expect(notice.classList.contains('ptdm-hidden')).toBe(false);
+    expect(notice.classList.contains('ptdm-danger')).toBe(true);
+    expect(notice.textContent).toContain('可能在不通知的情况下清除本站的全部数据');
+  });
+
+  it('stays quiet once storage is persistent', async () => {
+    INSPECTION.persistence = {
+      mode: 'persistent',
+      supported: true,
+      requested: true,
+      message: null,
+    };
+    try {
+      buttonLabelled('打开数据管理').click();
+      await settle();
+
+      expect(query('#ptdm-summary').textContent).toContain('持久化');
+      expect(query('#ptdm-persistence').classList.contains('ptdm-hidden')).toBe(true);
+    } finally {
+      INSPECTION.persistence = {
+        mode: 'best-effort',
+        supported: true,
+        requested: true,
+        message: 'declined',
+      };
+    }
   });
 
   it('exports the current data as a TauriTavern package', async () => {

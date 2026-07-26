@@ -108,14 +108,21 @@ function renderInspection() {
   const usage = inspection.quota?.usage ?? 0;
   const quota = inspection.quota?.quota ?? 0;
   const percent = quota ? Math.min(100, (usage / quota) * 100) : 0;
+  const persistence = describePersistence(inspection.persistence);
   document.querySelector('#ptdm-summary').innerHTML = `
     <div class="ptdm-card"><strong>${inspection.modules.length}</strong><div>数据模块</div></div>
     <div class="ptdm-card"><strong>${formatBytes(usage)}</strong><div>浏览器用量</div></div>
     <div class="ptdm-card"><strong>${formatBytes(quota)}</strong><div>浏览器配额</div></div>
+    <div class="ptdm-card${persistence.danger ? ' ptdm-danger' : ''}"><strong>${persistence.label}</strong><div>存储模式</div></div>
     <div class="ptdm-card"><strong>${inspection.backups.length}</strong><div>本地恢复点</div></div>`;
   const progress = document.querySelector('#ptdm-quota');
   progress.value = percent;
   progress.title = `${percent.toFixed(1)}%`;
+
+  const notice = document.querySelector('#ptdm-persistence');
+  notice.textContent = persistence.hint;
+  notice.classList.toggle('ptdm-hidden', !persistence.hint);
+  notice.classList.toggle('ptdm-danger', persistence.danger);
 
   const modules = document.querySelector('#ptdm-modules');
   modules.replaceChildren();
@@ -129,6 +136,28 @@ function renderInspection() {
       <span class="ptdm-module-meta">${module.recordCount} records · ${module.blobCount} blobs · ${formatBytes(module.totalBytes)}</span>`;
     row.querySelector('strong').textContent = module.displayName;
     modules.appendChild(row);
+  }
+}
+
+// 「尽力而为」不是提示音，是浏览器真的可能在磁盘紧张时把整个库清掉，所以这一格要能变红。
+function describePersistence(persistence) {
+  switch (persistence?.mode) {
+    case 'persistent':
+      return { label: '持久化', danger: false, hint: '' };
+    case 'best-effort':
+      return {
+        label: '尽力而为',
+        danger: true,
+        hint: '浏览器未授予持久化存储：磁盘空间不足时，它可能在不通知的情况下清除本站的全部数据。建议定期导出 ZIP 备份到本地磁盘。',
+      };
+    case 'unsupported':
+      return {
+        label: '不支持',
+        danger: true,
+        hint: '当前浏览器不提供持久化存储接口，数据可能被自动清理。建议定期导出 ZIP 备份到本地磁盘。',
+      };
+    default:
+      return { label: '检测中', danger: false, hint: '' };
   }
 }
 
@@ -605,6 +634,7 @@ function createUi() {
     <div class="ptdm-body">
       <div id="ptdm-summary" class="ptdm-grid"></div>
       <progress id="ptdm-quota" class="ptdm-progress" max="100" value="0"></progress>
+      <div id="ptdm-persistence" class="ptdm-muted ptdm-hidden"></div>
       <section class="ptdm-section"><h3>模块</h3><div id="ptdm-modules"></div></section>
       <section class="ptdm-section"><h3>手动导出</h3><div class="ptdm-toolbar"><button id="ptdm-export" class="menu_button">导出 ZIP</button><button id="ptdm-tt-export" class="menu_button">导出为 TauriTavern 格式</button><button id="ptdm-create-backup" class="menu_button">创建本地恢复点</button></div><div class="ptdm-muted">TauriTavern 格式即 SillyTavern 的 data/default-user 目录，可直接被 TauriTavern 的数据迁移扩展导入。</div></section>
       <section class="ptdm-section"><h3>导入与恢复</h3><div class="ptdm-toolbar"><input id="ptdm-import-file" class="ptdm-hidden" type="file" accept=".zip,application/zip,application/x-zip-compressed"><label for="ptdm-import-file" class="menu_button ptdm-file-picker">选择数据 ZIP</label><span id="ptdm-import-file-name" class="ptdm-muted" title="尚未选择文件">尚未选择文件</span><select id="ptdm-strategy"><option value="merge">合并并覆盖冲突</option><option value="skip">跳过冲突</option><option value="replace-module">替换选中模块</option><option value="replace-all">替换归档模块</option></select><button id="ptdm-import-confirm" class="menu_button" disabled>执行导入</button></div><pre id="ptdm-preview" class="ptdm-report ptdm-hidden"></pre>

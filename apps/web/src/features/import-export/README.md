@@ -57,6 +57,20 @@ single PNG with an embedded card there, so every module has its own mapping.
 
 Secrets are excluded by default. Explicit inclusion produces a plaintext archive and must be confirmed by the UI. Archive hashes provide integrity only; they are not encryption, signatures or author authentication.
 
+## Durability
+
+The app requests persistent storage at startup and again whenever the panel is opened. Without it
+the origin is best-effort: a browser under disk pressure may evict the whole database without
+notice, which would defeat the point of a local-first app. The panel shows the current mode and
+turns red when it is not persistent, because that state is a real risk to the user's data rather
+than a detail. Firefox also exempts persistent origins from its per-site group limit, so the
+reported quota can change once persistence is granted.
+
+Archive limits exist to reject malformed or hostile packages, not to cap how much a user may keep.
+A full library is legitimately several gigabytes. The practical ceiling is browser memory: decoding
+reads the whole archive in and inflates it in memory, so multi-gigabyte packages will exhaust the
+tab before they reach any configured limit.
+
 ## Storage
 
 M21 local backups use its own generic records/blobs namespace. The default retention is five archives. File System Access is an enhancement; standard browser downloads and file inputs remain available.
