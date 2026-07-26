@@ -368,7 +368,12 @@ async function restoreBackup(id) {
 }
 
 async function previewImport(file) {
-  state.selectedFile = file;
+  // 预览失败时必须保持“未选择”状态，否则确认按钮会停在上一次成功预览的启用状态，
+  // 却指向这个没通过校验的文件。
+  state.selectedFile = null;
+  state.preview = null;
+  document.querySelector('#ptdm-import-confirm').disabled = true;
+  document.querySelector('#ptdm-preview').classList.add('ptdm-hidden');
   const form = new FormData();
   form.set('file', file);
   form.set('includeSecrets', String(includeSecrets()));
@@ -377,6 +382,7 @@ async function previewImport(file) {
   const payload = await response.json();
   if (!response.ok) throw new Error(payload.error || `Preview failed: HTTP ${response.status}`);
   state.preview = payload;
+  state.selectedFile = file;
   const target = document.querySelector('#ptdm-preview');
   target.classList.remove('ptdm-hidden');
   target.textContent = [

@@ -7,7 +7,6 @@ import {
   normalizeCharacterCard,
   processUnsetSentinels,
   readFromV2,
-  serializeCard,
   toLegacyCharacterDto,
   unsetPath,
   unsetPrivateFields,
@@ -363,7 +362,6 @@ export class CharacterService {
       fileName: avatarFile,
       contentType: file.type || (fileType === 'png' ? PNG_MIME : 'application/json'),
       source: `import:${fileType}`,
-      cardJson: serializeCard(card),
     });
     await this.#repository.save(character);
     return normalizeInternalName(avatarFile);
@@ -450,7 +448,6 @@ export class CharacterService {
       fileName: avatarFile,
       contentType: blob.type || image.type || PNG_MIME,
       source,
-      cardJson: serializeCard(card),
     });
   }
 

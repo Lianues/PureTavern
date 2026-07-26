@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 
 import { decodeArchive, encodeArchive } from '../application/archive-codec';
 import type { PortableArchiveEntry } from '../application/archive-participant-registry';
+import { DEFAULT_ARCHIVE_LIMITS } from '../domain/archive';
 
 const moduleSummary = {
   moduleId: 'settings',
@@ -32,7 +33,7 @@ function entry(): PortableArchiveEntry {
   };
 }
 
-async function encoded() {
+async function encoded(limits = DEFAULT_ARCHIVE_LIMITS) {
   return encodeArchive(
     {
       archiveId: 'archive-test',
@@ -43,6 +44,7 @@ async function encoded() {
       modules: [moduleSummary],
     },
     [entry()],
+    limits,
   );
 }
 
@@ -59,6 +61,12 @@ describe('PureTavern archive codec', () => {
     expect(decoded.entries).toHaveLength(1);
     expect(decoded.entries[0]?.descriptor.sha256).toMatch(/^[a-f0-9]{64}$/u);
     expect(new TextDecoder().decode(decoded.entries[0]?.data)).toBe('{"theme":"dark"}');
+  });
+
+  it('refuses to encode a manifest that the importer would reject', async () => {
+    await expect(
+      encoded({ ...DEFAULT_ARCHIVE_LIMITS, maxManifestBytes: 256 }),
+    ).rejects.toMatchObject({ code: 'manifest-size' });
   });
 
   it('rejects hash tampering, zip-slip and undeclared payloads', async () => {

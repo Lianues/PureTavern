@@ -52,7 +52,7 @@ async function createHarness(deleteOwnerChats: ((ownerId: string) => Promise<voi
     undefined,
     deleteOwnerChats,
   );
-  return { service, assets, repository, defaultAvatar };
+  return { service, assets, repository, defaultAvatar, blobs };
 }
 
 afterEach(async () => {
@@ -103,6 +103,30 @@ describe('CharacterService', () => {
     await service.deleteCharacter('Alice.png');
     await expect(service.listCharacters()).resolves.toEqual([]);
     await expect(assets.getAvatar('Alice.png')).resolves.toBeNull();
+  });
+
+  it('keeps the character card out of asset metadata and purges legacy copies', async () => {
+    const { service, assets, blobs } = await createHarness();
+    await service.createCharacter({ ch_name: 'Alice', description: 'Initial description' });
+
+    const stored = await blobs.get('avatars', 'Alice.png');
+    if (!stored) throw new Error('Avatar blob missing from test storage.');
+    expect(stored.metadata).not.toHaveProperty('cardJson');
+
+    // 0.1.1 之前的写入会把整张角色卡塞进 metadata。
+    await blobs.put('avatars', 'Alice.png', stored.data, {
+      ...stored.metadata,
+      cardJson: '{"name":"Alice"}',
+    });
+    const read = await assets.getAvatar('Alice.png');
+    expect(read?.metadata).toMatchObject({ fileName: 'Alice.png' });
+    expect(read?.metadata).not.toHaveProperty('cardJson');
+
+    await expect(assets.purgeLegacyCardMetadata()).resolves.toBe(1);
+    const purged = await blobs.get('avatars', 'Alice.png');
+    expect(purged?.metadata).toMatchObject({ fileName: 'Alice.png' });
+    expect(purged?.metadata).not.toHaveProperty('cardJson');
+    await expect(assets.purgeLegacyCardMetadata()).resolves.toBe(0);
   });
 
   it('keeps display name and avatar file decoupled for duplicate and rename', async () => {

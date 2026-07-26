@@ -37,6 +37,7 @@ export interface DecodedArchive {
 export async function encodeArchive(
   metadata: ArchiveMetadataInput,
   inputEntries: readonly PortableArchiveEntry[],
+  limits: ArchiveLimits = DEFAULT_ARCHIVE_LIMITS,
 ): Promise<{ blob: Blob; manifest: PureTavernArchiveManifest }> {
   const entries: PortableArchiveEntry[] = [];
   for (const input of inputEntries) {
@@ -66,8 +67,16 @@ export async function encodeArchive(
     ),
     files: entries.map((entry) => entry.descriptor),
   };
+  // 编码端必须和 decodeArchive 用同一套上限，否则会写出一个自己都拒绝导入的归档。
+  const encodedManifest = textEncoder.encode(JSON.stringify(manifest, null, 2));
+  if (encodedManifest.byteLength > limits.maxManifestBytes) {
+    fail(
+      'manifest-size',
+      `Generated archive manifest is ${encodedManifest.byteLength} bytes and would not be importable.`,
+    );
+  }
   const zipped: Record<string, Uint8Array> = {
-    [ARCHIVE_MANIFEST_PATH]: textEncoder.encode(JSON.stringify(manifest, null, 2)),
+    [ARCHIVE_MANIFEST_PATH]: encodedManifest,
   };
   for (const entry of entries) zipped[entry.descriptor.path] = entry.data;
   const bytes = zipSync(zipped, { level: 6 });
