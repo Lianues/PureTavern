@@ -1,6 +1,5 @@
 import { unzipSync, zipSync } from 'fflate';
 
-import { DEFAULT_ARCHIVE_LIMITS, type ArchiveLimits } from '../../domain/archive';
 import {
   TAURI_TAVERN_DATA_ROOT,
   TAURI_TAVERN_DIRECTORIES,
@@ -34,36 +33,15 @@ export function packTauriTavernArchive(files: readonly TauriTavernFile[]): Blob 
   return new Blob([copy.buffer], { type: 'application/zip' });
 }
 
-export async function unpackTauriTavernArchive(
-  archive: Blob,
-  limits: ArchiveLimits = DEFAULT_ARCHIVE_LIMITS,
-): Promise<TauriTavernFile[]> {
-  if (archive.size <= 0 || archive.size > limits.maxArchiveBytes) {
-    failTauriTavern('archive-size', `Package must be 1-${limits.maxArchiveBytes} bytes.`);
-  }
+export async function unpackTauriTavernArchive(archive: Blob): Promise<TauriTavernFile[]> {
+  if (archive.size <= 0) failTauriTavern('archive-size', 'Package must not be empty.');
   const buffer = new Uint8Array(await archive.arrayBuffer());
 
-  let fileCount = 0;
-  let expandedBytes = 0;
   let output: Record<string, Uint8Array>;
   try {
     output = unzipSync(buffer, {
       filter(info) {
         if (info.name.endsWith('/')) return false;
-        fileCount += 1;
-        expandedBytes += info.originalSize;
-        if (fileCount > limits.maxFiles) {
-          failTauriTavern('file-count', 'Package has too many files.');
-        }
-        if (info.originalSize > limits.maxFileBytes) {
-          failTauriTavern('file-size', `Package file is too large: ${info.name}`);
-        }
-        if (expandedBytes > limits.maxExpandedBytes) {
-          failTauriTavern('expanded-size', 'Package expands beyond the configured limit.');
-        }
-        if (expandedBytes / Math.max(archive.size, 1) > limits.maxCompressionRatio) {
-          failTauriTavern('compression-ratio', 'Package compression ratio is unsafe.');
-        }
         return true;
       },
     });
@@ -84,7 +62,7 @@ export async function unpackTauriTavernArchive(
   for (const path of paths) {
     const rebased = rebase(normalizeSeparators(path));
     if (!rebased) continue;
-    assertSafeMigrationPath(rebased, limits.maxPathLength);
+    assertSafeMigrationPath(rebased);
     const key = rebased.normalize('NFKC').toLowerCase();
     if (seen.has(key)) {
       failTauriTavern('duplicate-path', `Package contains the same path twice: ${rebased}`);

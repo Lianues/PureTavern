@@ -12,7 +12,6 @@ const WINDOWS_RESERVED_NAME = /^(?:con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\.|$)/iu
 const DANGEROUS_KEYS = new Set(['__proto__', 'prototype', 'constructor']);
 
 export const MAX_PRESET_NAME_LENGTH = 240;
-export const MAX_PRESET_BYTES = 2 * 1024 * 1024;
 export const MAX_PRESET_JSON_DEPTH = 64;
 
 export class PresetValidationError extends Error {}
@@ -63,15 +62,10 @@ export function validatePresetDocument(
   const seen = new Set<object>();
   validateJsonValue(value, 0, seen);
 
-  let serialized: string;
   try {
-    serialized = JSON.stringify(value);
+    JSON.stringify(value);
   } catch (error) {
     throw new PresetValidationError('Preset data must be JSON-serializable.', { cause: error });
-  }
-
-  if (utf8ByteLength(serialized) > MAX_PRESET_BYTES) {
-    throw new PresetValidationError(`Preset data exceeds the ${MAX_PRESET_BYTES}-byte size limit.`);
   }
 }
 
@@ -147,8 +141,4 @@ function isPlainJsonObject(value: unknown): value is Record<string, unknown> {
 function isControlCharacter(value: string): boolean {
   const code = value.codePointAt(0) ?? 0;
   return (code >= 0 && code <= 31) || (code >= 127 && code <= 159);
-}
-
-function utf8ByteLength(value: string): number {
-  return new TextEncoder().encode(value).byteLength;
 }

@@ -7,8 +7,6 @@ import {
 } from '../domain/world-book';
 import { WorldBookValidationError, worldBookNameFromUpload } from './world-book-validation';
 
-export const MAX_WORLD_BOOK_IMPORT_BYTES = 10 * 1024 * 1024;
-
 export interface DecodedWorldBookImport {
   legacyFileId: string;
   document: WorldBookDocument;
@@ -38,15 +36,10 @@ export class WorldBookImportCodec {
   }
 
   async decode(file: Blob, convertedData?: unknown): Promise<DecodedWorldBookImport> {
-    this.#ensureSize(file.size, 'World Book import');
     const legacyFileId = worldBookNameFromUpload(file);
     let source: string;
 
     if (typeof convertedData === 'string' && convertedData.trim()) {
-      this.#ensureSize(
-        new TextEncoder().encode(convertedData).byteLength,
-        'Converted World Book data',
-      );
       source = convertedData;
     } else {
       source = await file.text();
@@ -63,14 +56,6 @@ export class WorldBookImportCodec {
       legacyFileId,
       document: this.normalizeDocument(parsed),
     };
-  }
-
-  #ensureSize(size: number, label: string) {
-    if (size > MAX_WORLD_BOOK_IMPORT_BYTES) {
-      throw new WorldBookValidationError(
-        `${label} is too large. Maximum size is ${MAX_WORLD_BOOK_IMPORT_BYTES} bytes.`,
-      );
-    }
   }
 }
 

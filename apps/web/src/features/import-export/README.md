@@ -10,7 +10,7 @@ M21 provides a versioned, hashed ZIP archive over all registered browser data mo
 
 - `manifest.json` identifies schema/app/upstream versions, modules, sizes and SHA-256 for every payload.
 - Module records and blobs are exported under stable logical paths, not IndexedDB physical keys.
-- ZIP path traversal, duplicates, Unicode/case conflicts, file count, expanded size, file size, compression ratio and hashes are validated before import.
+- ZIP path traversal, unsafe paths, duplicate and Unicode/case-conflicting targets, manifest consistency and payload hashes are validated before import.
 - Import supports merge, skip, replace-module and replace-all.
 - Dry-run preview reports new items, conflicts, unavailable modules, sensitive data and version differences.
 - A recovery archive is created before import/restore and an import journal records the active module/stage.
@@ -45,9 +45,8 @@ single PNG with an embedded card there, so every module has its own mapping.
   `manifest.homePage`; an extension with neither is skipped and named. Package files are stored as
   `library` assets under `/scripts/extensions/third-party/...`, exactly where the unchanged
   upstream loader looks. Every file in the folder is carried over verbatim — migration does not
-  decide which of the user's files are worth keeping. The default package limits exist to bound
-  untrusted network downloads, so a local package is validated against
-  `MIGRATION_EXTENSION_PACKAGE_LIMITS` instead; path safety and manifest checks are unchanged.
+  decide which of the user's files are worth keeping. Local migration and remote installation use
+  the same path-safety and manifest validation without frontend-only byte or file-count quotas.
 - Every file in a package is accounted for. Extensions, host-application files and unmapped
   directories (`groups/`, `user/workflows/`) land in the `extensions` / `unsupported` rows with
   example paths; regenerable data (`thumbnails/`, `backups/`, `vectors/`) lands in `derived`. The
@@ -71,10 +70,10 @@ The panel reports `应用私有存储` there and names the risks that are real o
 app data, or uninstalling. Container detection is re-evaluated on every read because the native
 bridge may not be injected yet during early startup.
 
-Archive limits exist to reject malformed or hostile packages, not to cap how much a user may keep.
-A full library is legitimately several gigabytes. The practical ceiling is browser memory: decoding
-reads the whole archive in and inflates it in memory, so multi-gigabyte packages will exhaust the
-tab before they reach any configured limit.
+PureTavern does not impose a feature-specific byte, file-count or compression-ratio quota on archive
+import/export. Format, path and integrity validation still applies. The practical ceiling is browser
+memory: decoding reads the whole archive in and inflates it in memory, so a multi-gigabyte package
+may exhaust the tab.
 
 ## Storage
 

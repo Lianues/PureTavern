@@ -165,6 +165,30 @@ describe('Presets Legacy routes', () => {
     });
   });
 
+  it('accepts OpenAI presets larger than the former frontend-only 2 MiB quota', async () => {
+    const { router, service } = createHarness();
+    const largeExtensions = { payload: '狐'.repeat(1_100_000) };
+    const preset = {
+      prompts: [{ identifier: 'main', name: 'Main', content: 'Test' }],
+      prompt_order: [{ character_id: 100001, order: [{ identifier: 'main', enabled: true }] }],
+      extensions: largeExtensions,
+    };
+
+    const saved = await dispatch(
+      router,
+      postJson('/api/presets/save', {
+        apiId: 'openai',
+        name: '[主预设] V16.1 狐神抚 · 毓忻',
+        preset,
+      }),
+    );
+
+    expect(saved.status).toBe(200);
+    await expect(service.get('openai', '[主预设] V16.1 狐神抚 · 毓忻')).resolves.toMatchObject({
+      value: preset,
+    });
+  });
+
   it('returns 400 for malformed JSON, missing names, invalid documents and unknown API IDs', async () => {
     const { router } = createHarness();
     const malformed = await dispatch(

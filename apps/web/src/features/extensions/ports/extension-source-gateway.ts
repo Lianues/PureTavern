@@ -1,8 +1,5 @@
 import type { ExtensionSourceProvider, RemoteExtensionSource } from '../domain/extension';
-import type {
-  ExtensionPackageFile,
-  ExtensionPackageLimits,
-} from '../application/package-validator';
+import type { ExtensionPackageFile } from '../application/package-validator';
 
 export interface ExtensionSourceSnapshot {
   provider: ExtensionSourceProvider;
@@ -25,7 +22,6 @@ export interface ExtensionSourceGateway {
   fetchSnapshot(
     url: string,
     ref?: string,
-    limits?: ExtensionPackageLimits,
     signal?: AbortSignal,
   ): Promise<ExtensionSourceSnapshot>;
   listRefs(source: RemoteExtensionSource, signal?: AbortSignal): Promise<ExtensionSourceRef[]>;

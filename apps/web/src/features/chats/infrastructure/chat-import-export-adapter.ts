@@ -8,10 +8,6 @@ import {
 } from '../domain/chat';
 import type { ChatImportContext, ChatImportExportPort } from '../ports/chat-import-export-port';
 
-export const MAX_CHAT_IMPORT_BYTES = 50 * 1024 * 1024;
-export const MAX_CHAT_JSONL_LINE_BYTES = 5 * 1024 * 1024;
-export const MAX_CHAT_IMPORT_MESSAGES = 100_000;
-
 export class ChatImportError extends Error {}
 
 export class BrowserChatImportExportAdapter implements ChatImportExportPort {
@@ -25,10 +21,6 @@ export class BrowserChatImportExportAdapter implements ChatImportExportPort {
     if (!(file instanceof Blob) || file.size === 0) {
       throw new ChatImportError('A non-empty chat file is required.');
     }
-    if (file.size > MAX_CHAT_IMPORT_BYTES) {
-      throw new ChatImportError(`Chat import exceeds ${MAX_CHAT_IMPORT_BYTES} bytes.`);
-    }
-
     let text: string;
     try {
       text = await file.text();
@@ -58,14 +50,7 @@ export class BrowserChatImportExportAdapter implements ChatImportExportPort {
   #parseJsonl(text: string): ChatDocument {
     const lines = text.split(/\r?\n/gu).filter((line) => line.trim().length > 0);
     if (lines.length === 0) throw new ChatImportError('Chat JSONL is empty.');
-    if (lines.length - 1 > MAX_CHAT_IMPORT_MESSAGES) {
-      throw new ChatImportError(`Chat import exceeds ${MAX_CHAT_IMPORT_MESSAGES} messages.`);
-    }
-
     const values = lines.map((line, index) => {
-      if (new TextEncoder().encode(line).byteLength > MAX_CHAT_JSONL_LINE_BYTES) {
-        throw new ChatImportError(`Chat JSONL line ${index + 1} is too large.`);
-      }
       try {
         const value = JSON.parse(line) as unknown;
         if (!isJsonObject(value)) throw new Error('line is not an object');

@@ -16,14 +16,12 @@ import type { AvatarCrop, ImageProcessor } from '../ports/image-processor';
 import {
   AssetConflictError,
   AssetFetchError,
-  AssetLimitError,
   AssetNotFoundError,
   AssetValidationError,
 } from './asset-errors';
 import {
-  ASSET_LIMITS,
-  assertFileSize,
   assertMimeMatchesExtension,
+  assertNonEmptyFile,
   assertSafeExtension,
   assertSafeFilename,
   assertSafePathSegment,
@@ -117,7 +115,7 @@ export class AssetService {
     const filename = assertSafeFilename(name, 'name');
     if (typeof data !== 'string') throw new AssetValidationError('data must be a base64 string.');
     const decoded = this.#images.decodeBase64(data, mimeTypeForFilename(filename));
-    assertFileSize(decoded.blob);
+    assertNonEmptyFile(decoded.blob);
     const content = await this.#validateFile(filename, decoded.blob, false);
     const path = makeLegacyPath('/user/files', filename);
     await this.#storeAsset({
@@ -180,7 +178,7 @@ export class AssetService {
         : `image-${crypto.randomUUID()}`;
     const filename = `${desiredBase}.${extension}`;
     const decoded = this.#images.decodeBase64(input.image, mimeTypeForFilename(filename));
-    assertFileSize(decoded.blob);
+    assertNonEmptyFile(decoded.blob);
     const content = IMAGE_EXTENSIONS.has(extension)
       ? await this.#validateFile(filename, decoded.blob, true)
       : { mimeType: await inspectVideoSignature(decoded.blob, extension) };
@@ -241,7 +239,7 @@ export class AssetService {
 
   async uploadBackground(file: Blob, filename: unknown): Promise<string> {
     const safeFilename = assertSafeFilename(filename, 'background filename');
-    assertFileSize(file);
+    assertNonEmptyFile(file);
     const image = await this.#images.inspect(file);
     assertImageExtension(safeFilename);
     assertMimeMatchesExtension(safeFilename, image.mimeType);
@@ -536,10 +534,11 @@ export class AssetService {
     filename: unknown,
     overwriteName?: unknown,
     crop?: AvatarCrop,
+    preferredOutputName?: unknown,
   ): Promise<string> {
     const sourceFilename = assertSafeFilename(filename, 'avatar filename');
     assertImageExtension(sourceFilename);
-    assertFileSize(file);
+    assertNonEmptyFile(file);
     const sourceInfo = await this.#images.inspect(file);
     assertMimeMatchesExtension(sourceFilename, sourceInfo.mimeType);
     const processed = await this.#images.processAvatar(file, crop);
@@ -547,14 +546,21 @@ export class AssetService {
       typeof overwriteName === 'string' && overwriteName.trim()
         ? assertSafeFilename(overwriteName, 'overwrite_name')
         : null;
-    let outputFilename = overwrite ?? sourceFilename;
+    const usesPreferredOutputName = preferredOutputName !== undefined;
+    let outputFilename =
+      overwrite ??
+      (usesPreferredOutputName
+        ? assertSafeFilename(preferredOutputName, 'avatar output filename')
+        : sourceFilename);
     if (!overwrite && processed.processed && processed.info.mimeType !== sourceInfo.mimeType) {
       outputFilename = replaceExtension(
         outputFilename,
         extensionForMimeType(processed.info.mimeType) ?? 'png',
       );
     }
-    if (!overwrite) outputFilename = await this.#uniqueFilename('user-avatars', '', outputFilename);
+    if (!overwrite && !usesPreferredOutputName) {
+      outputFilename = await this.#uniqueFilename('user-avatars', '', outputFilename);
+    }
     const path = makeLegacyPath('/User Avatars', outputFilename);
     await this.#storeAsset({
       collection: 'user-avatars',
@@ -563,7 +569,7 @@ export class AssetService {
       blob: processed.blob,
       mimeType: processed.info.mimeType,
       image: processed.info,
-      replace: Boolean(overwrite),
+      replace: Boolean(overwrite || usesPreferredOutputName),
     });
     return outputFilename;
   }
@@ -656,7 +662,7 @@ export class AssetService {
       );
     }
     const outputFilename = `${spriteBase}.${extension}`;
-    assertFileSize(input.file);
+    assertNonEmptyFile(input.file);
     const image = await this.#images.inspect(input.file);
     assertMimeMatchesExtension(outputFilename, image.mimeType);
     const owner = await this.#resolveOwner(ownerAlias);
@@ -679,10 +685,8 @@ export class AssetService {
 
   async uploadSpriteZip(name: unknown, archive: Blob): Promise<{ count: number }> {
     const ownerAlias = normalizeOwnerAlias(name);
-    assertFileSize(archive, ASSET_LIMITS.maxZipBytes);
+    assertNonEmptyFile(archive);
     const bytes = new Uint8Array(await archive.arrayBuffer());
-    let fileCount = 0;
-    let expandedBytes = 0;
     let files: Record<string, Uint8Array>;
     try {
       files = unzipSync(bytes, {
@@ -693,24 +697,11 @@ export class AssetService {
           if (basename === '.DS_Store' || file.name.includes('__MACOSX/')) return false;
           const extension = getExtension(basename);
           if (!IMAGE_EXTENSIONS.has(extension)) return false;
-          fileCount += 1;
-          expandedBytes += file.originalSize;
-          if (fileCount > ASSET_LIMITS.maxZipFiles) {
-            throw new AssetLimitError(
-              `Sprite ZIP contains more than ${ASSET_LIMITS.maxZipFiles} files.`,
-            );
-          }
-          if (
-            file.originalSize > ASSET_LIMITS.maxFileBytes ||
-            expandedBytes > ASSET_LIMITS.maxZipExpandedBytes
-          ) {
-            throw new AssetLimitError('Sprite ZIP expanded size exceeds the safety limit.');
-          }
           return true;
         },
       });
     } catch (error) {
-      if (error instanceof AssetValidationError || error instanceof AssetLimitError) throw error;
+      if (error instanceof AssetValidationError) throw error;
       throw new AssetValidationError(
         `Sprite ZIP could not be decoded: ${error instanceof Error ? error.message : String(error)}`,
       );
@@ -718,19 +709,14 @@ export class AssetService {
 
     const prepared: { filename: string; label: string; blob: Blob; image: ImageInfo }[] = [];
     const seen = new Set<string>();
-    let actualExpandedBytes = 0;
     for (const [entryName, data] of Object.entries(files)) {
       const filename = assertSafeFilename(zipBasename(entryName), 'sprite ZIP filename');
       if (seen.has(filename.toLocaleLowerCase())) {
         throw new AssetConflictError(`Sprite ZIP contains duplicate filename ${filename}.`);
       }
       seen.add(filename.toLocaleLowerCase());
-      actualExpandedBytes += data.byteLength;
-      if (actualExpandedBytes > ASSET_LIMITS.maxZipExpandedBytes) {
-        throw new AssetLimitError('Sprite ZIP expanded size exceeds the safety limit.');
-      }
       const blob = blobFromBytes(data, mimeTypeForFilename(filename));
-      assertFileSize(blob);
+      assertNonEmptyFile(blob);
       const image = await this.#images.inspect(blob);
       assertMimeMatchesExtension(filename, image.mimeType);
       prepared.push({
@@ -906,7 +892,6 @@ export class AssetService {
 
     try {
       for (const file of prepared) {
-        assertFileSize(file.blob, ASSET_LIMITS.maxFileBytes);
         await this.#storeAsset({
           collection: 'library',
           path: file.path,
@@ -1109,7 +1094,7 @@ export class AssetService {
     filename: string,
     blob: Blob,
   ): Promise<void> {
-    assertFileSize(blob, ASSET_LIMITS.maxRemoteFileBytes);
+    assertNonEmptyFile(blob);
     const extension = getExtension(filename);
     if (
       (category === 'bgm' || category === 'ambient' || category === 'blip') &&
@@ -1140,17 +1125,8 @@ export class AssetService {
       this.diagnostics.lastFetchError = message;
       throw new AssetFetchError(message);
     }
-    const contentLength = response.headers.get('content-length');
-    const declaredSize = contentLength === null ? null : Number(contentLength);
-    if (
-      declaredSize !== null &&
-      Number.isFinite(declaredSize) &&
-      declaredSize > ASSET_LIMITS.maxRemoteFileBytes
-    ) {
-      throw new AssetLimitError('Remote asset exceeds the download size limit.');
-    }
-    const blob = await readBoundedResponseBlob(response, ASSET_LIMITS.maxRemoteFileBytes);
-    assertFileSize(blob, ASSET_LIMITS.maxRemoteFileBytes);
+    const blob = await response.blob();
+    assertNonEmptyFile(blob);
     return blob;
   }
 
@@ -1401,32 +1377,6 @@ function zipBasename(path: string): string {
 function spriteLabelFromFilename(filename: string): string {
   const stem = withoutExtension(filename);
   return stem.split(/[-.]/, 1)[0] || stem;
-}
-
-async function readBoundedResponseBlob(response: Response, limit: number): Promise<Blob> {
-  if (!response.body) {
-    const blob = await response.blob();
-    if (blob.size > limit)
-      throw new AssetLimitError('Remote asset exceeds the download size limit.');
-    return blob;
-  }
-  const reader = response.body.getReader();
-  const chunks: ArrayBuffer[] = [];
-  let total = 0;
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    total += value.byteLength;
-    if (total > limit) {
-      await reader.cancel('asset size limit exceeded').catch(() => undefined);
-      throw new AssetLimitError('Remote asset exceeds the download size limit.');
-    }
-    chunks.push(
-      value.buffer.slice(value.byteOffset, value.byteOffset + value.byteLength) as ArrayBuffer,
-    );
-  }
-  const contentType = response.headers.get('content-type')?.split(';', 1)[0]?.trim() ?? '';
-  return new Blob(chunks, { type: contentType });
 }
 
 function blobFromBytes(bytes: Uint8Array, mimeType: string): Blob {

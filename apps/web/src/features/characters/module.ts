@@ -2,6 +2,7 @@ import type { FeatureModule } from '@/platform/features/feature-module';
 import { registerArchiveModule } from '@/platform/features/register-archive-module';
 import {
   assetServiceWorkerCapability,
+  avatarImageProcessingCapability,
   characterCardMigrationCapability,
   characterIdentityCapability,
   chatOwnerLifecycleCapability,
@@ -26,6 +27,10 @@ export const charactersFeature: FeatureModule = {
     );
     const avatarWorkerReady =
       capabilities.get(assetServiceWorkerCapability)?.ready ?? Promise.resolve('skipped');
+    const avatarImageProcessor = capabilities.get(avatarImageProcessingCapability);
+    if (!avatarImageProcessor) {
+      throw new Error('Characters requires the upstream-aligned avatar image processor.');
+    }
     const codec = new CharacterCardCodec();
     const service = new CharacterService(
       repository,
@@ -40,6 +45,7 @@ export const charactersFeature: FeatureModule = {
       async (ownerId) => {
         await capabilities.get(chatOwnerLifecycleCapability)?.deleteChatsForOwner(ownerId);
       },
+      (image, crop) => avatarImageProcessor.processAvatar(image, crop),
     );
 
     capabilities.register(characterIdentityCapability, {

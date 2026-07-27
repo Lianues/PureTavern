@@ -5,11 +5,7 @@ import { AppStorage } from '@/platform/storage/app-storage';
 import { initializeStorage } from '@/platform/storage/initialize-storage';
 
 import { SecretService } from '../application/secret-service';
-import {
-  MAX_SECRET_VALUE_BYTES,
-  SecretValidationError,
-  type SecretDocument,
-} from '../domain/secret';
+import { SecretValidationError, type SecretDocument } from '../domain/secret';
 import { IndexedDbSecretStore } from '../infrastructure/indexeddb-secret-store';
 import { MemorySecretStore, ResilientSecretStore } from '../infrastructure/resilient-secret-store';
 import type { SecretStore } from '../ports/secret-store';
@@ -81,7 +77,7 @@ describe('SecretService', () => {
     await expect(service.deleteSecret('api_key_custom', id)).resolves.toBe(true);
   });
 
-  it('rejects unsafe keys, labels, IDs and oversized values without echoing values', async () => {
+  it('rejects unsafe keys, labels and IDs without echoing values', async () => {
     const service = createService();
     await expect(service.writeSecret('__proto__', 'value', 'Label')).rejects.toThrow(
       SecretValidationError,
@@ -95,9 +91,15 @@ describe('SecretService', () => {
     await expect(service.rotateSecret('safe', 'bad\nid')).rejects.toThrow(
       'Credential ID is invalid.',
     );
-    await expect(
-      service.writeSecret('safe', 'x'.repeat(MAX_SECRET_VALUE_BYTES + 1), 'Label'),
-    ).rejects.toThrow('Credential value is invalid or too large.');
+  });
+
+  it('stores credential values larger than the former 1 MiB quota', async () => {
+    const service = createService();
+    const value = '密'.repeat(600_000);
+
+    await service.writeSecret('api_key_custom', value, 'Large');
+
+    await expect(service.resolveCredential('api_key_custom')).resolves.toBe(value);
   });
 
   it('serializes concurrent writes so the final invocation is the only active value', async () => {

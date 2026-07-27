@@ -2,7 +2,6 @@ import { zipSync } from 'fflate';
 import { describe, expect, it } from 'vitest';
 
 import {
-  DEFAULT_EXTENSION_PACKAGE_LIMITS,
   ExtensionPackageValidationError,
   extractExtensionZip,
   validateLegacyExtensionPackage,
@@ -105,19 +104,36 @@ describe('Legacy extension package validation', () => {
     );
   });
 
-  it('rejects declared expansion ratios beyond the configured limit', async () => {
+  it('accepts highly compressed packages beyond the former compression-ratio quota', async () => {
+    const zip = zipSync({
+      'cocktail-main/manifest.json': stringBytes(
+        JSON.stringify({
+          display_name: 'Cocktail',
+          js: 'index.js',
+          description: 'x'.repeat(300 * 1024),
+        }),
+      ),
+      'cocktail-main/index.js': new Uint8Array(512 * 1024),
+    });
+    const files = await extractExtensionZip(bytesBlob(zip));
+
+    await expect(validateLegacyExtensionPackage(files)).resolves.toMatchObject({
+      fileCount: 2,
+      manifest: { display_name: 'Cocktail', js: 'index.js' },
+    });
+  });
+
+  it('accepts ZIPs whose reported size exceeds the former 20 MiB archive quota', async () => {
     const zip = zipSync({
       'cocktail-main/manifest.json': stringBytes(
         JSON.stringify({ display_name: 'Cocktail', js: 'index.js' }),
       ),
-      'cocktail-main/index.js': new Uint8Array(512 * 1024),
+      'cocktail-main/index.js': stringBytes('export default true;'),
     });
-    await expect(
-      extractExtensionZip(bytesBlob(zip), {
-        ...DEFAULT_EXTENSION_PACKAGE_LIMITS,
-        maxCompressionRatio: 5,
-      }),
-    ).rejects.toMatchObject({ code: 'compression-ratio' });
+    const archive = bytesBlob(zip);
+    Object.defineProperty(archive, 'size', { value: 20 * 1024 * 1024 + 1 });
+
+    await expect(extractExtensionZip(archive)).resolves.toHaveLength(2);
   });
 });
 

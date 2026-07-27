@@ -22,7 +22,7 @@ export class CohereAdapter implements ProviderAdapter {
     const response = await context.client.send(
       context.descriptor.source,
       url,
-      getRequest(context.signal, this.#headers(context)),
+      getRequest(context.signal, this.#headers(context, false)),
     );
     const data = await parseJson(response);
     return { data: normalizeModels(data.models) };
@@ -51,15 +51,16 @@ export class CohereAdapter implements ProviderAdapter {
     const response = await context.client.send(
       context.descriptor.source,
       url,
-      requestInit(this.#headers(context), body, context.signal),
+      requestInit(this.#headers(context, true), body, context.signal),
     );
     return requireOk(response);
   }
 
-  #headers(context: ProviderAdapterContext): HeadersInit {
-    return {
-      'Content-Type': 'application/json',
+  #headers(context: ProviderAdapterContext, includeContentType: boolean): HeadersInit {
+    const headers: Record<string, string> = {
       Authorization: `Bearer ${context.credential ?? ''}`,
     };
+    if (includeContentType) headers['Content-Type'] = 'application/json';
+    return headers;
   }
 }

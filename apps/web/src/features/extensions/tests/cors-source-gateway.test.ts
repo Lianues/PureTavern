@@ -30,7 +30,7 @@ describe('CORS extension source gateway', () => {
     );
   });
 
-  it('downloads the GitHub default branch through jsDelivr HEAD without GitHub REST', async () => {
+  it('downloads GitHub catalogs even when declared file sizes exceed former quotas', async () => {
     const files = makeLegacyPackage();
     const byPath = new Map(files.map((file) => [file.path, file.data]));
     const nativeFetch = vi.fn(async (input: RequestInfo | URL) => {
@@ -44,7 +44,7 @@ describe('CORS extension source gateway', () => {
           files: files.map((file) => ({
             name: `/${file.path}`,
             hash: `hash-${file.path}`,
-            size: file.data.size,
+            size: file.path === 'index.js' ? 60 * 1024 * 1024 : file.data.size,
           })),
         });
       }

@@ -4,10 +4,7 @@ import { AppDatabase } from '@/platform/storage/app-database';
 import { AppStorage } from '@/platform/storage/app-storage';
 import { initializeStorage } from '@/platform/storage/initialize-storage';
 
-import {
-  MAX_WORLD_BOOK_IMPORT_BYTES,
-  WorldBookImportCodec,
-} from '../application/world-book-import-codec';
+import { WorldBookImportCodec } from '../application/world-book-import-codec';
 import { WorldBookService } from '../application/world-book-service';
 import { WorldBookValidationError } from '../application/world-book-validation';
 import type { StoredWorldBook } from '../domain/world-book';
@@ -203,6 +200,7 @@ describe('WorldBook repository and service', () => {
       message: 'IndexedDB unavailable',
     });
   });
+
 });
 
 describe('WorldBookImportCodec', () => {
@@ -232,7 +230,7 @@ describe('WorldBookImportCodec', () => {
     await expect(service.getWorldBook('Converted')).resolves.toEqual(converted);
   });
 
-  it('rejects invalid JSON, missing/invalid entries, oversized data and unsafe names', async () => {
+  it('rejects invalid JSON, missing/invalid entries and unsafe names', async () => {
     const codec = new WorldBookImportCodec();
     await expect(codec.decode(namedBlob(['{'], 'Broken.json'))).rejects.toThrow(
       WorldBookValidationError,
@@ -244,14 +242,25 @@ describe('WorldBookImportCodec', () => {
       codec.decode(namedBlob([JSON.stringify({ entries: 'invalid' })], 'BadEntries.json')),
     ).rejects.toThrow('entries must be an object or array');
 
-    const oversized = namedBlob([], 'Large.json');
-    Object.defineProperty(oversized, 'size', { value: MAX_WORLD_BOOK_IMPORT_BYTES + 1 });
-    await expect(codec.decode(oversized)).rejects.toThrow('too large');
     await expect(
       codec.decode(namedBlob([JSON.stringify({ entries: {} })], '../escape.json')),
     ).rejects.toThrow('unsafe path characters');
     await expect(
       codec.decode(namedBlob([JSON.stringify({ entries: {} })], '..%2Fencoded.json')),
     ).rejects.toThrow('unsafe path characters');
+  });
+
+  it('accepts valid imports whose reported size exceeds the former 10 MiB quota', async () => {
+    const codec = new WorldBookImportCodec();
+    const large = namedBlob(
+      [JSON.stringify({ entries: {}, extensions: { kept: true } })],
+      'Large.json',
+    );
+    Object.defineProperty(large, 'size', { value: 10 * 1024 * 1024 + 1 });
+
+    await expect(codec.decode(large)).resolves.toMatchObject({
+      legacyFileId: 'Large',
+      document: { entries: {}, extensions: { kept: true } },
+    });
   });
 });

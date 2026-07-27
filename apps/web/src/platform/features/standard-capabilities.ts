@@ -49,6 +49,18 @@ export interface AssetServiceWorkerCapability {
   ready: Promise<unknown>;
 }
 
+export interface AvatarCropData {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  want_resize?: boolean;
+}
+
+export interface AvatarImageProcessingCapability {
+  processAvatar(image: Blob, crop?: AvatarCropData): Promise<Blob>;
+}
+
 export interface PersonaAvatarAssetsCapability {
   hasAvatar(avatarAlias: string): Promise<boolean>;
   ensureAvatar(avatarAlias: string): Promise<boolean>;
@@ -178,6 +190,10 @@ export const legacyPresetBootstrapCapability = defineCapability<LegacyPresetBoot
 
 export const assetServiceWorkerCapability = defineCapability<AssetServiceWorkerCapability>(
   'assets.service-worker.v1',
+);
+
+export const avatarImageProcessingCapability = defineCapability<AvatarImageProcessingCapability>(
+  'assets.avatar-image-processing.v1',
 );
 
 export const personaAvatarAssetsCapability = defineCapability<PersonaAvatarAssetsCapability>(

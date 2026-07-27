@@ -7,6 +7,7 @@ import { build } from 'esbuild';
 
 import { generateDefaultAssetManifest } from './default-asset-manifest-generator.mjs';
 import { generateHookedIndex } from './legacy-index-generator.mjs';
+import { normalizeChineseCustomParameterExamples } from './legacy-runtime-text-patches.mjs';
 import { generatePresetSeedManifest } from './preset-manifest-generator.mjs';
 import { generateTrustedExtensionManifest } from './trusted-extension-manifest-generator.mjs';
 
@@ -81,6 +82,7 @@ export async function prepareLegacyRuntime() {
       },
     );
   }
+  await patchGeneratedChineseLocale();
 
   const compatibilityAssetsRoot = path.join(generatedPublicRoot, '__pure_tavern');
   await mkdir(compatibilityAssetsRoot, { recursive: true });
@@ -170,6 +172,14 @@ export async function prepareLegacyRuntime() {
   console.log(
     `Prepared Legacy runtime: ${path.relative(packageRoot, generatedIndexPath)} + ${path.relative(packageRoot, generatedPublicRoot)}`,
   );
+}
+
+async function patchGeneratedChineseLocale() {
+  // Keep the upstream snapshot pristine while making its displayed YAML examples copyable.
+  const localePath = path.join(generatedPublicRoot, 'locales', 'zh-cn.json');
+  const source = await readFile(localePath, 'utf8');
+  const normalized = normalizeChineseCustomParameterExamples(source);
+  if (normalized !== source) await writeFile(localePath, normalized, 'utf8');
 }
 
 export async function loadDataManagementExtensionDefinition() {

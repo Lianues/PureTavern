@@ -50,6 +50,20 @@ describe('StatsService', () => {
     });
   });
 
+  it('accepts documents beyond the former serialized-length and node-count quotas', async () => {
+    const service = new StatsService(new MemoryStatsRepository(), emptySource, { now: () => 7 });
+    const payload = 'x'.repeat(2_000_001);
+    const values = Array.from({ length: 50_001 }, (_, index) => index);
+
+    await service.update({ payload, values });
+
+    await expect(service.get()).resolves.toMatchObject({
+      payload,
+      values,
+      timestamp: 7,
+    });
+  });
+
   it('serializes competing updates in invocation order', async () => {
     class DelayedRepository extends MemoryStatsRepository {
       override async save(document: StatsDocument): Promise<void> {

@@ -1,12 +1,8 @@
+import type { AvatarCropData } from '@/platform/features/standard-capabilities';
+
 import type { ImageInfo } from '../domain/asset';
 
-export interface AvatarCrop {
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-  want_resize?: boolean;
-}
+export type AvatarCrop = AvatarCropData;
 
 export interface DecodedAssetData {
   blob: Blob;
@@ -29,5 +25,5 @@ export interface ImageProcessor {
   readonly diagnostics: ImageProcessorDiagnostics;
   decodeBase64(value: string, fallbackMimeType?: string): DecodedAssetData;
   inspect(blob: Blob): Promise<ImageInfo>;
-  processAvatar(blob: Blob, crop?: AvatarCrop, size?: number): Promise<ProcessedImage>;
+  processAvatar(blob: Blob, crop?: AvatarCrop): Promise<ProcessedImage>;
 }

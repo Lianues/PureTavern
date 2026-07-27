@@ -129,6 +129,41 @@ describe('BrowserChatImportExportAdapter', () => {
     expect(documents[1]?.messages[0]?.name).toBe('Bot');
   });
 
+  it('accepts files and JSONL lines larger than the former frontend quotas', async () => {
+    const codec = new BrowserChatImportExportAdapter(() => fixedNow);
+    const context = { fileType: 'jsonl' as const, userName: 'User', characterName: 'Bot' };
+    const small = new Blob([
+      `${JSON.stringify({ chat_metadata: {} })}\n${JSON.stringify({ name: 'Bot', mes: 'ok' })}`,
+    ]);
+    Object.defineProperty(small, 'size', { value: 50 * 1024 * 1024 + 1 });
+    await expect(codec.import(small, context)).resolves.toMatchObject([
+      { messages: [{ mes: 'ok' }] },
+    ]);
+
+    const largeMessage = '聊'.repeat(1_800_000);
+    const largeLine = new Blob([
+      `${JSON.stringify({ chat_metadata: {} })}\n${JSON.stringify({ name: 'Bot', mes: largeMessage })}`,
+    ]);
+    await expect(codec.import(largeLine, context)).resolves.toMatchObject([
+      { messages: [{ mes: largeMessage }] },
+    ]);
+  });
+
+  it('accepts more than the former 100,000-message import quota', async () => {
+    const codec = new BrowserChatImportExportAdapter(() => fixedNow);
+    const header = JSON.stringify({ chat_metadata: {} });
+    const message = JSON.stringify({ name: 'Bot', mes: '' });
+    const source = `${header}\n${Array.from({ length: 100_001 }, () => message).join('\n')}`;
+
+    const [document] = await codec.import(new Blob([source]), {
+      fileType: 'jsonl',
+      userName: 'User',
+      characterName: 'Bot',
+    });
+
+    expect(document?.messages).toHaveLength(100_001);
+  });
+
   it('exports JSONL losslessly and TXT without hidden system messages', () => {
     const codec = new BrowserChatImportExportAdapter(() => fixedNow);
     const document = {

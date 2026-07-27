@@ -22,7 +22,7 @@ export class AnthropicAdapter implements ProviderAdapter {
     const response = await context.client.send(
       context.descriptor.source,
       url,
-      getRequest(context.signal, this.#headers(context)),
+      getRequest(context.signal, this.#headers(context, false)),
     );
     const data = await parseJson(response);
     return { data: normalizeModels(data.data) };
@@ -70,16 +70,32 @@ export class AnthropicAdapter implements ProviderAdapter {
     const response = await context.client.send(
       context.descriptor.source,
       url,
-      requestInit(this.#headers(context), body, context.signal),
+      requestInit(this.#headers(context, true), body, context.signal),
     );
     return requireOk(response);
   }
 
-  #headers(context: ProviderAdapterContext): HeadersInit {
-    return {
-      'Content-Type': 'application/json',
+  #headers(context: ProviderAdapterContext, generation: boolean): HeadersInit {
+    const headers: Record<string, string> = {
       'anthropic-version': '2023-06-01',
       'x-api-key': context.credential ?? '',
     };
+    if (!generation) return headers;
+    headers['Content-Type'] = 'application/json';
+
+    // SillyTavern 1.18.0 starts every Claude generation with these beta capabilities.
+    const betaHeaders = ['output-128k-2025-02-19', 'context-1m-2025-08-07'];
+    if (Array.isArray(context.request.tools) && context.request.tools.length > 0) {
+      betaHeaders.push('tools-2024-05-16');
+    }
+    const model = typeof context.request.model === 'string' ? context.request.model : '';
+    if (
+      context.request.verbosity &&
+      /^claude-(opus-4-5|opus-4-6|sonnet-4-6|opus-4-7)/u.test(model)
+    ) {
+      betaHeaders.push('effort-2025-11-24');
+    }
+    headers['anthropic-beta'] = betaHeaders.join(',');
+    return headers;
   }
 }

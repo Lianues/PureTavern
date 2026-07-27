@@ -1,9 +1,6 @@
 const FORBIDDEN_VISIBLE_FILE_CHARS = /[\\/:*?"<>|]/;
 const RESERVED_NAMES = new Set(['', '.', '..']);
 
-export const MAX_AVATAR_BYTES = 25 * 1024 * 1024;
-export const MAX_IMPORT_BYTES = 50 * 1024 * 1024;
-
 export class CharacterValidationError extends Error {}
 export class CharacterNotFoundError extends Error {}
 export class DuplicateCharacterError extends Error {}
@@ -64,18 +61,11 @@ export function ensureSupportedImportType(value: unknown): 'json' | 'png' {
   );
 }
 
-export function ensureBlobSize(blob: Blob, maxBytes: number, label: string): void {
-  if (blob.size > maxBytes) {
-    throw new CharacterValidationError(`${label} is too large. Maximum size is ${maxBytes} bytes.`);
-  }
-}
-
 export function ensureImageBlob(blob: Blob): void {
   if (blob.size === 0) return;
   if (blob.type && !blob.type.startsWith('image/')) {
     throw new CharacterValidationError('Avatar upload must be an image.');
   }
-  ensureBlobSize(blob, MAX_AVATAR_BYTES, 'Avatar upload');
 }
 
 export function uniqueName(baseName: string, existing: ReadonlySet<string>): string {

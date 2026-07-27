@@ -2,6 +2,7 @@ import type { FeatureModule } from '@/platform/features/feature-module';
 import { registerArchiveModule } from '@/platform/features/register-archive-module';
 import {
   assetServiceWorkerCapability,
+  avatarImageProcessingCapability,
   characterIdentityCapability,
   extensionPackageAssetsCapability,
   personaAvatarAssetsCapability,
@@ -65,6 +66,10 @@ export function createAssetsFeature(options: AssetsFeatureOptions = {}): Feature
           throw error;
         });
       capabilities.register(assetServiceWorkerCapability, { ready: serviceWorkerReady });
+      capabilities.register(avatarImageProcessingCapability, {
+        processAvatar: async (image, crop) =>
+          (await imageProcessor.processAvatar(image, crop)).blob,
+      });
 
       const ownerResolver =
         options.ownerResolver ??

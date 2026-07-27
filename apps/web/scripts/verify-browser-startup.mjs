@@ -54,11 +54,12 @@ async function getAvailablePort() {
 async function startMockChatCompletionProvider() {
   let extensionVersion = '1.0.0';
   let externalCharacterCard = null;
+  let lastChatCompletionRequest = null;
   const server = createHttpServer(async (request, response) => {
     response.setHeader('Access-Control-Allow-Origin', '*');
     response.setHeader(
       'Access-Control-Allow-Headers',
-      'Content-Type, Authorization, x-api-key, anthropic-version, HTTP-Referer, X-Title, Accept-Language',
+      'Content-Type, Authorization, x-api-key, anthropic-version, anthropic-beta, HTTP-Referer, X-Title, Accept-Language, X-Browser-Custom',
     );
     response.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
     if (request.method === 'OPTIONS') {
@@ -92,6 +93,10 @@ async function startMockChatCompletionProvider() {
       sendJson({ size: externalCharacterCard.byteLength });
       return;
     }
+    if (pathname === '/browser-provider-last-request') {
+      sendJson(lastChatCompletionRequest);
+      return;
+    }
     if (pathname === '/attachments/browser/channel/14.png') {
       if (!externalCharacterCard) {
         response.writeHead(404).end();
@@ -120,6 +125,7 @@ async function startMockChatCompletionProvider() {
       return;
     }
     if (pathname.endsWith('/chat/completions')) {
+      lastChatCompletionRequest = { body, headers: request.headers };
       if (body.stream === true) {
         response.setHeader('Content-Type', 'text/event-stream');
         response.write('data: {"choices":[{"index":0,"delta":{"content":"Browser "}}]}\n\n');
@@ -1280,8 +1286,15 @@ try {
       const nonStreamResponse = await post('/api/backends/chat-completions/generate', {
         ...customBase,
         stream: false,
+        temperature: 0.7,
+        custom_include_body: 'top_k: 42\\nmodel: browser-overridden-model',
+        custom_exclude_body: '- temperature',
+        custom_include_headers:
+          'Authorization: Browser custom-token\\nContent-Type: application/vnd.browser+json\\nX-Browser-Custom: enabled',
       });
       const nonStream = nonStreamResponse.ok ? await nonStreamResponse.json() : null;
+      const customRequestResponse = await fetch(mockBase + '/browser-provider-last-request');
+      const customRequest = customRequestResponse.ok ? await customRequestResponse.json() : null;
 
       const streamResponse = await post('/api/backends/chat-completions/generate', {
         ...customBase,
@@ -1339,6 +1352,7 @@ try {
         available: true,
         modelIds: status?.data?.map((model) => model.id) ?? [],
         nonStreamText: nonStream?.choices?.[0]?.message?.content ?? null,
+        customRequest,
         streamText,
         anthropicText: anthropic?.content?.[0]?.text ?? null,
         googleText: google?.candidates?.[0]?.content?.parts?.[0]?.text ?? null,
@@ -3361,6 +3375,15 @@ try {
       generationWorkflow?.scope === 'chat-completion-only' &&
       generationWorkflow?.directBrowserRequests === true &&
       generationWorkflow?.optionalBackend === false,
+    generationCustomParametersWorkflow:
+      generationWorkflow?.nonStreamText === 'Browser non-stream' &&
+      generationWorkflow?.customRequest?.body?.model === 'browser-overridden-model' &&
+      generationWorkflow?.customRequest?.body?.top_k === 42 &&
+      !Object.hasOwn(generationWorkflow?.customRequest?.body ?? {}, 'temperature') &&
+      generationWorkflow?.customRequest?.headers?.authorization === 'Browser custom-token' &&
+      generationWorkflow?.customRequest?.headers?.['content-type'] ===
+        'application/vnd.browser+json' &&
+      generationWorkflow?.customRequest?.headers?.['x-browser-custom'] === 'enabled',
     generationBrowserWorkflow:
       generationWorkflow?.modelIds?.includes('browser-provider-model') === true &&
       generationWorkflow?.nonStreamText === 'Browser non-stream' &&

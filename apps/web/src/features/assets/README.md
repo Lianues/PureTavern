@@ -27,14 +27,22 @@ start.
 ## Image and input safety
 
 `BrowserImageProcessor` validates PNG/JPEG/GIF/WebP signatures, dimensions, and common animation
-markers (GIF/APNG/animated WebP). Avatar crop/resize uses `createImageBitmap` plus
-`OffscreenCanvas`/Canvas. If those APIs are unavailable, the request fails with a diagnostic
-`IMAGE_PROCESSING_UNSUPPORTED` response rather than pretending that processing succeeded.
+markers (GIF/APNG/animated WebP). Persona and Character avatars share SillyTavern 1.18.0 semantics:
+they are encoded as PNG, a valid crop is applied as provided, `want_resize` uses the upstream
+512×768 target with centered `cover`, and a missing resize request preserves the source/crop
+dimensions. The implementation uses `createImageBitmap` plus `OffscreenCanvas`/Canvas. If those APIs
+are unavailable, the request fails with a diagnostic `IMAGE_PROCESSING_UNSUPPORTED` response rather
+than pretending that processing succeeded.
+
+No other resource is transcoded, resized, or recompressed. Attachments and user media only decode
+the Legacy API's base64 transport; sprite ZIP entries are only decompressed; backgrounds, sprites,
+library downloads, external character cards, and extension-package files retain their original
+bytes. Validation and metadata extraction never replace their Blob payloads.
 
 All entry points enforce filename/path traversal rules, unsafe extension checks, MIME/signature
-checks, per-file limits, and ZIP compressed/expanded byte and file-count limits. Sprite ZIP paths
-are checked for zip-slip before extraction. The original `/api/content/importURL` flow downloads a
-bounded PNG through native browser `fetch`, validates its signature, and returns the original
+checks, and non-empty upload validation without frontend-only byte or file-count quotas. Sprite ZIP
+paths are checked for zip-slip before extraction. The original `/api/content/importURL` flow downloads
+a PNG through native browser `fetch`, validates its signature, and returns the original
 `X-Custom-Content-Type: character` and filename headers so `importFromExternalUrl()` can pass it to
 the existing Character Card importer.
 

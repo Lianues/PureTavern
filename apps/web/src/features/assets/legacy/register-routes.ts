@@ -1,9 +1,9 @@
 import type { CompatibilityRouter } from '@/platform/legacy/compatibility-router';
 import { jsonResponse, textResponse } from '@/platform/legacy/compatibility-router';
+import { parseAvatarCrop } from '@/platform/legacy/parse-avatar-crop';
 
 import { AssetError, AssetValidationError } from '../application/asset-errors';
 import type { AssetService, LibraryDownloadResult } from '../application/asset-service';
-import type { AvatarCrop } from '../ports/image-processor';
 
 export function registerAssetsLegacyRoutes(
   router: CompatibilityRouter,
@@ -155,12 +155,13 @@ export function registerAssetsLegacyRoutes(
       const form = await request.formData();
       const file = requireFormFile(form, 'avatar');
       const overwriteName = form.get('overwrite_name');
-      const crop = parseCrop(url.searchParams.get('crop'));
+      const crop = parseAvatarCrop(url.searchParams.get('crop'));
       const path = await assets.uploadAvatar(
         file,
         fileNameOf(file, 'avatar.png'),
         typeof overwriteName === 'string' ? overwriteName : undefined,
         crop,
+        `${Date.now()}.png`,
       );
       return jsonResponse({ path });
     } catch (error) {
@@ -314,35 +315,6 @@ function requireFormFile(form: FormData, field: string): Blob {
 function fileNameOf(file: Blob, fallback: string): string {
   const candidate = (file as Blob & { name?: unknown }).name;
   return typeof candidate === 'string' && candidate.trim() ? candidate : fallback;
-}
-
-function parseCrop(value: string | null): AvatarCrop | undefined {
-  if (!value) return undefined;
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(value) as unknown;
-  } catch {
-    throw new AssetValidationError('crop query parameter must contain valid JSON.');
-  }
-  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
-    throw new AssetValidationError('crop query parameter must be an object.');
-  }
-  const crop = parsed as Record<string, unknown>;
-  if (
-    typeof crop.x !== 'number' ||
-    typeof crop.y !== 'number' ||
-    typeof crop.width !== 'number' ||
-    typeof crop.height !== 'number'
-  ) {
-    throw new AssetValidationError('crop must contain numeric x, y, width and height fields.');
-  }
-  return {
-    x: crop.x,
-    y: crop.y,
-    width: crop.width,
-    height: crop.height,
-    ...(typeof crop.want_resize === 'boolean' ? { want_resize: crop.want_resize } : {}),
-  };
 }
 
 function libraryDownloadResponse(result: LibraryDownloadResult): Response {

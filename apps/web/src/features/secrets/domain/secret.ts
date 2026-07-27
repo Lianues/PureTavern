@@ -85,7 +85,6 @@ export type LegacySecretStateMap = Record<string, LegacySecretState[] | null>;
 
 export const MAX_SECRET_KEY_LENGTH = 256;
 export const MAX_SECRET_LABEL_LENGTH = 512;
-export const MAX_SECRET_VALUE_BYTES = 1024 * 1024;
 
 const FORBIDDEN_KEYS = new Set(['__proto__', 'prototype', 'constructor']);
 
@@ -175,11 +174,8 @@ export function assertSecretLabel(label: unknown): asserts label is string {
 }
 
 export function assertSecretValue(value: unknown): asserts value is string {
-  if (
-    typeof value !== 'string' ||
-    new TextEncoder().encode(value).byteLength > MAX_SECRET_VALUE_BYTES
-  ) {
-    throw new SecretValidationError('Credential value is invalid or too large.');
+  if (typeof value !== 'string') {
+    throw new SecretValidationError('Credential value must be a string.');
   }
 }
 

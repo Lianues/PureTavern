@@ -1,15 +1,12 @@
-import {
-  DEFAULT_EXTENSION_PACKAGE_LIMITS,
-  extractExtensionZip,
-  sha256Hex,
-  type ExtensionPackageLimits,
-} from '../application/package-validator';
+import { extractExtensionZip, sha256Hex } from '../application/package-validator';
 import type { RemoteExtensionSource } from '../domain/extension';
 import type {
   ExtensionSourceGateway,
   ExtensionSourceRef,
   ExtensionSourceSnapshot,
 } from '../ports/extension-source-gateway';
+
+const MAX_EXTENSION_PATH_LENGTH = 300;
 
 interface GitHubLocation {
   provider: 'github';
@@ -61,18 +58,17 @@ export class CorsExtensionSourceGateway implements ExtensionSourceGateway {
   async fetchSnapshot(
     rawUrl: string,
     requestedRef = '',
-    limits: ExtensionPackageLimits = DEFAULT_EXTENSION_PACKAGE_LIMITS,
     signal?: AbortSignal,
   ): Promise<ExtensionSourceSnapshot> {
     const location = parseSourceLocation(rawUrl);
     const cleanRef = normalizeRef(requestedRef);
     if (location.provider === 'github') {
-      return this.#fetchGitHubSnapshot(location, cleanRef, limits, signal);
+      return this.#fetchGitHubSnapshot(location, cleanRef, signal);
     }
     if (location.provider === 'gitlab') {
-      return this.#fetchGitLabSnapshot(location, cleanRef, limits, signal);
+      return this.#fetchGitLabSnapshot(location, cleanRef, signal);
     }
-    return this.#fetchDirectZipSnapshot(location, cleanRef, limits, signal);
+    return this.#fetchDirectZipSnapshot(location, cleanRef, signal);
   }
 
   async listRefs(
@@ -135,12 +131,11 @@ export class CorsExtensionSourceGateway implements ExtensionSourceGateway {
   async #fetchGitHubSnapshot(
     location: GitHubLocation,
     requestedRef: string,
-    limits: ExtensionPackageLimits,
     signal?: AbortSignal,
   ): Promise<ExtensionSourceSnapshot> {
     const resolvedRef = requestedRef || 'HEAD';
     const packagePath = jsDelivrPackagePath(location.owner, location.repository, resolvedRef);
-    const entries = await this.#fetchGitHubEntries(location, resolvedRef, limits, signal);
+    const entries = await this.#fetchGitHubEntries(location, resolvedRef, signal);
     const files = await mapWithConcurrency(entries, 6, async (entry) => ({
       path: entry.path,
       data: await this.#fetchGitHubFile(
@@ -148,7 +143,6 @@ export class CorsExtensionSourceGateway implements ExtensionSourceGateway {
         resolvedRef,
         packagePath,
         entry.path,
-        limits.maxFileBytes,
         signal,
       ),
     }));
@@ -174,7 +168,6 @@ export class CorsExtensionSourceGateway implements ExtensionSourceGateway {
   async #fetchGitHubEntries(
     location: GitHubLocation,
     resolvedRef: string,
-    limits: ExtensionPackageLimits,
     signal?: AbortSignal,
   ): Promise<RemoteFileEntry[]> {
     const packagePath = jsDelivrPackagePath(location.owner, location.repository, resolvedRef);
@@ -183,7 +176,7 @@ export class CorsExtensionSourceGateway implements ExtensionSourceGateway {
         `https://data.jsdelivr.com/v1/package/gh/${packagePath}/flat`,
         signal,
       );
-      return parseJsDelivrListing(listing, limits);
+      return parseJsDelivrListing(listing);
     } catch (error) {
       if (!isRecoverableCatalogError(error)) throw error;
     }
@@ -192,7 +185,7 @@ export class CorsExtensionSourceGateway implements ExtensionSourceGateway {
       `https://api.github.com/repos/${encodeURIComponent(location.owner)}/${encodeURIComponent(location.repository)}/git/trees/${encodeURIComponent(resolvedRef)}?recursive=1`,
       signal,
     );
-    return parseGitHubTree(tree, limits);
+    return parseGitHubTree(tree);
   }
 
   async #fetchGitHubFile(
@@ -200,26 +193,24 @@ export class CorsExtensionSourceGateway implements ExtensionSourceGateway {
     resolvedRef: string,
     packagePath: string,
     filePath: string,
-    maxFileBytes: number,
     signal?: AbortSignal,
   ): Promise<Blob> {
     const jsDelivrUrl = `https://cdn.jsdelivr.net/gh/${packagePath}${encodeFilePath(filePath)}`;
     try {
       const response = await this.#request(jsDelivrUrl, signal);
-      return await readBoundedBlob(response, maxFileBytes);
+      return await response.blob();
     } catch (error) {
       if (!isRecoverableFileError(error)) throw error;
     }
 
     const rawUrl = `https://raw.githubusercontent.com/${encodeURIComponent(location.owner)}/${encodeURIComponent(location.repository)}/${encodeRefPath(resolvedRef)}${encodeFilePath(filePath)}`;
     const response = await this.#request(rawUrl, signal);
-    return readBoundedBlob(response, maxFileBytes);
+    return response.blob();
   }
 
   async #fetchGitLabSnapshot(
     location: GitLabLocation,
     requestedRef: string,
-    limits: ExtensionPackageLimits,
     signal?: AbortSignal,
   ): Promise<ExtensionSourceSnapshot> {
     const project = encodeURIComponent(location.projectPath);
@@ -243,7 +234,7 @@ export class CorsExtensionSourceGateway implements ExtensionSourceGateway {
       `https://gitlab.com/api/v4/projects/${project}/repository/archive.zip?sha=${encodeURIComponent(resolvedRef)}`,
       signal,
     );
-    const archive = await readBoundedBlob(response, limits.maxArchiveBytes);
+    const archive = await response.blob();
     return {
       provider: 'gitlab',
       repositoryUrl: location.repositoryUrl,
@@ -251,18 +242,17 @@ export class CorsExtensionSourceGateway implements ExtensionSourceGateway {
       resolvedRef,
       revision,
       folderName: location.folderName,
-      files: await extractExtensionZip(archive, limits),
+      files: await extractExtensionZip(archive),
     };
   }
 
   async #fetchDirectZipSnapshot(
     location: DirectZipLocation,
     requestedRef: string,
-    limits: ExtensionPackageLimits,
     signal?: AbortSignal,
   ): Promise<ExtensionSourceSnapshot> {
     const response = await this.#request(location.archiveUrl, signal);
-    const archive = await readBoundedBlob(response, limits.maxArchiveBytes);
+    const archive = await response.blob();
     return {
       provider: 'cors-zip',
       repositoryUrl: location.repositoryUrl,
@@ -270,7 +260,7 @@ export class CorsExtensionSourceGateway implements ExtensionSourceGateway {
       resolvedRef: requestedRef || 'archive',
       revision: await sha256Hex(archive),
       folderName: location.folderName,
-      files: await extractExtensionZip(archive, limits),
+      files: await extractExtensionZip(archive),
     };
   }
 
@@ -376,7 +366,7 @@ export function parseSourceLocation(rawUrl: string): RemoteLocation {
   };
 }
 
-function parseJsDelivrListing(value: unknown, limits: ExtensionPackageLimits): RemoteFileEntry[] {
+function parseJsDelivrListing(value: unknown): RemoteFileEntry[] {
   if (!isRecord(value) || !Array.isArray(value.files)) {
     throw new ExtensionSourceError('listing', 'jsDelivr did not return a package file listing.');
   }
@@ -391,10 +381,10 @@ function parseJsDelivrListing(value: unknown, limits: ExtensionPackageLimits): R
     }
     return { path: entry.name, hash: entry.hash, size: entry.size };
   });
-  return validateRemoteEntries(entries, limits);
+  return validateRemoteEntries(entries);
 }
 
-function parseGitHubTree(value: unknown, limits: ExtensionPackageLimits): RemoteFileEntry[] {
+function parseGitHubTree(value: unknown): RemoteFileEntry[] {
   if (!isRecord(value) || !Array.isArray(value.tree)) {
     throw new ExtensionSourceError('listing', 'GitHub did not return a repository tree.');
   }
@@ -417,30 +407,25 @@ function parseGitHubTree(value: unknown, limits: ExtensionPackageLimits): Remote
     }
     entries.push({ path: entry.path, hash: entry.sha, size: entry.size });
   }
-  return validateRemoteEntries(entries, limits);
+  return validateRemoteEntries(entries);
 }
 
-function validateRemoteEntries(
-  input: readonly RemoteFileEntry[],
-  limits: ExtensionPackageLimits,
-): RemoteFileEntry[] {
+function validateRemoteEntries(input: readonly RemoteFileEntry[]): RemoteFileEntry[] {
   const entries = input
-    .map((entry) => ({ ...entry, path: normalizeRemotePath(entry.path, limits.maxPathLength) }))
+    .map((entry) => ({
+      ...entry,
+      path: normalizeRemotePath(entry.path, MAX_EXTENSION_PATH_LENGTH),
+    }))
     .filter((entry) => !isIgnoredRemoteFile(entry.path));
-  if (entries.length === 0 || entries.length > limits.maxFiles) {
-    throw new ExtensionSourceError('file-count', 'Remote extension file count is outside limits.');
+  if (entries.length === 0) {
+    throw new ExtensionSourceError('file-count', 'Remote extension does not contain any files.');
   }
 
-  let total = 0;
+
   const seen = new Set<string>();
   for (const entry of entries) {
-    if (
-      !entry.hash ||
-      !Number.isSafeInteger(entry.size) ||
-      entry.size < 0 ||
-      entry.size > limits.maxFileBytes
-    ) {
-      throw new ExtensionSourceError('package-size', 'Remote extension file exceeds size limits.');
+    if (!entry.hash || !Number.isSafeInteger(entry.size) || entry.size < 0) {
+      throw new ExtensionSourceError('listing', 'Remote extension file metadata is invalid.');
     }
     const key = entry.path.normalize('NFKC').toLocaleLowerCase('en-US');
     if (seen.has(key)) {
@@ -450,13 +435,6 @@ function validateRemoteEntries(
       );
     }
     seen.add(key);
-    total += entry.size;
-    if (total > limits.maxTotalBytes) {
-      throw new ExtensionSourceError(
-        'package-size',
-        'Remote extension exceeds package size limits.',
-      );
-    }
   }
   return entries;
 }
@@ -531,38 +509,6 @@ function currentOnlyRef(source: RemoteExtensionSource): ExtensionSourceRef[] {
       label: `Current: ${source.resolvedRef}`,
     },
   ];
-}
-
-async function readBoundedBlob(response: Response, limit: number): Promise<Blob> {
-  const declared = Number(response.headers.get('content-length') ?? '0');
-  if (Number.isFinite(declared) && declared > limit) {
-    throw new ExtensionSourceError('response-size', `Remote response exceeds ${limit} bytes.`);
-  }
-  if (!response.body) {
-    const blob = await response.blob();
-    if (blob.size > limit) {
-      throw new ExtensionSourceError('response-size', `Remote response exceeds ${limit} bytes.`);
-    }
-    return blob;
-  }
-  const reader = response.body.getReader();
-  const chunks: ArrayBuffer[] = [];
-  let total = 0;
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    total += value.byteLength;
-    if (total > limit) {
-      await reader.cancel();
-      throw new ExtensionSourceError('response-size', `Remote response exceeds ${limit} bytes.`);
-    }
-    const copy = new Uint8Array(value.byteLength);
-    copy.set(value);
-    chunks.push(copy.buffer);
-  }
-  return new Blob(chunks, {
-    type: response.headers.get('content-type') ?? 'application/octet-stream',
-  });
 }
 
 function normalizeRef(value: string): string {

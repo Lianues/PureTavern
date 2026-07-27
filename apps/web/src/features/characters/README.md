@@ -18,6 +18,6 @@ M05 owns real chat history. `/api/characters/chats` intentionally returns an emp
 
 ## Notes
 
-Display names and avatar file names are separate. Rename updates the card display name and moves/copies the blob to a unique avatar file, preventing blob loss. If IndexedDB is unavailable, repositories degrade to page-memory storage and report diagnostics; Service Worker avatar serving requires IndexedDB, so image persistence is only guaranteed in the normal browser-ready path.
+Display names and avatar file names are separate. Create, edit, and edit-avatar forward the Legacy `crop` query to the shared Assets avatar processor, which matches the upstream PNG/crop/512×768 `cover` behavior. Duplicate copies the stored avatar payload directly without running image processing again. Rename updates the card display name and moves/copies the blob to a unique avatar file, preventing blob loss. If IndexedDB is unavailable, repositories degrade to page-memory storage and report diagnostics; Service Worker avatar serving requires IndexedDB, so image persistence is only guaranteed in the normal browser-ready path.
 
 The Service Worker handles only the two avatar URL shapes above. All other requests fall through to the browser/network.

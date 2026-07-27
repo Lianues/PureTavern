@@ -1,18 +1,29 @@
 import { zipSync } from 'fflate';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { CompatibilityRouter } from '@/platform/legacy/compatibility-router';
 
 import { AssetService } from '../application/asset-service';
+import type { ImageInfo } from '../domain/asset';
 import { MemoryBlobRepository } from '../infrastructure/asset-blob-repositories';
 import { MemoryAssetIndex } from '../infrastructure/asset-index-repositories';
 import { BrowserImageProcessor } from '../infrastructure/browser-image-processor';
 import { registerAssetsLegacyRoutes } from '../legacy/register-routes';
+import type {
+  AvatarCrop,
+  DecodedAssetData,
+  ImageProcessor,
+  ProcessedImage,
+} from '../ports/image-processor';
 import { bytesFromBase64, ONE_BY_ONE_PNG_BASE64, pngBlob, pngDataUrl } from './test-helpers';
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
 
 describe('M13 Legacy route DTOs', () => {
   it('covers files, user images, backgrounds, metadata and avatar DTOs', async () => {
-    const { router } = createRouteHarness();
+    const { router, images } = createRouteHarness();
 
     const sanitized = await postJson(router, '/api/files/sanitize-filename', {
       fileName: '../bad:name.txt',
@@ -177,14 +188,29 @@ describe('M13 Legacy route DTOs', () => {
     await expect((await postJson(router, '/api/avatars/get', {})).json()).resolves.toEqual([
       'user-default.png',
     ]);
+    vi.spyOn(Date, 'now').mockReturnValue(123);
+    const crop: AvatarCrop = { x: 0, y: 0, width: 1, height: 1, want_resize: true };
     const avatarForm = new FormData();
     avatarForm.set('avatar', imageFile('persona.png'));
     await expect(
-      (await dispatch(router, 'POST', '/api/avatars/upload', avatarForm)).json(),
-    ).resolves.toEqual({ path: 'persona.png' });
-    expect((await postJson(router, '/api/avatars/delete', { avatar: 'persona.png' })).status).toBe(
-      200,
-    );
+      (
+        await dispatch(
+          router,
+          'POST',
+          `/api/avatars/upload?crop=${encodeURIComponent(JSON.stringify(crop))}`,
+          avatarForm,
+        )
+      ).json(),
+    ).resolves.toEqual({ path: '123.png' });
+    expect(images.lastCrop).toEqual(crop);
+
+    const invalidCropForm = new FormData();
+    invalidCropForm.set('avatar', imageFile('persona.png'));
+    await expect(
+      (await dispatch(router, 'POST', '/api/avatars/upload?crop=not-json', invalidCropForm)).json(),
+    ).resolves.toEqual({ path: '123.png' });
+    expect(images.lastCrop).toBeUndefined();
+    expect((await postJson(router, '/api/avatars/delete', { avatar: '123.png' })).status).toBe(200);
 
     const unsafe = await postJson(router, '/api/files/upload', {
       name: '../bad.txt',
@@ -353,15 +379,35 @@ function createRouteHarness(fetchImplementation?: typeof fetch) {
             headers: { 'Content-Type': 'audio/mpeg' },
           });
     });
+  const images = new RecordingImageProcessor();
   const service = new AssetService(
     new MemoryBlobRepository(),
     new MemoryAssetIndex(),
-    new BrowserImageProcessor(),
+    images,
     nativeFetch,
   );
   const router = new CompatibilityRouter();
   registerAssetsLegacyRoutes(router, service);
-  return { router, service, nativeFetch };
+  return { router, service, nativeFetch, images };
+}
+
+class RecordingImageProcessor implements ImageProcessor {
+  readonly #delegate = new BrowserImageProcessor();
+  readonly diagnostics = this.#delegate.diagnostics;
+  lastCrop: AvatarCrop | undefined;
+
+  decodeBase64(value: string, fallbackMimeType?: string): DecodedAssetData {
+    return this.#delegate.decodeBase64(value, fallbackMimeType);
+  }
+
+  inspect(blob: Blob): Promise<ImageInfo> {
+    return this.#delegate.inspect(blob);
+  }
+
+  async processAvatar(blob: Blob, crop?: AvatarCrop): Promise<ProcessedImage> {
+    this.lastCrop = crop;
+    return { blob, info: await this.inspect(blob), processed: true };
+  }
 }
 
 async function postJson(

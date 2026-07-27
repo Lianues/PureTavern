@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
-import { blobFromBytes, createMemoryHarness, pngBlob } from './test-helpers';
+import {
+  blobFromBytes,
+  createMemoryHarness,
+  PassthroughImageProcessor,
+  pngBlob,
+} from './test-helpers';
 
 function textBlob(value: string, type: string): Blob {
   return blobFromBytes(new TextEncoder().encode(value), type);
@@ -8,7 +13,7 @@ function textBlob(value: string, type: string): Blob {
 
 describe('Assets cross-feature bridges', () => {
   it('owns Persona avatar aliases without copying storage into M08', async () => {
-    const { service } = createMemoryHarness();
+    const { service } = createMemoryHarness(fetch, new PassthroughImageProcessor());
 
     expect(await service.hasAvatar('user-default.png')).toBe(true);
     const created = await service.uploadAvatar(pngBlob(), 'persona-a.png');
@@ -28,6 +33,7 @@ describe('Assets cross-feature bridges', () => {
   it('stores validated extension package files behind M13 aliases', async () => {
     const { service } = createMemoryHarness();
     const extensionId = 'local.browser-probe';
+    const workerSource = textBlob('self.postMessage("ready")', 'text/javascript');
 
     await service.saveExtensionPackage({
       extensionId,
@@ -42,7 +48,7 @@ describe('Assets cross-feature bridges', () => {
         },
         {
           path: 'worker/index.js',
-          data: textBlob('self.postMessage("ready")', 'text/javascript'),
+          data: workerSource,
           sha256: 'c'.repeat(64),
         },
         {
@@ -67,7 +73,7 @@ describe('Assets cross-feature bridges', () => {
     const workerUrl = await service.resolveExtensionPackageAssetUrl(extensionId, 'worker/index.js');
     expect(htmlUrl).toBe('/scripts/extensions/third-party/browser-probe/index.html');
     expect(workerUrl).toBe('/scripts/extensions/third-party/browser-probe/worker/index.js');
-    expect((await service.getAssetByPath(workerUrl!))?.blob.data.size).toBeGreaterThan(0);
+    expect((await service.getAssetByPath(workerUrl!))?.blob.data).toBe(workerSource);
     expect(
       await service.resolveExtensionPackageAssetUrl(extensionId, '.github/workflows/ci.yml'),
     ).toBe('/scripts/extensions/third-party/browser-probe/.github/workflows/ci.yml');

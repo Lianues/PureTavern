@@ -9,7 +9,6 @@ import {
 } from '@/platform/features/standard-capabilities';
 
 import { ExtensionService } from './application/extension-service';
-import type { ExtensionPackageLimits } from './application/package-validator';
 import type { TrustedLegacyBuiltInDefinition } from './domain/extension';
 import { CorsExtensionSourceGateway } from './infrastructure/cors-extension-source';
 import {
@@ -43,7 +42,6 @@ export interface ExtensionsFeatureOptions {
   loadTrustedBuiltIns?: (
     context: FeatureInstallContext,
   ) => Promise<readonly TrustedLegacyBuiltInDefinition[]>;
-  packageLimits?: ExtensionPackageLimits;
 }
 
 export function createExtensionsFeature(options: ExtensionsFeatureOptions = {}): FeatureModule {
@@ -64,12 +62,7 @@ export function createExtensionsFeature(options: ExtensionsFeatureOptions = {}):
         options.createSourceGateway?.(context) ??
         options.sourceGateway ??
         new CorsExtensionSourceGateway(context.nativeFetch);
-      const service = new ExtensionService(
-        registry,
-        packageAssets,
-        sourceGateway,
-        options.packageLimits,
-      );
+      const service = new ExtensionService(registry, packageAssets, sourceGateway);
       const seedDiagnostics = {
         status: 'pending' as 'pending' | 'ready' | 'fallback',
         source: options.loadTrustedBuiltIns ? 'generated-manifest' : 'compiled-fallback',

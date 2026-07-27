@@ -40,6 +40,12 @@ const BODY_KEYS = [
   'top_logprobs',
 ] as const;
 
+// SillyTavern 1.18.0/src/constants.js: OPENROUTER_HEADERS and AIMLAPI_HEADERS.
+const SILLY_TAVERN_ATTRIBUTION_HEADERS = {
+  'HTTP-Referer': 'https://sillytavern.app',
+  'X-Title': 'SillyTavern',
+} as const;
+
 export class OpenAiCompatibleAdapter implements ProviderAdapter {
   async listModels(context: ProviderAdapterContext): Promise<ModelCatalogResult> {
     if (context.descriptor.source === 'azure_openai') {
@@ -55,7 +61,7 @@ export class OpenAiCompatibleAdapter implements ProviderAdapter {
     const response = await context.client.send(
       context.descriptor.source,
       url,
-      getRequest(context.signal, this.#headers(context)),
+      getRequest(context.signal, this.#headers(context, false)),
     );
     await requireOk(response);
     let data: unknown;
@@ -95,24 +101,31 @@ export class OpenAiCompatibleAdapter implements ProviderAdapter {
     const response = await context.client.send(
       context.descriptor.source,
       url,
-      requestInit(this.#headers(context), body, context.signal),
+      requestInit(this.#headers(context, true), body, context.signal),
     );
     return requireOk(response);
   }
 
-  #headers(context: ProviderAdapterContext): HeadersInit {
-    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  #headers(context: ProviderAdapterContext, includeContentType: boolean): HeadersInit {
+    const headers: Record<string, string> = {};
+    if (includeContentType) headers['Content-Type'] = 'application/json';
+
     if (context.descriptor.source === 'azure_openai') {
       if (context.credential) headers['api-key'] = context.credential;
-    } else if (context.credential) {
-      headers.Authorization = `Bearer ${context.credential}`;
+    } else {
+      // SillyTavern sends the Authorization field even when an optional Custom key is empty.
+      headers.Authorization = `Bearer ${context.credential ?? ''}`;
     }
-    if (context.descriptor.source === 'openrouter') {
-      headers['HTTP-Referer'] = window.location.origin;
-      headers['X-Title'] = 'PureTavern';
+
+    if (context.descriptor.source === 'openrouter' || context.descriptor.source === 'aimlapi') {
+      Object.assign(headers, SILLY_TAVERN_ATTRIBUTION_HEADERS);
+    }
+    if (context.descriptor.source === 'ai21' && includeContentType) {
+      headers.Accept = 'application/json';
     }
     if (context.descriptor.source === 'zai') headers['Accept-Language'] = 'en-US,en';
     if (context.descriptor.source === 'custom') {
+      // Upstream merges Custom YAML last, so user values can replace controllable defaults.
       Object.assign(headers, parseCustomHeaders(context.request.custom_include_headers));
     }
     return headers;
@@ -193,34 +206,17 @@ function requiredSetting(value: unknown, label: string): string {
 
 function parseCustomHeaders(value: unknown): Record<string, string> {
   const parsed = parseCustomMerge(value);
-  return Object.fromEntries(
-    Object.entries(parsed)
-      .filter(([, header]) => typeof header === 'string')
-      .map(([key, header]) => [key, header as string]),
-  );
+  return Object.fromEntries(Object.entries(parsed).map(([key, header]) => [key, String(header)]));
 }
 
 function parseCustomBody(value: unknown): Record<string, unknown> {
-  const parsed = parseCustomMerge(value);
-  for (const key of [
-    'chat_completion_source',
-    'custom_url',
-    'proxy_password',
-    'reverse_proxy',
-    'secret_id',
-  ]) {
-    delete parsed[key];
-  }
-  return parsed;
+  // SillyTavern's mergeObjectWithYaml applies every explicitly supplied Custom field.
+  return parseCustomMerge(value);
 }
 
 function parseCustomExclusions(value: unknown): string[] {
   const parsed = parseCustomYaml(value);
-  if (Array.isArray(parsed)) {
-    return parsed
-      .filter((key): key is string | number => typeof key === 'string' || typeof key === 'number')
-      .map(String);
-  }
+  if (Array.isArray(parsed)) return parsed.map(String);
   if (isRecord(parsed)) return Object.keys(parsed);
   return typeof parsed === 'string' && parsed ? [parsed] : [];
 }

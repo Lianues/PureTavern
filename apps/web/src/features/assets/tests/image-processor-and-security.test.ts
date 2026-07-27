@@ -1,7 +1,12 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { AssetValidationError, ImageProcessingUnsupportedError } from '../application/asset-errors';
-import { BrowserImageProcessor } from '../infrastructure/browser-image-processor';
+import {
+  AVATAR_HEIGHT,
+  AVATAR_WIDTH,
+  BrowserImageProcessor,
+  coverSourceRect,
+} from '../infrastructure/browser-image-processor';
 import {
   blobFromBytes,
   bytesFromBase64,
@@ -86,7 +91,47 @@ describe('BrowserImageProcessor', () => {
     });
   });
 
-  it('diagnoses unavailable browser crop APIs without claiming success', async () => {
+  it('matches upstream avatar dimensions, PNG encoding and cover behavior', async () => {
+    const draws = installAvatarCanvasStub();
+    const processor = new BrowserImageProcessor();
+    const output = await processor.processAvatar(pngBlobWithDimensions(300, 300), {
+      x: 0,
+      y: 0,
+      width: 300,
+      height: 300,
+      want_resize: true,
+    });
+
+    expect(output.blob.type).toBe('image/png');
+    expect(output.info).toMatchObject({ width: AVATAR_WIDTH, height: AVATAR_HEIGHT });
+    expect(draws).toHaveLength(1);
+    expect(draws[0]?.slice(1, 5)).toEqual([50, 0, 200, 300]);
+    expect(coverSourceRect({ x: 0, y: 0, width: 300, height: 300 }, 512, 768)).toEqual({
+      x: 50,
+      y: 0,
+      width: 200,
+      height: 300,
+    });
+  });
+
+  it('keeps source or crop dimensions unless upstream explicitly requests resize', async () => {
+    installAvatarCanvasStub();
+    const processor = new BrowserImageProcessor();
+
+    await expect(processor.processAvatar(pngBlobWithDimensions(300, 200))).resolves.toMatchObject({
+      info: { width: 300, height: 200, mimeType: 'image/png' },
+    });
+    await expect(
+      processor.processAvatar(pngBlobWithDimensions(300, 200), {
+        x: 10,
+        y: 10,
+        width: 100,
+        height: 150,
+      }),
+    ).resolves.toMatchObject({ info: { width: 100, height: 150 } });
+  });
+
+  it('diagnoses unavailable browser image APIs without claiming success', async () => {
     vi.stubGlobal('createImageBitmap', undefined);
     const processor = new BrowserImageProcessor();
     await expect(
@@ -137,6 +182,41 @@ describe('asset input safety', () => {
     ]);
   });
 });
+
+function installAvatarCanvasStub(): unknown[][] {
+  const draws: unknown[][] = [];
+  class TestOffscreenCanvas {
+    constructor(
+      readonly width: number,
+      readonly height: number,
+    ) {}
+
+    getContext(): { drawImage: (...args: unknown[]) => void } {
+      return { drawImage: (...args: unknown[]) => draws.push(args) };
+    }
+
+    convertToBlob(options: { type: string }): Promise<Blob> {
+      return Promise.resolve(pngBlobWithDimensions(this.width, this.height, options.type));
+    }
+  }
+
+  vi.stubGlobal(
+    'createImageBitmap',
+    vi.fn(async () => ({ close: vi.fn() })),
+  );
+  vi.stubGlobal('OffscreenCanvas', TestOffscreenCanvas);
+  return draws;
+}
+
+function pngBlobWithDimensions(width: number, height: number, type = 'image/png'): Blob {
+  const bytes = new Uint8Array(24);
+  bytes.set([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a], 0);
+  bytes.set(ascii('IHDR'), 12);
+  const view = new DataView(bytes.buffer);
+  view.setUint32(16, width);
+  view.setUint32(20, height);
+  return blobFromBytes(bytes, type);
+}
 
 function ascii(value: string): number[] {
   return [...value].map((character) => character.charCodeAt(0));

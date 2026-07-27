@@ -12,7 +12,14 @@ import type {
   ImageProcessorDiagnostics,
   ProcessedImage,
 } from '../ports/image-processor';
-import { createMemoryHarness, pngBlob, pngDataUrl } from './test-helpers';
+import {
+  blobBytes,
+  bytesFromBase64,
+  createMemoryHarness,
+  ONE_BY_ONE_PNG_BASE64,
+  pngBlob,
+  pngDataUrl,
+} from './test-helpers';
 
 describe('AssetService files and user images', () => {
   it('uploads, verifies, resolves and deletes chat attachments', async () => {
@@ -46,6 +53,8 @@ describe('AssetService files and user images', () => {
     });
     expect(first).toBe('/user/images/Alice/gallery.png');
     expect(second).toBe('/user/images/Alice/gallery_1.png');
+    const stored = await service.getAssetByPath(first);
+    expect(await blobBytes(stored!.blob.data)).toEqual([...bytesFromBase64(ONE_BY_ONE_PNG_BASE64)]);
     await expect(service.listUserImageFolders()).resolves.toEqual(['Alice']);
     await expect(
       service.listUserImages({ folder: 'Alice', sortField: 'name', sortOrder: 'desc', type: 1 }),
@@ -61,7 +70,8 @@ describe('AssetService files and user images', () => {
 describe('AssetService backgrounds and image metadata', () => {
   it('renames aliases without copying the Blob and manages metadata folders', async () => {
     const { service, blobs, index } = createMemoryHarness();
-    await expect(service.uploadBackground(pngBlob(), 'scene.png')).resolves.toBe('scene.png');
+    const source = pngBlob();
+    await expect(service.uploadBackground(source, 'scene.png')).resolves.toBe('scene.png');
     await expect(service.listBackgrounds()).resolves.toEqual({
       images: [{ filename: 'scene.png', isAnimated: false }],
       config: { width: 160, height: 90 },
@@ -69,6 +79,7 @@ describe('AssetService backgrounds and image metadata', () => {
 
     const before = await index.getByLegacyPath('/backgrounds/scene.png');
     const beforeBlob = before ? await blobs.get('backgrounds', before.id) : null;
+    expect(beforeBlob?.data).toBe(source);
     await expect(service.getImageMetadata('/backgrounds/scene.png')).resolves.toMatchObject({
       path: '/backgrounds/scene.png',
       width: 1,
@@ -120,7 +131,7 @@ describe('AssetService backgrounds and image metadata', () => {
 });
 
 describe('AssetService user avatars', () => {
-  it('uploads, crop-processes, overwrites and deletes persona avatars', async () => {
+  it('forwards upstream avatar processing, overwrites and deletes persona avatars', async () => {
     const blobs = new MemoryBlobRepository();
     const index = new MemoryAssetIndex();
     const processor = new RecordingImageProcessor();

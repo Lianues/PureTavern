@@ -18,7 +18,7 @@ The original warning is shown before a non-official repository is installed. Onc
 
 ## Supported remote sources
 
-- Public GitHub repository install/update prefers jsDelivr's CORS file catalog and single-file CDN. An omitted branch resolves through jsDelivr `HEAD`, so ordinary installation consumes no GitHub REST quota. If the jsDelivr catalog is unavailable or rejects an oversized package, the gateway makes one recursive GitHub Tree API request, filters non-runtime source maps/Finder metadata, and still downloads each file from jsDelivr first. A failed jsDelivr file request falls back to `raw.githubusercontent.com`, which supports browser CORS and does not consume GitHub REST's 60-requests/hour/IP core quota. Truncated trees and existing package/file safety limits remain hard failures. The branch/tag UI also uses GitHub REST and degrades to the current ref when rate-limited; rate-limit errors expose the remaining count and reset time when GitHub provides them.
+- Public GitHub repository install/update prefers jsDelivr's CORS file catalog and single-file CDN. An omitted branch resolves through jsDelivr `HEAD`, so ordinary installation consumes no GitHub REST quota. If the jsDelivr catalog is unavailable, the gateway makes one recursive GitHub Tree API request, filters non-runtime source maps/Finder metadata, and still downloads each file from jsDelivr first. A failed jsDelivr file request falls back to `raw.githubusercontent.com`, which supports browser CORS and does not consume GitHub REST's 60-requests/hour/IP core quota. Truncated trees and invalid paths/manifests remain hard failures. The branch/tag UI also uses GitHub REST and degrades to the current ref when rate-limited; rate-limit errors expose the remaining count and reset time when GitHub provides them.
 - Public GitLab repository URLs use GitLab's CORS REST/archive endpoints.
 - Direct HTTPS `.zip` URLs are supported when the host permits browser CORS. HTTP is accepted only for localhost development and browser tests.
 
@@ -28,7 +28,7 @@ No CORS proxy or private-repository credential relay exists. A remote host that 
 
 Packages use SillyTavern's existing root `manifest.json`, including `display_name`, `version`, `author`, `js`, `css`, `i18n`, `requires`, `optional`, `dependencies`, `hooks`, and future opaque fields. The `js` and `css` values are passed through to the unchanged upstream loader, including cache-busting query strings and fragments; PureTavern does not require those references to match a package file during installation. All extension behavior remains owned by the upstream loader.
 
-Archives and remote file catalogs are bounded by compressed size, expanded size, per-file size, file count, path length, and compression ratio. Absolute package paths, drive paths, backslashes, control characters, `.`/`..`, zip-slip, duplicate Unicode/case package paths, and unsupported source URLs are rejected.
+Archives and remote file catalogs do not have frontend-only byte, file-count or compression-ratio quotas. Path and format validation remains strict: absolute package paths, drive paths, backslashes, control characters, `.`/`..`, zip-slip, duplicate Unicode/case package paths, invalid manifests, and unsupported source URLs are rejected.
 
 ## Lifecycle
 

@@ -14,11 +14,8 @@ import type {
   ExtensionSourceSnapshot,
 } from '../ports/extension-source-gateway';
 import {
-  DEFAULT_EXTENSION_PACKAGE_LIMITS,
-  MIGRATION_EXTENSION_PACKAGE_LIMITS,
   sha256Hex,
   validateLegacyExtensionPackage,
-  type ExtensionPackageLimits,
   type ValidatedLegacyExtensionPackage,
 } from './package-validator';
 
@@ -60,7 +57,6 @@ export class ExtensionService {
   readonly #registry: ExtensionRegistry;
   readonly #assets: ExtensionPackageAssets;
   readonly #sources: ExtensionSourceGateway;
-  readonly #limits: ExtensionPackageLimits;
   readonly #clock: () => Date;
   readonly #queues = new Map<string, Promise<void>>();
 
@@ -68,13 +64,11 @@ export class ExtensionService {
     registry: ExtensionRegistry,
     assets: ExtensionPackageAssets,
     sources: ExtensionSourceGateway,
-    limits: ExtensionPackageLimits = DEFAULT_EXTENSION_PACKAGE_LIMITS,
     clock: () => Date = () => new Date(),
   ) {
     this.#registry = registry;
     this.#assets = assets;
     this.#sources = sources;
-    this.#limits = limits;
     this.#clock = clock;
   }
 
@@ -124,7 +118,7 @@ export class ExtensionService {
     ref = '',
     signal?: AbortSignal,
   ): Promise<LegacyInstallExtensionDto> {
-    const snapshot = await this.#sources.fetchSnapshot(url, ref, this.#limits, signal);
+    const snapshot = await this.#sources.fetchSnapshot(url, ref, signal);
     const extensionId = await extensionIdForRepository(snapshot.repositoryUrl);
     return this.#serialize(extensionId, async () => {
       if (await this.#registry.get(extensionId)) {
@@ -138,7 +132,7 @@ export class ExtensionService {
           `Extension folder is already installed: ${snapshot.folderName}`,
         );
       }
-      const validated = await validateLegacyExtensionPackage(snapshot.files, this.#limits);
+      const validated = await validateLegacyExtensionPackage(snapshot.files);
       const now = this.#clock().toISOString();
       const record = createRemoteRecord({
         extensionId,
@@ -193,11 +187,7 @@ export class ExtensionService {
     if (!repositoryUrl) {
       throw new TypeError('An imported extension needs a repository URL to derive its identity.');
     }
-    // 迁移包里的扩展按原样搬运，一个文件都不丢，所以这里用放宽体积的那套上限。
-    const validated = await validateLegacyExtensionPackage(
-      input.files,
-      MIGRATION_EXTENSION_PACKAGE_LIMITS,
-    );
+    const validated = await validateLegacyExtensionPackage(input.files);
     const extensionId = await extensionIdForRepository(repositoryUrl);
     const legacyName = `third-party/${input.folderName}`;
     const record: ExtensionRecord = {
@@ -334,10 +324,9 @@ export class ExtensionService {
       const snapshot = await this.#sources.fetchSnapshot(
         current.source.repositoryUrl,
         branch,
-        this.#limits,
         signal,
       );
-      const validated = await validateLegacyExtensionPackage(snapshot.files, this.#limits);
+      const validated = await validateLegacyExtensionPackage(snapshot.files);
       const updated = createRemoteRecord({
         extensionId: current.extensionId,
         legacyName: current.legacyName,
@@ -403,12 +392,11 @@ export class ExtensionService {
     const snapshot = await this.#sources.fetchSnapshot(
       source.repositoryUrl,
       source.resolvedRef,
-      this.#limits,
       signal,
     );
     return {
       snapshot,
-      validated: await validateLegacyExtensionPackage(snapshot.files, this.#limits),
+      validated: await validateLegacyExtensionPackage(snapshot.files),
     };
   }
 

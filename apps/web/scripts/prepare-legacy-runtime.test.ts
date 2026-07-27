@@ -4,6 +4,7 @@ import { inflateSync } from 'node:zlib';
 import { describe, expect, it } from 'vitest';
 
 import { generateHookedIndex } from './legacy-index-generator.mjs';
+import { normalizeChineseCustomParameterExamples } from './legacy-runtime-text-patches.mjs';
 
 const hookMarker = 'data-pure-tavern-hook="bootstrap"';
 
@@ -87,6 +88,22 @@ describe('generateHookedIndex', () => {
     expect(prepare).toContain('Cache-Control: no-cache, no-store, must-revalidate');
     expect(prepare).toContain('copyBrandingAssets');
     expect(prepare).toContain('pure-tavern-favicon.ico');
+  });
+
+  it('keeps Chinese Custom parameter examples valid and copyable as YAML', () => {
+    const upstream = JSON.stringify({
+      custom_include_body_desc: '示例：\ntop_k：20\nrepetition_penalty：1.1',
+      custom_include_headers_desc: '示例：\nCustomHeader：自定义值\nAnotherHeader：自定义值',
+    });
+
+    const normalized = JSON.parse(normalizeChineseCustomParameterExamples(upstream)) as Record<
+      string,
+      string
+    >;
+    expect(normalized.custom_include_body_desc).toContain('top_k: 20\nrepetition_penalty: 1.1');
+    expect(normalized.custom_include_headers_desc).toContain(
+      'CustomHeader: 自定义值\nAnotherHeader: 自定义值',
+    );
   });
 
   it('contains optimized branding PNGs and a multi-resolution favicon', async () => {

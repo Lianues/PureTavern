@@ -14,8 +14,6 @@ export interface CharacterStats extends Record<string, unknown> {
 
 export const NEVER_CHAT_TIMESTAMP = new Date('9999-12-31T23:59:59.999Z').getTime();
 
-const MAX_DOCUMENT_LENGTH = 2_000_000;
-const MAX_DOCUMENT_NODES = 50_000;
 const MAX_DOCUMENT_DEPTH = 32;
 const UNSAFE_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
 const NUMERIC_FIELDS = new Set([
@@ -64,10 +62,6 @@ export function normalizeStatsDocument(value: unknown): StatsDocument {
       `Stats document must be JSON-serializable: ${error instanceof Error ? error.message : String(error)}`,
     );
   }
-  if (serialized.length > MAX_DOCUMENT_LENGTH) {
-    throw new StatsValidationError('Stats document exceeds the local compatibility size limit.');
-  }
-
   const cloned = JSON.parse(serialized) as unknown;
   assertSafeJson(cloned);
   if (!isRecord(cloned)) throw new StatsValidationError('Stats document must be a JSON object.');
@@ -105,12 +99,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function assertSafeJson(root: unknown): void {
-  let nodes = 0;
   const visit = (value: unknown, depth: number): void => {
-    nodes += 1;
-    if (nodes > MAX_DOCUMENT_NODES) {
-      throw new StatsValidationError('Stats document contains too many values.');
-    }
     if (depth > MAX_DOCUMENT_DEPTH) {
       throw new StatsValidationError('Stats document is nested too deeply.');
     }

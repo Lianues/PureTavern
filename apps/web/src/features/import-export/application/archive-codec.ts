@@ -7,13 +7,7 @@ import {
 } from '@pure-tavern/contracts';
 import { unzipSync, zipSync } from 'fflate';
 
-import {
-  ARCHIVE_MANIFEST_PATH,
-  assertArchivePath,
-  DEFAULT_ARCHIVE_LIMITS,
-  fail,
-  type ArchiveLimits,
-} from '../domain/archive';
+import { ARCHIVE_MANIFEST_PATH, assertArchivePath, fail } from '../domain/archive';
 import type { PortableArchiveEntry } from './archive-participant-registry';
 
 const textEncoder = new TextEncoder();
@@ -37,7 +31,6 @@ export interface DecodedArchive {
 export async function encodeArchive(
   metadata: ArchiveMetadataInput,
   inputEntries: readonly PortableArchiveEntry[],
-  limits: ArchiveLimits = DEFAULT_ARCHIVE_LIMITS,
 ): Promise<{ blob: Blob; manifest: PureTavernArchiveManifest }> {
   const entries: PortableArchiveEntry[] = [];
   for (const input of inputEntries) {
@@ -67,14 +60,7 @@ export async function encodeArchive(
     ),
     files: entries.map((entry) => entry.descriptor),
   };
-  // 编码端必须和 decodeArchive 用同一套上限，否则会写出一个自己都拒绝导入的归档。
   const encodedManifest = textEncoder.encode(JSON.stringify(manifest, null, 2));
-  if (encodedManifest.byteLength > limits.maxManifestBytes) {
-    fail(
-      'manifest-size',
-      `Generated archive manifest is ${encodedManifest.byteLength} bytes and would not be importable.`,
-    );
-  }
   const zipped: Record<string, Uint8Array> = {
     [ARCHIVE_MANIFEST_PATH]: encodedManifest,
   };
@@ -87,34 +73,15 @@ export async function encodeArchive(
   };
 }
 
-export async function decodeArchive(
-  archive: Blob,
-  limits: ArchiveLimits = DEFAULT_ARCHIVE_LIMITS,
-): Promise<DecodedArchive> {
-  if (archive.size <= 0 || archive.size > limits.maxArchiveBytes) {
-    fail('archive-size', `Archive must be 1-${limits.maxArchiveBytes} bytes.`);
-  }
+export async function decodeArchive(archive: Blob): Promise<DecodedArchive> {
+  if (archive.size <= 0) fail('archive-size', 'Archive must not be empty.');
   const buffer = new Uint8Array(await archive.arrayBuffer());
-  let declaredFiles = 0;
-  let declaredTotal = 0;
   let output: Record<string, Uint8Array>;
   try {
     output = unzipSync(buffer, {
       filter(info) {
         if (info.name.endsWith('/')) return false;
-        assertArchivePath(info.name, limits.maxPathLength);
-        declaredFiles += 1;
-        declaredTotal += info.originalSize;
-        if (declaredFiles > limits.maxFiles) fail('file-count', 'Archive has too many files.');
-        if (info.originalSize > limits.maxFileBytes) {
-          fail('file-size', `Archive file is too large: ${info.name}`);
-        }
-        if (declaredTotal > limits.maxExpandedBytes) {
-          fail('expanded-size', 'Archive expands beyond the configured limit.');
-        }
-        if (declaredTotal / Math.max(archive.size, 1) > limits.maxCompressionRatio) {
-          fail('compression-ratio', 'Archive compression ratio is unsafe.');
-        }
+        assertArchivePath(info.name);
         return true;
       },
     });
@@ -125,9 +92,6 @@ export async function decodeArchive(
 
   const manifestBytes = output[ARCHIVE_MANIFEST_PATH];
   if (!manifestBytes) fail('missing-manifest', 'Archive does not contain manifest.json.');
-  if (manifestBytes.byteLength > limits.maxManifestBytes) {
-    fail('manifest-size', 'Archive manifest exceeds the configured limit.');
-  }
   let parsed: unknown;
   try {
     parsed = JSON.parse(textDecoder.decode(manifestBytes)) as unknown;
@@ -152,7 +116,7 @@ export async function decodeArchive(
   const entries: PortableArchiveEntry[] = [];
   let totalBytes = 0;
   for (const descriptor of manifest.files) {
-    assertArchivePath(descriptor.path, limits.maxPathLength);
+    assertArchivePath(descriptor.path);
     const data = output[descriptor.path];
     if (!data) fail('missing-file', `Archive file is missing: ${descriptor.path}`);
     if (data.byteLength !== descriptor.size) {

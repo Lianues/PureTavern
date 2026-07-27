@@ -3,43 +3,7 @@ import { unzipSync, type UnzipFileInfo } from 'fflate';
 import type { LegacyExtensionManifest } from '../domain/extension';
 import type { ValidatedExtensionPackageFile } from '../ports/extension-package-assets';
 
-export const DEFAULT_EXTENSION_PACKAGE_LIMITS = Object.freeze({
-  maxArchiveBytes: 20 * 1024 * 1024,
-  maxFiles: 2_000,
-  maxTotalBytes: 50 * 1024 * 1024,
-  maxFileBytes: 20 * 1024 * 1024,
-  maxManifestBytes: 256 * 1024,
-  maxPathLength: 300,
-  maxCompressionRatio: 200,
-});
-
-/**
- * 从本地迁移包里搬运扩展时用的上限。
- *
- * 默认那套是为「从不可信远端下载」定的：它要限制网络传输量和解压炸弹。迁移包是用户
- * 自己机器上已经存在的数据，那层理由不成立，用它去卡只会把用户既有的扩展整个拒之门外
- * （实测一个 59 MB 的扩展就会被 50 MB 的默认上限挡下）。
- * 路径安全和 manifest 结构校验一点不放宽，放开的只有体积和数量。
- */
-export const MIGRATION_EXTENSION_PACKAGE_LIMITS: ExtensionPackageLimits = Object.freeze({
-  maxArchiveBytes: 64 * 1024 * 1024 * 1024,
-  maxFiles: 2_000_000,
-  maxTotalBytes: 64 * 1024 * 1024 * 1024,
-  maxFileBytes: 2 * 1024 * 1024 * 1024,
-  maxManifestBytes: 64 * 1024 * 1024,
-  maxPathLength: 300,
-  maxCompressionRatio: 10_000,
-});
-
-export interface ExtensionPackageLimits {
-  maxArchiveBytes: number;
-  maxFiles: number;
-  maxTotalBytes: number;
-  maxFileBytes: number;
-  maxManifestBytes: number;
-  maxPathLength: number;
-  maxCompressionRatio: number;
-}
+const MAX_EXTENSION_PACKAGE_PATH_LENGTH = 300;
 
 export interface ExtensionPackageFile {
   path: string;
@@ -64,38 +28,15 @@ export class ExtensionPackageValidationError extends Error {
   }
 }
 
-export function extractExtensionZip(
-  archive: Blob,
-  limits: ExtensionPackageLimits = DEFAULT_EXTENSION_PACKAGE_LIMITS,
-): Promise<ExtensionPackageFile[]> {
-  assertPositiveLimits(limits);
-  if (archive.size <= 0 || archive.size > limits.maxArchiveBytes) {
-    fail('archive-size', `Extension archive must be 1-${limits.maxArchiveBytes} bytes.`);
-  }
+export function extractExtensionZip(archive: Blob): Promise<ExtensionPackageFile[]> {
+  if (archive.size <= 0) fail('archive-size', 'Extension archive must not be empty.');
   return archive.arrayBuffer().then((buffer) => {
-    let declaredFiles = 0;
-    let declaredTotal = 0;
-    const compressedBytes = Math.max(archive.size, 1);
     let output: Record<string, Uint8Array>;
     try {
       output = unzipSync(new Uint8Array(buffer), {
         filter(info) {
           if (isIgnoredArchiveEntry(info.name) || info.name.endsWith('/')) return false;
-          assertSafeZipEntry(info, limits.maxPathLength);
-          declaredFiles += 1;
-          declaredTotal += info.originalSize;
-          if (declaredFiles > limits.maxFiles) {
-            fail('file-count', `Extension archive exceeds the ${limits.maxFiles} file limit.`);
-          }
-          if (info.originalSize > limits.maxFileBytes) {
-            fail('file-size', `Extension archive file is too large: ${info.name}`);
-          }
-          if (declaredTotal > limits.maxTotalBytes) {
-            fail('expanded-size', 'Extension archive expands beyond the configured size limit.');
-          }
-          if (declaredTotal / compressedBytes > limits.maxCompressionRatio) {
-            fail('compression-ratio', 'Extension archive compression ratio is unsafe.');
-          }
+          assertSafeZipEntry(info, MAX_EXTENSION_PACKAGE_PATH_LENGTH);
           return true;
         },
       });
@@ -120,13 +61,8 @@ export function extractExtensionZip(
 
 export async function validateLegacyExtensionPackage(
   inputFiles: readonly ExtensionPackageFile[],
-  limits: ExtensionPackageLimits = DEFAULT_EXTENSION_PACKAGE_LIMITS,
 ): Promise<ValidatedLegacyExtensionPackage> {
-  assertPositiveLimits(limits);
   if (inputFiles.length === 0) fail('empty-package', 'Extension package is empty.');
-  if (inputFiles.length > limits.maxFiles) {
-    fail('file-count', `Extension package exceeds the ${limits.maxFiles} file limit.`);
-  }
 
   const files: ExtensionPackageFile[] = [];
   const pathKeys = new Set<string>();
@@ -135,19 +71,13 @@ export async function validateLegacyExtensionPackage(
     if (!(file.data instanceof Blob)) {
       fail('invalid-file', 'Every package entry must contain a Blob.');
     }
-    const path = validatePackagePath(file.path, limits.maxPathLength);
+    const path = validatePackagePath(file.path, MAX_EXTENSION_PACKAGE_PATH_LENGTH);
     const conflictKey = path.normalize('NFKC').toLocaleLowerCase('en-US');
     if (pathKeys.has(conflictKey)) {
       fail('duplicate-path', `Duplicate or case-conflicting package path: ${path}`);
     }
     pathKeys.add(conflictKey);
-    if (file.data.size > limits.maxFileBytes) {
-      fail('file-size', `Extension package file exceeds the size limit: ${path}`);
-    }
     totalBytes += file.data.size;
-    if (totalBytes > limits.maxTotalBytes) {
-      fail('package-size', `Extension package exceeds the ${limits.maxTotalBytes} byte limit.`);
-    }
     files.push({ path, data: file.data });
   }
 
@@ -155,10 +85,10 @@ export async function validateLegacyExtensionPackage(
   if (!manifestFile) {
     fail('missing-manifest', 'SillyTavern extension must contain manifest.json at its root.');
   }
-  if (manifestFile.data.size > limits.maxManifestBytes) {
-    fail('manifest-size', `manifest.json exceeds the ${limits.maxManifestBytes} byte limit.`);
-  }
-  const manifest = await parseLegacyManifest(manifestFile.data, limits.maxPathLength);
+  const manifest = await parseLegacyManifest(
+    manifestFile.data,
+    MAX_EXTENSION_PACKAGE_PATH_LENGTH,
+  );
 
   const validatedFiles: ValidatedExtensionPackageFile[] = [];
   for (const file of files) {
@@ -341,15 +271,6 @@ function mimeTypeForPath(path: string): string {
       return 'font/woff2';
     default:
       return 'application/octet-stream';
-  }
-}
-
-function assertPositiveLimits(limits: ExtensionPackageLimits): void {
-  if (
-    Object.values(limits).some((value) => !Number.isInteger(value) || value <= 0) ||
-    limits.maxFileBytes > limits.maxTotalBytes
-  ) {
-    throw new TypeError('Extension package limits must be positive coherent integers.');
   }
 }
 

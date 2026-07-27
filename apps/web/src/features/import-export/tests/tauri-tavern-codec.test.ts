@@ -639,6 +639,17 @@ describe('TauriTavern package layout', () => {
     expect(unpacked.map((file) => file.path)).toEqual(files.map((file) => file.path));
   });
 
+  it('accepts packages whose reported size exceeds the former archive quota', async () => {
+    const archive = packTauriTavernArchive([
+      { path: 'data/default-user/worlds/A.json', data: encoder.encode('{}') },
+    ]);
+    Object.defineProperty(archive, 'size', { value: 65 * 1024 * 1024 * 1024 });
+
+    await expect(unpackTauriTavernArchive(archive)).resolves.toEqual([
+      { path: 'data/default-user/worlds/A.json', data: expect.any(Uint8Array) },
+    ]);
+  });
+
   it('accepts packages wrapped in an extra folder or rooted at the user directory', async () => {
     const payload = encoder.encode('{}');
     const wrapped = packTauriTavernArchive([

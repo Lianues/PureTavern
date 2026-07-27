@@ -1,11 +1,6 @@
-import { AssetLimitError, AssetValidationError } from './asset-errors';
+import { AssetValidationError } from './asset-errors';
 
 export const ASSET_LIMITS = Object.freeze({
-  maxFileBytes: 50 * 1024 * 1024,
-  maxRemoteFileBytes: 50 * 1024 * 1024,
-  maxZipBytes: 20 * 1024 * 1024,
-  maxZipExpandedBytes: 100 * 1024 * 1024,
-  maxZipFiles: 256,
   maxFilenameLength: 180,
   maxPathLength: 600,
 });
@@ -159,11 +154,8 @@ export function extensionForMimeType(mimeType: string): string | null {
   }
 }
 
-export function assertFileSize(blob: Blob, limit = ASSET_LIMITS.maxFileBytes): void {
+export function assertNonEmptyFile(blob: Blob): void {
   if (blob.size <= 0) throw new AssetValidationError('The uploaded file is empty.');
-  if (blob.size > limit) {
-    throw new AssetLimitError(`The uploaded file exceeds the ${limit}-byte size limit.`);
-  }
 }
 
 export function normalizeLegacyPath(value: unknown, allowedPrefixes?: readonly string[]): string {

@@ -1,3 +1,5 @@
+import type { AvatarCropData } from '@/platform/features/standard-capabilities';
+
 import {
   cloneJson,
   deepMerge,
@@ -21,10 +23,8 @@ import {
   CharacterNotFoundError,
   CharacterValidationError,
   duplicateAvatarFileName,
-  ensureBlobSize,
   ensureImageBlob,
   ensureSupportedImportType,
-  MAX_IMPORT_BYTES,
   normalizeAvatarFile,
   normalizeInternalName,
   sanitizeDisplayName,
@@ -40,6 +40,7 @@ export interface CharacterServiceDiagnostics {
 
 export type DefaultAvatarLoader = () => Promise<Blob>;
 export type DeleteOwnerChats = (ownerId: string) => Promise<void>;
+export type ProcessAvatarImage = (image: Blob, crop?: AvatarCropData) => Promise<Blob>;
 
 export interface StableCharacterIdentity {
   ownerId: string;
@@ -72,6 +73,7 @@ export class CharacterService {
   readonly #loadDefaultAvatar: DefaultAvatarLoader;
   readonly #avatarWorkerReady: Promise<unknown>;
   readonly #deleteOwnerChats: DeleteOwnerChats | null;
+  readonly #processAvatar: ProcessAvatarImage;
 
   constructor(
     repository: CharacterRepository,
@@ -80,6 +82,7 @@ export class CharacterService {
     avatarWorkerReady: Promise<unknown> = Promise.resolve('skipped'),
     codec = new CharacterCardCodec(),
     deleteOwnerChats: DeleteOwnerChats | null = null,
+    processAvatar: ProcessAvatarImage = async (image) => image,
   ) {
     this.#repository = repository;
     this.#assets = assets;
@@ -97,6 +100,7 @@ export class CharacterService {
       });
     this.#codec = codec;
     this.#deleteOwnerChats = deleteOwnerChats;
+    this.#processAvatar = processAvatar;
   }
 
   async listCharacters(): Promise<LegacyCharacterDto[]> {
@@ -132,7 +136,11 @@ export class CharacterService {
     return (await this.#repository.get(ownerId))?.avatarFile ?? null;
   }
 
-  async createCharacter(input: Record<string, unknown>, avatarBlob?: Blob | null): Promise<string> {
+  async createCharacter(
+    input: Record<string, unknown>,
+    avatarBlob?: Blob | null,
+    crop?: AvatarCropData,
+  ): Promise<string> {
     const now = Date.now();
     const payload = {
       ...input,
@@ -155,7 +163,7 @@ export class CharacterService {
     const image = avatarBlob && avatarBlob.size > 0 ? avatarBlob : await this.#loadDefaultAvatar();
     ensureImageBlob(image);
     const character = this.#newStoredCharacter(avatarFile, card, now);
-    await this.#writeAvatarWithCard(avatarFile, image, card, 'create');
+    await this.#writeAvatarWithCard(avatarFile, image, card, 'create', crop);
     await this.#repository.save(character);
     return avatarFile;
   }
@@ -182,7 +190,11 @@ export class CharacterService {
     return newAvatarFile;
   }
 
-  async editCharacter(input: Record<string, unknown>, avatarBlob?: Blob | null): Promise<void> {
+  async editCharacter(
+    input: Record<string, unknown>,
+    avatarBlob?: Blob | null,
+    crop?: AvatarCropData,
+  ): Promise<void> {
     const avatarFile = normalizeAvatarFile(input.avatar_url);
     const existing = await this.#requireByAvatar(avatarFile);
     const card = formatCharacterData(
@@ -201,11 +213,13 @@ export class CharacterService {
         ? avatarBlob
         : ((await this.#assets.getAvatar(avatarFile))?.data ?? (await this.#loadDefaultAvatar()));
     ensureImageBlob(image);
+    const hasUploadedAvatar = Boolean(avatarBlob && avatarBlob.size > 0);
     await this.#writeAvatarWithCard(
       avatarFile,
       image,
       card,
-      avatarBlob && avatarBlob.size > 0 ? 'edit' : 'metadata',
+      hasUploadedAvatar ? 'edit' : 'metadata',
+      hasUploadedAvatar ? crop : undefined,
     );
     await this.#repository.save({
       ...existing,
@@ -214,13 +228,17 @@ export class CharacterService {
     });
   }
 
-  async editAvatar(avatarFileInput: unknown, avatarBlob: Blob | null | undefined): Promise<void> {
+  async editAvatar(
+    avatarFileInput: unknown,
+    avatarBlob: Blob | null | undefined,
+    crop?: AvatarCropData,
+  ): Promise<void> {
     const avatarFile = normalizeAvatarFile(avatarFileInput);
     if (!avatarBlob || avatarBlob.size === 0)
       throw new CharacterValidationError('No file uploaded.');
     ensureImageBlob(avatarBlob);
     const character = await this.#requireByAvatar(avatarFile);
-    await this.#writeAvatarWithCard(avatarFile, avatarBlob, character.card, 'edit-avatar');
+    await this.#writeAvatarWithCard(avatarFile, avatarBlob, character.card, 'edit-avatar', crop);
     await this.#repository.save({ ...character, updatedAt: new Date().toISOString() });
   }
 
@@ -314,7 +332,11 @@ export class CharacterService {
     };
     const image =
       (await this.#assets.getAvatar(avatarFile))?.data ?? (await this.#loadDefaultAvatar());
-    await this.#writeAvatarWithCard(newAvatarFile, image, duplicate.card, 'duplicate');
+    await this.#assets.putAvatar(newAvatarFile, image, {
+      fileName: newAvatarFile,
+      contentType: image.type || PNG_MIME,
+      source: 'duplicate',
+    });
     await this.#repository.save(duplicate);
     return newAvatarFile;
   }
@@ -324,7 +346,6 @@ export class CharacterService {
     fileTypeInput: unknown,
     preservedNameInput?: unknown,
   ): Promise<string> {
-    ensureBlobSize(file, MAX_IMPORT_BYTES, 'Character import');
     const fileType = ensureSupportedImportType(fileTypeInput);
     const bytes = new Uint8Array(await file.arrayBuffer());
     let card: CharacterCard;
@@ -442,11 +463,13 @@ export class CharacterService {
     image: Blob,
     card: CharacterCard,
     source: string,
+    crop?: AvatarCropData,
   ): Promise<void> {
-    const blob = await this.#blobWithEmbeddedCard(image, card);
+    const processedImage = await this.#processAvatar(image, crop);
+    const blob = await this.#blobWithEmbeddedCard(processedImage, card);
     await this.#assets.putAvatar(avatarFile, blob, {
       fileName: avatarFile,
-      contentType: blob.type || image.type || PNG_MIME,
+      contentType: blob.type || processedImage.type || image.type || PNG_MIME,
       source,
     });
   }

@@ -119,7 +119,6 @@ function harness() {
     registry,
     assets,
     source,
-    undefined,
     () => new Date('2026-07-24T00:00:00.000Z'),
   );
   return { registry, assets, source, service };

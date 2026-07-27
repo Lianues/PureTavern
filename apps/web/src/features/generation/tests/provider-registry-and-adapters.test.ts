@@ -41,7 +41,6 @@ describe('chat completion provider registry', () => {
     });
     expect(descriptors.find((entry) => entry.source === 'custom')?.keyOptional).toBe(true);
   });
-
 });
 
 describe('GenerationService provider adapters', () => {
@@ -92,7 +91,7 @@ describe('GenerationService provider adapters', () => {
     expect(body).not.toHaveProperty('reverse_proxy');
   });
 
-  it('applies Legacy YAML custom headers, body entries and exclusions', async () => {
+  it('applies upstream Custom YAML and lets user values override controllable fields', async () => {
     let sentUrl = '';
     let sentInit: RequestInit = {};
     const nativeFetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -111,18 +110,81 @@ describe('GenerationService provider adapters', () => {
       messages: [{ role: 'user', content: 'Hi' }],
       reasoning_effort: 'high',
       verbosity: 'high',
-      custom_include_headers: 'X-PureTavern-Test: enabled',
-      custom_include_body: '- top_k: 42\n- reasoning_effort: low\n- secret_id: must-not-leak',
+      custom_include_headers:
+        'Authorization: Custom user-token\nContent-Type: application/vnd.custom+json\nX-Numeric-Header: 7',
+      custom_include_body: 'top_k: 42\nmodel: overridden-model\nreasoning_effort: low',
       custom_exclude_body: '- reasoning_effort\n- verbosity',
     });
 
     expect(sentUrl).toBe('https://custom.example/v1/chat/completions');
-    expect(new Headers(sentInit.headers).get('X-PureTavern-Test')).toBe('enabled');
+    const headers = new Headers(sentInit.headers);
+    expect(headers.get('Authorization')).toBe('Custom user-token');
+    expect(headers.get('Content-Type')).toBe('application/vnd.custom+json');
+    expect(headers.get('X-Numeric-Header')).toBe('7');
     const body = JSON.parse(String(sentInit.body)) as Record<string, unknown>;
-    expect(body).toMatchObject({ model: 'custom-model', top_k: 42 });
+    expect(body).toMatchObject({ model: 'overridden-model', top_k: 42 });
     expect(body).not.toHaveProperty('reasoning_effort');
     expect(body).not.toHaveProperty('verbosity');
-    expect(body).not.toHaveProperty('secret_id');
+  });
+
+  it('matches SillyTavern attribution and method-specific headers', async () => {
+    const calls: Array<{ url: string; headers: Record<string, string> }> = [];
+    const nativeFetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      calls.push({
+        url: String(input),
+        headers: Object.fromEntries(new Headers(init?.headers).entries()),
+      });
+      const payload = String(input).endsWith('/models')
+        ? { data: [{ id: 'header-model' }] }
+        : { choices: [{ message: { content: 'ok' } }] };
+      return new Response(JSON.stringify(payload), {
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }) as typeof window.fetch;
+    const service = createService(nativeFetch);
+
+    await service.listModels({ chat_completion_source: 'openrouter' });
+    await service.generate({
+      chat_completion_source: 'openrouter',
+      model: 'header-model',
+      messages: [{ role: 'user', content: 'Hi' }],
+    });
+    await service.generate({
+      chat_completion_source: 'aimlapi',
+      model: 'header-model',
+      messages: [{ role: 'user', content: 'Hi' }],
+    });
+    await service.generate({
+      chat_completion_source: 'ai21',
+      model: 'header-model',
+      messages: [{ role: 'user', content: 'Hi' }],
+    });
+
+    expect(calls[0]).toEqual({
+      url: 'https://openrouter.ai/api/v1/models',
+      headers: {
+        authorization: 'Bearer credential-for-api_key_openrouter',
+        'http-referer': 'https://sillytavern.app',
+        'x-title': 'SillyTavern',
+      },
+    });
+    expect(calls[1]!.headers).toEqual({
+      authorization: 'Bearer credential-for-api_key_openrouter',
+      'content-type': 'application/json',
+      'http-referer': 'https://sillytavern.app',
+      'x-title': 'SillyTavern',
+    });
+    expect(calls[2]!.headers).toEqual({
+      authorization: 'Bearer credential-for-api_key_aimlapi',
+      'content-type': 'application/json',
+      'http-referer': 'https://sillytavern.app',
+      'x-title': 'SillyTavern',
+    });
+    expect(calls[3]!.headers).toEqual({
+      accept: 'application/json',
+      authorization: 'Bearer credential-for-api_key_ai21',
+      'content-type': 'application/json',
+    });
   });
 
   it('accepts YAML object and scalar custom exclusion variants', async () => {
@@ -204,9 +266,20 @@ describe('GenerationService provider adapters', () => {
 
     await service.generate({
       chat_completion_source: 'claude',
-      model: 'claude-browser',
+      model: 'claude-opus-4-6',
       messages,
       max_tokens: 100,
+      verbosity: 'high',
+      tools: [
+        {
+          type: 'function',
+          function: {
+            name: 'lookup',
+            description: 'Look up a value',
+            parameters: { type: 'object', properties: {} },
+          },
+        },
+      ],
     });
     await service.generate({
       chat_completion_source: 'makersuite',
@@ -222,7 +295,13 @@ describe('GenerationService provider adapters', () => {
     });
 
     expect(calls[0]!.url).toBe('https://api.anthropic.com/v1/messages');
-    expect(calls[0]!.headers.get('x-api-key')).toBe('credential-for-api_key_claude');
+    expect(Object.fromEntries(calls[0]!.headers.entries())).toEqual({
+      'anthropic-beta':
+        'output-128k-2025-02-19,context-1m-2025-08-07,tools-2024-05-16,effort-2025-11-24',
+      'anthropic-version': '2023-06-01',
+      'content-type': 'application/json',
+      'x-api-key': 'credential-for-api_key_claude',
+    });
     expect(calls[0]!.body).toMatchObject({ system: 'System', max_tokens: 100 });
     expect(calls[1]!.url).toContain(
       'generativelanguage.googleapis.com/v1beta/models/gemini-browser:generateContent',
@@ -293,6 +372,7 @@ describe('GenerationService provider adapters', () => {
 
     expect(calls[0]!.url).toBe('https://api.cohere.ai/v1/models');
     expect(calls[0]!.headers.get('Authorization')).toBe('Bearer credential-for-api_key_cohere');
+    expect(calls[0]!.headers.has('Content-Type')).toBe(false);
   });
 
   it('routes DeepSeek through reverse_proxy with proxy_password, matching upstream', async () => {

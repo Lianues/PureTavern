@@ -1,9 +1,7 @@
 import {
-  AssetLimitError,
   AssetValidationError,
   ImageProcessingUnsupportedError,
 } from '../application/asset-errors';
-import { ASSET_LIMITS } from '../application/asset-security';
 import type { ImageInfo } from '../domain/asset';
 import type {
   AvatarCrop,
@@ -14,6 +12,8 @@ import type {
 } from '../ports/image-processor';
 
 const PNG_SIGNATURE = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a] as const;
+export const AVATAR_WIDTH = 512;
+export const AVATAR_HEIGHT = 768;
 const JPEG_SOF_MARKERS = new Set([
   0xc0, 0xc1, 0xc2, 0xc3, 0xc5, 0xc6, 0xc7, 0xc9, 0xca, 0xcb, 0xcd, 0xce, 0xcf,
 ]);
@@ -39,10 +39,6 @@ export class BrowserImageProcessor implements ImageProcessor {
       encoded = match[2] ?? '';
     }
     encoded = encoded.replace(/\s/g, '');
-    const maxEncodedLength = Math.ceil((ASSET_LIMITS.maxFileBytes * 4) / 3) + 4;
-    if (encoded.length > maxEncodedLength) {
-      throw new AssetLimitError('Base64 asset data exceeds the decoded file size limit.');
-    }
     if (!encoded || encoded.length % 4 === 1 || !/^[a-z\d+/]*={0,2}$/i.test(encoded)) {
       throw new AssetValidationError('Asset data is not valid base64.');
     }
@@ -76,50 +72,46 @@ export class BrowserImageProcessor implements ImageProcessor {
     );
   }
 
-  async processAvatar(blob: Blob, crop?: AvatarCrop, size = 400): Promise<ProcessedImage> {
+  async processAvatar(blob: Blob, crop?: AvatarCrop): Promise<ProcessedImage> {
     const originalInfo = await this.inspect(blob);
-    if (!crop) return { blob, info: originalInfo, processed: false };
-    validateCrop(crop, originalInfo);
-    if (!Number.isInteger(size) || size < 16 || size > 4096) {
-      throw new AssetValidationError('Avatar output size must be an integer between 16 and 4096.');
-    }
+    if (crop) validateCrop(crop, originalInfo);
 
     const createBitmap = globalThis.createImageBitmap;
     if (typeof createBitmap !== 'function') {
       throw this.#unsupported(
-        'createImageBitmap is unavailable; the avatar was not cropped or resized.',
+        'createImageBitmap is unavailable; the avatar could not be processed as an upstream PNG.',
       );
     }
 
-    const outputWidth = crop.want_resize === false ? Math.max(1, Math.round(crop.width)) : size;
-    const outputHeight = crop.want_resize === false ? Math.max(1, Math.round(crop.height)) : size;
+    const source = crop
+      ? { x: crop.x, y: crop.y, width: crop.width, height: crop.height }
+      : { x: 0, y: 0, width: originalInfo.width, height: originalInfo.height };
+    const outputWidth = crop?.want_resize ? AVATAR_WIDTH : Math.max(1, Math.round(source.width));
+    const outputHeight = crop?.want_resize ? AVATAR_HEIGHT : Math.max(1, Math.round(source.height));
     let bitmap: ImageBitmap;
     try {
       bitmap = await createBitmap(blob);
     } catch (error) {
       throw this.#unsupported(
-        `The browser could not decode the avatar for cropping: ${error instanceof Error ? error.message : String(error)}`,
+        `The browser could not decode the avatar: ${error instanceof Error ? error.message : String(error)}`,
       );
     }
     try {
       const canvas = createCanvas(outputWidth, outputHeight);
       const context = canvas.context;
+      const coveredSource = coverSourceRect(source, outputWidth, outputHeight);
       context.drawImage(
         bitmap,
-        crop.x,
-        crop.y,
-        crop.width,
-        crop.height,
+        coveredSource.x,
+        coveredSource.y,
+        coveredSource.width,
+        coveredSource.height,
         0,
         0,
         outputWidth,
         outputHeight,
       );
-      const outputMimeType =
-        originalInfo.mimeType === 'image/jpeg' || originalInfo.mimeType === 'image/webp'
-          ? originalInfo.mimeType
-          : 'image/png';
-      const output = await canvas.toBlob(outputMimeType);
+      const output = await canvas.toBlob('image/png');
       const info = await this.inspect(output);
       return { blob: output, info, processed: true };
     } catch (error) {
@@ -244,6 +236,34 @@ function inspectWebp(bytes: Uint8Array): ImageInfo {
     height,
     isAnimated: animationFlag || containsAscii(bytes, 'ANIM') || containsAscii(bytes, 'ANMF'),
   };
+}
+
+export function coverSourceRect(
+  source: { x: number; y: number; width: number; height: number },
+  targetWidth: number,
+  targetHeight: number,
+): { x: number; y: number; width: number; height: number } {
+  const sourceAspectRatio = source.width / source.height;
+  const targetAspectRatio = targetWidth / targetHeight;
+  if (sourceAspectRatio > targetAspectRatio) {
+    const width = source.height * targetAspectRatio;
+    return {
+      x: source.x + (source.width - width) / 2,
+      y: source.y,
+      width,
+      height: source.height,
+    };
+  }
+  if (sourceAspectRatio < targetAspectRatio) {
+    const height = source.width / targetAspectRatio;
+    return {
+      x: source.x,
+      y: source.y + (source.height - height) / 2,
+      width: source.width,
+      height,
+    };
+  }
+  return { ...source };
 }
 
 function validateCrop(crop: AvatarCrop, image: ImageInfo): void {

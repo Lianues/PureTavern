@@ -9,7 +9,6 @@ import { PresetImportExportService } from '../application/preset-import-export-s
 import { PresetSeedService } from '../application/preset-seed-service';
 import { PresetService } from '../application/preset-service';
 import {
-  MAX_PRESET_BYTES,
   PresetConflictError,
   PresetValidationError,
 } from '../application/preset-validation';
@@ -121,7 +120,7 @@ describe('Preset repositories and service', () => {
     ]);
   });
 
-  it('rejects unsafe names, oversized/deep/non-JSON-safe documents and dangerous keys', async () => {
+  it('rejects unsafe names, deep/non-JSON-safe documents and dangerous keys', async () => {
     const service = new PresetService(new MemoryPresetRepository());
     const invalidNames = [
       '',
@@ -143,9 +142,6 @@ describe('Preset repositories and service', () => {
     await expect(service.save('kobold', 'Array root', [1, 2, 3])).rejects.toThrow(
       'must be a JSON object',
     );
-    await expect(
-      service.save('kobold', 'Oversized', { text: 'x'.repeat(MAX_PRESET_BYTES) }),
-    ).rejects.toThrow('size limit');
     await expect(
       service.save('kobold', 'Dangerous', JSON.parse('{"__proto__":{"x":1}}')),
     ).rejects.toThrow('dangerous key');

@@ -28,12 +28,6 @@ export class AssetConflictError extends AssetError {
   }
 }
 
-export class AssetLimitError extends AssetError {
-  constructor(message: string) {
-    super(message, 413, 'ASSET_LIMIT_EXCEEDED');
-  }
-}
-
 export class AssetFetchError extends AssetError {
   constructor(message: string) {
     super(message, 502, 'ASSET_FETCH_FAILED');

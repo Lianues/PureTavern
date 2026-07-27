@@ -1,10 +1,10 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { AppDatabase } from '@/platform/storage/app-database';
 import { AppStorage } from '@/platform/storage/app-storage';
 import { initializeStorage } from '@/platform/storage/initialize-storage';
 
-import { CharacterService } from '../application/character-service';
+import { CharacterService, type ProcessAvatarImage } from '../application/character-service';
 import { CharacterCardCodec } from '../application/character-card-codec';
 import { CharacterValidationError } from '../application/character-validation';
 import { formatCharacterData } from '../domain/character-card';
@@ -33,7 +33,10 @@ function blobFromBytes(bytes: Uint8Array, type = 'image/png'): Blob {
   return new Blob([buffer], { type });
 }
 
-async function createHarness(deleteOwnerChats: ((ownerId: string) => Promise<void>) | null = null) {
+async function createHarness(
+  deleteOwnerChats: ((ownerId: string) => Promise<void>) | null = null,
+  processAvatar?: ProcessAvatarImage,
+) {
   const database = new AppDatabase(`pure-tavern-character-test-${crypto.randomUUID()}`);
   databases.push(database);
   const storage = new AppStorage(database);
@@ -51,6 +54,7 @@ async function createHarness(deleteOwnerChats: ((ownerId: string) => Promise<voi
     Promise.resolve('skipped'),
     undefined,
     deleteOwnerChats,
+    processAvatar,
   );
   return { service, assets, repository, defaultAvatar };
 }
@@ -135,6 +139,56 @@ describe('CharacterService', () => {
     ]);
     await expect(assets.getAvatar('Bob.png')).resolves.not.toBeNull();
     await expect(assets.getAvatar('Alice_1.png')).resolves.toBeNull();
+  });
+
+  it('forwards upstream crop data and copies duplicate avatar bytes without reprocessing', async () => {
+    const crops: Parameters<ProcessAvatarImage>[1][] = [];
+    const processAvatar: ProcessAvatarImage = async (image, crop) => {
+      crops.push(crop);
+      return image;
+    };
+    const { service, assets, defaultAvatar } = await createHarness(null, processAvatar);
+    const createCrop = { x: 0, y: 0, width: 1, height: 1, want_resize: true };
+    await service.createCharacter({ ch_name: 'Alice' }, defaultAvatar, createCrop);
+    expect(crops).toEqual([createCrop]);
+
+    const getAvatar = vi.spyOn(assets, 'getAvatar');
+    const putAvatar = vi.spyOn(assets, 'putAvatar');
+    const duplicate = await service.duplicateCharacter('Alice.png');
+    const getResult = getAvatar.mock.results[0];
+    const putCall = putAvatar.mock.calls[0];
+    expect(getResult).toBeDefined();
+    expect(putCall).toBeDefined();
+    if (!getResult || !putCall) throw new Error('Duplicate did not copy its source avatar.');
+    const copiedSource = await getResult.value;
+    expect(crops).toEqual([createCrop]);
+    expect(putAvatar).toHaveBeenCalledOnce();
+    expect(putCall[0]).toBe(duplicate);
+    expect(putCall[1]).toBe(copiedSource?.data);
+
+    const editCrop = { x: 0, y: 0, width: 1, height: 1, want_resize: false };
+    await service.editAvatar('Alice.png', defaultAvatar, editCrop);
+    expect(crops.at(-1)).toEqual(editCrop);
+    await service.editCharacter(
+      { avatar_url: 'Alice.png', ch_name: 'Alice', first_mes: 'Updated' },
+      defaultAvatar,
+      createCrop,
+    );
+    expect(crops.at(-1)).toEqual(createCrop);
+  });
+
+  it('accepts avatars and imports whose reported sizes exceed former frontend quotas', async () => {
+    const { service, defaultAvatar } = await createHarness();
+    const largeAvatar = defaultAvatar.slice(0, defaultAvatar.size, 'image/png');
+    Object.defineProperty(largeAvatar, 'size', { value: 25 * 1024 * 1024 + 1 });
+    await expect(
+      service.createCharacter({ ch_name: 'Large Avatar' }, largeAvatar),
+    ).resolves.toBe('Large Avatar.png');
+
+    const card = formatCharacterData({ ch_name: 'Large Import', first_mes: 'Hello' }, 1);
+    const largeImport = new Blob([JSON.stringify(card)], { type: 'application/json' });
+    Object.defineProperty(largeImport, 'size', { value: 50 * 1024 * 1024 + 1 });
+    await expect(service.importCharacter(largeImport, 'json')).resolves.toBe('Large Import');
   });
 
   it('imports and exports JSON and PNG character cards', async () => {

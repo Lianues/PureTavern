@@ -3,7 +3,6 @@ import { describe, expect, it } from 'vitest';
 
 import { decodeArchive, encodeArchive } from '../application/archive-codec';
 import type { PortableArchiveEntry } from '../application/archive-participant-registry';
-import { DEFAULT_ARCHIVE_LIMITS } from '../domain/archive';
 
 const moduleSummary = {
   moduleId: 'settings',
@@ -33,7 +32,7 @@ function entry(): PortableArchiveEntry {
   };
 }
 
-async function encoded(limits = DEFAULT_ARCHIVE_LIMITS) {
+async function encoded() {
   return encodeArchive(
     {
       archiveId: 'archive-test',
@@ -44,7 +43,6 @@ async function encoded(limits = DEFAULT_ARCHIVE_LIMITS) {
       modules: [moduleSummary],
     },
     [entry()],
-    limits,
   );
 }
 
@@ -63,10 +61,14 @@ describe('PureTavern archive codec', () => {
     expect(new TextDecoder().decode(decoded.entries[0]?.data)).toBe('{"theme":"dark"}');
   });
 
-  it('refuses to encode a manifest that the importer would reject', async () => {
-    await expect(
-      encoded({ ...DEFAULT_ARCHIVE_LIMITS, maxManifestBytes: 256 }),
-    ).rejects.toMatchObject({ code: 'manifest-size' });
+  it('does not reject a valid archive because of a frontend-only declared size quota', async () => {
+    const output = await encoded();
+    Object.defineProperty(output.blob, 'size', { value: 65 * 1024 * 1024 * 1024 });
+
+    await expect(decodeArchive(output.blob)).resolves.toMatchObject({
+      manifest: { archiveId: 'archive-test' },
+      entries: expect.arrayContaining([expect.objectContaining({ descriptor: expect.any(Object) })]),
+    });
   });
 
   it('rejects hash tampering, zip-slip and undeclared payloads', async () => {

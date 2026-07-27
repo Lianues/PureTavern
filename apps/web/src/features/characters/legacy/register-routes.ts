@@ -1,5 +1,6 @@
 import type { CompatibilityRouter } from '@/platform/legacy/compatibility-router';
 import { jsonResponse, textResponse } from '@/platform/legacy/compatibility-router';
+import { parseAvatarCrop } from '@/platform/legacy/parse-avatar-crop';
 
 import {
   CharacterNotFoundError,
@@ -28,10 +29,14 @@ export function registerCharactersLegacyRoutes(
     jsonResponse(await characters.listChats()),
   );
 
-  router.register('POST', '/api/characters/create', async (request) => {
+  router.register('POST', '/api/characters/create', async (request, url) => {
     try {
       const { fields, file } = await readLegacyBodyWithOptionalFile(request);
-      const avatar = await characters.createCharacter(fields, file);
+      const avatar = await characters.createCharacter(
+        fields,
+        file,
+        parseAvatarCrop(url.searchParams.get('crop')),
+      );
       return textResponse(avatar, 200);
     } catch (error) {
       return characterErrorResponse(error, 400);
@@ -48,20 +53,24 @@ export function registerCharactersLegacyRoutes(
     }
   });
 
-  router.register('POST', '/api/characters/edit', async (request) => {
+  router.register('POST', '/api/characters/edit', async (request, url) => {
     try {
       const { fields, file } = await readLegacyBodyWithOptionalFile(request);
-      await characters.editCharacter(fields, file);
+      await characters.editCharacter(fields, file, parseAvatarCrop(url.searchParams.get('crop')));
       return textResponse('OK', 200);
     } catch (error) {
       return characterErrorResponse(error, 400);
     }
   });
 
-  router.register('POST', '/api/characters/edit-avatar', async (request) => {
+  router.register('POST', '/api/characters/edit-avatar', async (request, url) => {
     try {
       const { fields, file } = await readLegacyBodyWithOptionalFile(request);
-      await characters.editAvatar(fields.avatar_url, file);
+      await characters.editAvatar(
+        fields.avatar_url,
+        file,
+        parseAvatarCrop(url.searchParams.get('crop')),
+      );
       return textResponse('OK', 200);
     } catch (error) {
       return characterErrorResponse(error, 400);
