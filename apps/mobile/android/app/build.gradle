@@ -1,7 +1,7 @@
 apply plugin: 'com.android.application'
 
-def pureTavernVersionCode = (System.getenv('PURE_TAVERN_VERSION_CODE') ?: '1004').toInteger()
-def pureTavernVersionName = System.getenv('PURE_TAVERN_VERSION_NAME') ?: '0.1.3'
+def pureTavernVersionCode = (System.getenv('PURE_TAVERN_VERSION_CODE') ?: '1005').toInteger()
+def pureTavernVersionName = System.getenv('PURE_TAVERN_VERSION_NAME') ?: '0.1.4'
 def pureTavernKeystorePath = (System.getenv('PURE_TAVERN_KEYSTORE_PATH') ?: '').trim()
 def pureTavernReleaseSigned = !pureTavernKeystorePath.isEmpty()
 
