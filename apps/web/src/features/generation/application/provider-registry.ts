@@ -31,7 +31,7 @@ const descriptors: readonly ProviderDescriptor[] = [
     true,
   ),
   descriptor('custom', 'openai-compatible', 'api_key_custom', '', false, true),
-  descriptor('cohere', 'cohere', 'api_key_cohere', 'https://api.cohere.ai', true),
+  descriptor('cohere', 'cohere', 'api_key_cohere', 'https://api.cohere.ai'),
   descriptor('perplexity', 'openai-compatible', 'api_key_perplexity', 'https://api.perplexity.ai'),
   descriptor('groq', 'openai-compatible', 'api_key_groq', 'https://api.groq.com/openai/v1'),
   descriptor(

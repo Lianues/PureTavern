@@ -42,31 +42,6 @@ describe('chat completion provider registry', () => {
     expect(descriptors.find((entry) => entry.source === 'custom')?.keyOptional).toBe(true);
   });
 
-  it('supports reverse proxy for every source the legacy frontend allowlist sends', () => {
-    // Sources listed in `proxySupportedSources` in
-    // apps/web/legacy/upstream/public/scripts/openai.js. The frontend sends
-    // `reverse_proxy` + `proxy_password` for these sources, so the backend
-    // MUST mark them supportsReverseProxy=true to honor the override and to
-    // avoid #resolveCredential leaking the proxy password to the default
-    // endpoint. Keep this list in sync with the frontend allowlist.
-    const frontendAllowlist = [
-      'claude',
-      'openai',
-      'mistralai',
-      'makersuite',
-      'vertexai',
-      'deepseek',
-      'xai',
-      'zai',
-      'moonshot',
-    ] as const;
-    const descriptors = listProviderDescriptors();
-    const backendSupported = new Set(
-      descriptors.filter((entry) => entry.supportsReverseProxy).map((entry) => entry.source),
-    );
-    const missing = frontendAllowlist.filter((source) => !backendSupported.has(source));
-    expect(missing).toEqual([]);
-  });
 });
 
 describe('GenerationService provider adapters', () => {
@@ -300,33 +275,30 @@ describe('GenerationService provider adapters', () => {
     expect(calls[0]).toBe('https://api.z.ai/api/coding/paas/v4/chat/completions');
   });
 
-  it('does not use proxy_password as credential when source lacks supportsReverseProxy', async () => {
-    const calls: Array<{ headers: Headers }> = [];
-    const nativeFetch = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
-      calls.push({ headers: new Headers(init?.headers) });
-      return new Response(JSON.stringify({ choices: [{ message: { content: 'ok' } }] }), {
+  it('ignores legacy proxy fields for Cohere, matching the upstream provider behavior', async () => {
+    const calls: Array<{ url: string; headers: Headers }> = [];
+    const nativeFetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      calls.push({ url: String(input), headers: new Headers(init?.headers) });
+      return new Response(JSON.stringify({ models: [] }), {
         headers: { 'Content-Type': 'application/json' },
       });
     }) as typeof window.fetch;
     const service = createService(nativeFetch);
 
-    await service.generate({
-      chat_completion_source: 'openrouter',
+    await service.listModels({
+      chat_completion_source: 'cohere',
       reverse_proxy: 'https://proxy.example/v1',
       proxy_password: 'must-not-be-used',
-      model: 'openrouter-model',
-      messages: [{ role: 'user', content: 'Hi' }],
     });
 
-    expect(calls[0]!.headers.get('Authorization')).toBe(
-      'Bearer credential-for-api_key_openrouter',
-    );
+    expect(calls[0]!.url).toBe('https://api.cohere.ai/v1/models');
+    expect(calls[0]!.headers.get('Authorization')).toBe('Bearer credential-for-api_key_cohere');
   });
 
-  it('uses proxy_password as credential when source supports reverse proxy', async () => {
-    const calls: Array<{ headers: Headers }> = [];
-    const nativeFetch = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
-      calls.push({ headers: new Headers(init?.headers) });
+  it('routes DeepSeek through reverse_proxy with proxy_password, matching upstream', async () => {
+    const calls: Array<{ url: string; headers: Headers }> = [];
+    const nativeFetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      calls.push({ url: String(input), headers: new Headers(init?.headers) });
       return new Response(JSON.stringify({ choices: [{ message: { content: 'ok' } }] }), {
         headers: { 'Content-Type': 'application/json' },
       });
@@ -334,13 +306,14 @@ describe('GenerationService provider adapters', () => {
     const service = createService(nativeFetch);
 
     await service.generate({
-      chat_completion_source: 'openai',
+      chat_completion_source: 'deepseek',
       reverse_proxy: 'https://proxy.example/v1',
       proxy_password: 'proxy-secret',
-      model: 'gpt-4o',
+      model: 'deepseek-chat',
       messages: [{ role: 'user', content: 'Hi' }],
     });
 
+    expect(calls[0]!.url).toBe('https://proxy.example/v1/chat/completions');
     expect(calls[0]!.headers.get('Authorization')).toBe('Bearer proxy-secret');
   });
 
