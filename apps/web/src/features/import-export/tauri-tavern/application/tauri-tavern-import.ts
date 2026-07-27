@@ -39,12 +39,30 @@ export interface CharacterCardReader {
   readCardFromPng(bytes: Uint8Array): Record<string, unknown>;
 }
 
+export interface TauriTavernImportState {
+  characterIds: Map<string, string>;
+  characterNames: Map<string, string>;
+  imageMetadata: Map<string, Record<string, unknown>>;
+  targets: Set<string>;
+}
+
+export function createTauriTavernImportState(): TauriTavernImportState {
+  return {
+    characterIds: new Map(),
+    characterNames: new Map(),
+    imageMetadata: new Map(),
+    targets: new Set(),
+  };
+}
+
 export interface TauriTavernImportOptions {
   identity?: MigrationIdentityLookup;
   cardReader?: CharacterCardReader | null;
   /** 由 extensions 特性提供；缺席时第三方扩展会被跳过并给出警告。 */
   extensionMigration?: ExtensionMigrationCapability | null;
   now?: string;
+  /** 流式导入跨文件复用的轻量身份/元数据状态；不保存文件正文。 */
+  state?: TauriTavernImportState;
 }
 
 export interface TauriTavernImportResult {
@@ -124,18 +142,23 @@ class ImportContext {
   readonly extensionMigration: ExtensionMigrationCapability | null;
   readonly now: string;
   /** 本次包里角色头像文件名 -> 将要写入的角色 id，供聊天和表情复用。 */
-  readonly characterIds = new Map<string, string>();
-  readonly characterNames = new Map<string, string>();
+  readonly characterIds: Map<string, string>;
+  readonly characterNames: Map<string, string>;
   /** image-metadata.json 里的「相对路径 -> 元数据」，由 importAssets 挂到资源记录上。 */
-  readonly imageMetadata = new Map<string, Record<string, unknown>>();
+  readonly imageMetadata: Map<string, Record<string, unknown>>;
   readonly #reports = new Map<string, TauriTavernModuleReport>();
-  readonly #targets = new Set<string>();
+  readonly #targets: Set<string>;
 
   constructor(options: TauriTavernImportOptions) {
     this.identity = options.identity ?? EMPTY_MIGRATION_IDENTITY;
     this.cardReader = options.cardReader ?? null;
     this.extensionMigration = options.extensionMigration ?? null;
     this.now = options.now ?? new Date().toISOString();
+    const state = options.state ?? createTauriTavernImportState();
+    this.characterIds = state.characterIds;
+    this.characterNames = state.characterNames;
+    this.imageMetadata = state.imageMetadata;
+    this.#targets = state.targets;
   }
 
   report(moduleId: string): TauriTavernModuleReport {

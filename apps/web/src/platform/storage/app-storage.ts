@@ -100,6 +100,28 @@ export class ModuleRecordStore {
     }));
   }
 
+  async *iterateAll<T = unknown>(batchSize = 50): AsyncGenerator<ModuleRecordSnapshot<T>[]> {
+    const lower = `${this.#moduleId}${KEY_SEPARATOR}`;
+    const upper = `${this.#moduleId}${KEY_SEPARATOR}\uffff`;
+    let after: string | null = null;
+    for (;;) {
+      const page: import('./app-database').StoredModuleRecord[] = await this.#database.records
+        .where(':id')
+        .between(after ?? lower, upper, after === null, true)
+        .limit(batchSize)
+        .toArray();
+      if (page.length === 0) return;
+      yield page.map((record) => ({
+        collection: record.collection,
+        id: record.id,
+        value: cloneJsonValue(record.value) as T,
+        updatedAt: record.updatedAt,
+      }));
+      after = page.at(-1)?.key ?? null;
+      if (page.length < batchSize) return;
+    }
+  }
+
   async clearAll(): Promise<void> {
     const keys = await this.#database.records
       .filter((record) => record.module === this.#moduleId)
@@ -162,6 +184,29 @@ export class ModuleBlobStore {
       metadata: cloneJsonValue(record.metadata),
       updatedAt: record.updatedAt,
     }));
+  }
+
+  async *iterateAll(batchSize = 25): AsyncGenerator<ModuleBlobSnapshot[]> {
+    const lower = `${this.#moduleId}${KEY_SEPARATOR}`;
+    const upper = `${this.#moduleId}${KEY_SEPARATOR}\uffff`;
+    let after: string | null = null;
+    for (;;) {
+      const page: import('./app-database').StoredModuleBlob[] = await this.#database.blobs
+        .where(':id')
+        .between(after ?? lower, upper, after === null, true)
+        .limit(batchSize)
+        .toArray();
+      if (page.length === 0) return;
+      yield page.map((record) => ({
+        collection: record.collection,
+        id: record.id,
+        data: record.data,
+        metadata: cloneJsonValue(record.metadata),
+        updatedAt: record.updatedAt,
+      }));
+      after = page.at(-1)?.key ?? null;
+      if (page.length < batchSize) return;
+    }
   }
 
   async clearAll(): Promise<void> {

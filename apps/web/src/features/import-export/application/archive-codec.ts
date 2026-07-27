@@ -45,7 +45,7 @@ export async function encodeArchive(
     });
   }
   entries.sort((left, right) => left.descriptor.path.localeCompare(right.descriptor.path, 'en'));
-  assertUniqueEntries(entries.map((entry) => entry.descriptor));
+  assertUniqueArchiveEntries(entries.map((entry) => entry.descriptor));
 
   const manifest: PureTavernArchiveManifest = {
     format: PURE_TAVERN_ARCHIVE_FORMAT,
@@ -98,8 +98,8 @@ export async function decodeArchive(archive: Blob): Promise<DecodedArchive> {
   } catch (error) {
     fail('invalid-manifest', `Archive manifest is not valid JSON: ${errorMessage(error)}`);
   }
-  const manifest = validateManifest(parsed);
-  assertUniqueEntries(manifest.files);
+  const manifest = validateArchiveManifest(parsed);
+  assertUniqueArchiveEntries(manifest.files);
 
   const expectedPaths = new Set([
     ARCHIVE_MANIFEST_PATH,
@@ -137,7 +137,7 @@ export async function sha256Hex(data: Uint8Array): Promise<string> {
   return [...new Uint8Array(digest)].map((value) => value.toString(16).padStart(2, '0')).join('');
 }
 
-function validateManifest(value: unknown): PureTavernArchiveManifest {
+export function validateArchiveManifest(value: unknown): PureTavernArchiveManifest {
   if (!isRecord(value)) fail('invalid-manifest', 'Archive manifest must be an object.');
   assertNoUnsafeKeys(value);
   if (value.format !== PURE_TAVERN_ARCHIVE_FORMAT) {
@@ -204,7 +204,7 @@ function validateFile(value: unknown): asserts value is PureTavernArchiveFile {
   }
 }
 
-function assertUniqueEntries(files: readonly PureTavernArchiveFile[]): void {
+export function assertUniqueArchiveEntries(files: readonly PureTavernArchiveFile[]): void {
   const paths = new Set<string>();
   const targets = new Set<string>();
   for (const file of files) {

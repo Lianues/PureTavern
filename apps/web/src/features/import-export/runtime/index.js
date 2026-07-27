@@ -1,4 +1,4 @@
-/* global fetch, document, console, URL, setTimeout, location, FormData */
+/* global fetch, document, console, URL, setTimeout, location, FormData, AbortController */
 
 const API = '/api/backups/archive';
 const TT_API = '/api/backups/tauritavern';
@@ -8,6 +8,8 @@ const state = {
   preview: null,
   ttFile: null,
   ttPreview: null,
+  importAbort: null,
+  ttImportAbort: null,
 };
 const IMPORT_STRATEGIES = Object.freeze([
   { value: 'merge', label: '合并并覆盖冲突' },
@@ -47,6 +49,35 @@ function formatBytes(value) {
     index += 1;
   }
   return `${amount.toFixed(amount >= 10 ? 1 : 2)} ${units[index]}`;
+}
+
+function streamingUiOptions(controller, target, label) {
+  return {
+    signal: controller?.signal,
+    onProgress(progress) {
+      const path = progress.path ? `\n${progress.path}` : '';
+      const total = Number(progress.total) || 0;
+      const percent = total ? ` ${Math.min(100, (progress.loaded / total) * 100).toFixed(1)}%` : '';
+      target.textContent = `${label}中${percent}${path}`;
+    },
+  };
+}
+
+function formatExactImportPreview(preview, strategy, format) {
+  return [
+    `${format} 精确预览`,
+    `导入模式：${strategyLabel(strategy)}`,
+    completeLocalReplacementWarning(strategy),
+    `所选内容：${formatBytes(preview.totalBytes)}`,
+    ...(preview.modules ?? [])
+      .filter((module) => module.selected)
+      .map(
+        (module) =>
+          `${module.displayName}: ${module.incomingRecords} records · ${module.incomingBlobs} blobs · ${module.conflicts} conflicts`,
+      ),
+  ]
+    .filter(Boolean)
+    .join('\n');
 }
 
 function selectedModules() {
@@ -175,7 +206,9 @@ function chooseImportModules(preview, options = {}) {
       if (module.available === false) heading.append('（不可用）');
       const meta = document.createElement('span');
       meta.className = 'ptdm-module-meta';
-      meta.textContent = `${module.incomingRecords} records · ${module.incomingBlobs} blobs · ${module.conflicts} conflicts`;
+      meta.textContent = module.inspectionOnly
+        ? `${module.files} files · ${formatBytes(module.totalBytes)} · 选择后校验内容与冲突`
+        : `${module.incomingRecords} records · ${module.incomingBlobs} blobs · ${module.conflicts} conflicts`;
       row.append(heading, meta);
       list.appendChild(row);
       return { input, module };
@@ -564,38 +597,50 @@ async function downloadBackupAsTauriTavern(id) {
 }
 
 async function previewTauriTavernImport(file) {
-  // 与原生归档同理：预览失败必须回到「未选择」，否则确认按钮会指向一个没通过校验的包。
+  // 选择文件阶段只扫描 ZIP 目录，不解压正文；真正的内容/冲突预览在用户选定模块后进行。
+  state.ttImportAbort?.abort();
+  const abort = new AbortController();
+  state.ttImportAbort = abort;
   state.ttFile = null;
   state.ttPreview = null;
   document.querySelector('#ptdm-tt-import-confirm').disabled = true;
-  document.querySelector('#ptdm-tt-preview').classList.add('ptdm-hidden');
+  const target = document.querySelector('#ptdm-tt-preview');
+  target.classList.remove('ptdm-hidden');
+  target.textContent = '正在扫描 TauriTavern ZIP 目录（不会解压文件正文）…';
 
   const strategy = selectedStrategy('#ptdm-tt-strategy');
-  const form = new FormData();
-  form.set('file', file);
-  // 预览先包含敏感模块，随后由模块选择对话框让用户逐项决定是否导入。
-  form.set('includeSecrets', 'true');
-  form.set('strategy', strategy);
-  const response = await fetch(`${TT_API}/import/preview`, { method: 'POST', body: form });
-  const payload = await response.json();
-  if (!response.ok) throw new Error(payload.error || `Preview failed: HTTP ${response.status}`);
+  const bridge = globalThis.__PURE_TAVERN_DATA_STREAMING__;
+  let payload;
+  if (bridge?.inspectTauriTavern) {
+    payload = await bridge.inspectTauriTavern(file, streamingUiOptions(abort, target, '扫描'));
+  } else {
+    const form = new FormData();
+    form.set('file', file);
+    form.set('includeSecrets', 'true');
+    form.set('strategy', strategy);
+    const response = await fetch(`${TT_API}/import/preview`, { method: 'POST', body: form });
+    payload = await response.json();
+    if (!response.ok) throw new Error(payload.error || `Preview failed: HTTP ${response.status}`);
+  }
 
   state.ttPreview = payload;
   state.ttFile = file;
-  const target = document.querySelector('#ptdm-tt-preview');
-  target.classList.remove('ptdm-hidden');
   target.textContent = [
     `TauriTavern 数据包：${payload.migration.files} 个文件`,
     `导入模式：${strategyLabel(strategy)}`,
     completeLocalReplacementWarning(strategy),
-    `将写入 ${payload.modules.length} 个模块 · ${formatBytes(payload.totalBytes)}`,
-    ...payload.modules.map(
-      (module) =>
-        `${module.selected ? '✓' : '–'} ${module.displayName}: ${module.incomingRecords} records, ${module.incomingBlobs} blobs, ${module.conflicts} conflicts${module.warnings.length ? ` (${module.warnings.join('; ')})` : ''}`,
+    `发现 ${payload.modules.length} 个可导入模块 · ${formatBytes(payload.totalBytes)}`,
+    bridge ? '当前仅扫描目录；选择模块后才会流式解压并校验内容。' : '',
+    ...payload.modules.map((module) =>
+      module.inspectionOnly
+        ? `${module.selected ? '✓' : '–'} ${module.displayName}: ${module.files} files · ${formatBytes(module.totalBytes)}`
+        : `${module.selected ? '✓' : '–'} ${module.displayName}: ${module.incomingRecords} records, ${module.incomingBlobs} blobs, ${module.conflicts} conflicts${module.warnings.length ? ` (${module.warnings.join('; ')})` : ''}`,
     ),
     '',
     summarizeMigration(payload.migration),
-  ].join('\n');
+  ]
+    .filter(Boolean)
+    .join('\n');
   document.querySelector('#ptdm-tt-import-confirm').disabled = false;
 }
 
@@ -607,28 +652,69 @@ async function importTauriTavern() {
     strategy,
   });
   if (!selection) return;
-  const replaceLocal = isCompleteLocalReplacement(strategy);
-  const warning = completeLocalReplacementWarning(strategy);
-  if (
-    !(await confirmAction(
-      `${warning ? `${warning}\n\n` : ''}已选择 ${selection.moduleIds.length} 个模块。导入模式：${strategyLabel(strategy)}。将把 TauriTavern 数据写入当前浏览器数据库，导入前会自动创建完整恢复点。确定继续吗？`,
-      replaceLocal ? { confirmLabel: '清空并导入', danger: true } : {},
-    ))
-  ) {
-    return;
+  const bridge = globalThis.__PURE_TAVERN_DATA_STREAMING__;
+  const options = {
+    moduleIds: selection.moduleIds,
+    includeSecrets: selection.includeSecrets,
+    strategy,
+    createRecoveryPoint: true,
+  };
+  const target = document.querySelector('#ptdm-tt-preview');
+  const button = document.querySelector('#ptdm-tt-import-confirm');
+  button.disabled = true;
+  try {
+    let exactPreview = state.ttPreview;
+    if (bridge?.previewTauriTavern) {
+      target.textContent = '正在流式校验所选模块并分析冲突…';
+      exactPreview = await bridge.previewTauriTavern(
+        state.ttFile,
+        options,
+        streamingUiOptions(state.ttImportAbort, target, '预览'),
+      );
+      state.ttPreview = exactPreview;
+      target.textContent = formatExactImportPreview(exactPreview, strategy, 'TauriTavern');
+    }
+
+    const replaceLocal = isCompleteLocalReplacement(strategy);
+    const warning = completeLocalReplacementWarning(strategy);
+    const conflicts = (exactPreview?.modules ?? []).reduce(
+      (total, module) => total + (module.conflicts || 0),
+      0,
+    );
+    if (
+      !(await confirmAction(
+        `${warning ? `${warning}\n\n` : ''}已选择 ${selection.moduleIds.length} 个模块，检测到 ${conflicts} 个冲突。导入模式：${strategyLabel(strategy)}。将流式写入当前浏览器数据库，导入前会自动创建恢复点。确定继续吗？`,
+        replaceLocal ? { confirmLabel: '清空并导入', danger: true } : {},
+      ))
+    ) {
+      return;
+    }
+
+    let payload;
+    if (bridge?.importTauriTavern) {
+      target.textContent = '正在流式导入所选 TauriTavern 模块…';
+      payload = await bridge.importTauriTavern(
+        state.ttFile,
+        options,
+        streamingUiOptions(state.ttImportAbort, target, '导入'),
+      );
+    } else {
+      const form = new FormData();
+      form.set('file', state.ttFile);
+      form.set('modules', JSON.stringify(selection.moduleIds));
+      form.set('includeSecrets', String(selection.includeSecrets));
+      form.set('strategy', strategy);
+      form.set('createRecoveryPoint', 'true');
+      const response = await fetch(`${TT_API}/import`, { method: 'POST', body: form });
+      payload = await response.json();
+      if (!response.ok) throw new Error(payload.error || `Import failed: HTTP ${response.status}`);
+    }
+    showReport(payload);
+    notify('success', 'TauriTavern 数据导入完成，页面即将刷新。');
+    setTimeout(() => location.reload(), 500);
+  } finally {
+    button.disabled = false;
   }
-  const form = new FormData();
-  form.set('file', state.ttFile);
-  form.set('modules', JSON.stringify(selection.moduleIds));
-  form.set('includeSecrets', String(selection.includeSecrets));
-  form.set('strategy', strategy);
-  form.set('createRecoveryPoint', 'true');
-  const response = await fetch(`${TT_API}/import`, { method: 'POST', body: form });
-  const payload = await response.json();
-  if (!response.ok) throw new Error(payload.error || `Import failed: HTTP ${response.status}`);
-  showReport(payload);
-  notify('success', 'TauriTavern 数据导入完成，页面即将刷新。');
-  setTimeout(() => location.reload(), 500);
 }
 
 async function createBackup() {
@@ -692,25 +778,31 @@ async function restoreBackup(id) {
 }
 
 async function previewImport(file) {
-  // 预览失败时必须保持“未选择”状态，否则确认按钮会停在上一次成功预览的启用状态，
-  // 却指向这个没通过校验的文件。
+  state.importAbort?.abort();
+  const abort = new AbortController();
+  state.importAbort = abort;
   state.selectedFile = null;
   state.preview = null;
   document.querySelector('#ptdm-import-confirm').disabled = true;
-  document.querySelector('#ptdm-preview').classList.add('ptdm-hidden');
-  const strategy = selectedStrategy('#ptdm-strategy');
-  const form = new FormData();
-  form.set('file', file);
-  // 与 TauriTavern 导入一致，先展示包内全部模块，再由用户逐项选择。
-  form.set('includeSecrets', 'true');
-  form.set('strategy', strategy);
-  const response = await fetch(`${API}/import/preview`, { method: 'POST', body: form });
-  const payload = await response.json();
-  if (!response.ok) throw new Error(payload.error || `Preview failed: HTTP ${response.status}`);
-  state.preview = payload;
-  state.selectedFile = file;
   const target = document.querySelector('#ptdm-preview');
   target.classList.remove('ptdm-hidden');
+  target.textContent = '正在读取 PureTavern manifest 与 ZIP 目录（不会解压模块正文）…';
+  const strategy = selectedStrategy('#ptdm-strategy');
+  const bridge = globalThis.__PURE_TAVERN_DATA_STREAMING__;
+  let payload;
+  if (bridge?.inspectArchive) {
+    payload = await bridge.inspectArchive(file, streamingUiOptions(abort, target, '扫描'));
+  } else {
+    const form = new FormData();
+    form.set('file', file);
+    form.set('includeSecrets', 'true');
+    form.set('strategy', strategy);
+    const response = await fetch(`${API}/import/preview`, { method: 'POST', body: form });
+    payload = await response.json();
+    if (!response.ok) throw new Error(payload.error || `Preview failed: HTTP ${response.status}`);
+  }
+  state.preview = payload;
+  state.selectedFile = file;
   target.textContent = [
     `Archive: ${payload.manifest.archiveId}`,
     `Created: ${payload.manifest.createdAt}`,
@@ -718,11 +810,14 @@ async function previewImport(file) {
     completeLocalReplacementWarning(strategy),
     `Modules: ${payload.modules.length}`,
     `Payload: ${formatBytes(payload.totalBytes)}`,
+    bridge ? '当前仅校验 manifest/目录；选择模块后才会逐文件校验 SHA-256 与冲突。' : '',
     ...payload.modules.map(
       (module) =>
-        `${module.selected ? '✓' : '–'} ${module.displayName}: ${module.incomingRecords} records, ${module.incomingBlobs} blobs, ${module.conflicts} conflicts${module.warnings.length ? ` (${module.warnings.join('; ')})` : ''}`,
+        `${module.selected ? '✓' : '–'} ${module.displayName}: ${module.incomingRecords} records, ${module.incomingBlobs} blobs${bridge ? '' : `, ${module.conflicts} conflicts`}${module.warnings.length ? ` (${module.warnings.join('; ')})` : ''}`,
     ),
-  ].join('\n');
+  ]
+    .filter(Boolean)
+    .join('\n');
   document.querySelector('#ptdm-import-confirm').disabled = false;
 }
 
@@ -734,27 +829,67 @@ async function importArchive() {
     strategy,
   });
   if (!selection) return;
-  const replaceLocal = isCompleteLocalReplacement(strategy);
-  const warning = completeLocalReplacementWarning(strategy);
-  if (
-    !(await confirmAction(
-      `${warning ? `${warning}\n\n` : ''}已选择 ${selection.moduleIds.length} 个模块。导入前会自动创建完整恢复点。确定继续吗？`,
-      replaceLocal ? { confirmLabel: '清空并导入', danger: true } : {},
-    ))
-  )
-    return;
-  const form = new FormData();
-  form.set('file', state.selectedFile);
-  form.set('modules', JSON.stringify(selection.moduleIds));
-  form.set('includeSecrets', String(selection.includeSecrets));
-  form.set('strategy', strategy);
-  form.set('createRecoveryPoint', 'true');
-  const response = await fetch(`${API}/import`, { method: 'POST', body: form });
-  const payload = await response.json();
-  if (!response.ok) throw new Error(payload.error || `Import failed: HTTP ${response.status}`);
-  showReport(payload);
-  notify('success', '数据导入完成，页面即将刷新。');
-  setTimeout(() => location.reload(), 500);
+  const bridge = globalThis.__PURE_TAVERN_DATA_STREAMING__;
+  const options = {
+    moduleIds: selection.moduleIds,
+    includeSecrets: selection.includeSecrets,
+    strategy,
+    createRecoveryPoint: true,
+  };
+  const target = document.querySelector('#ptdm-preview');
+  const button = document.querySelector('#ptdm-import-confirm');
+  button.disabled = true;
+  try {
+    let exactPreview = state.preview;
+    if (bridge?.previewArchive) {
+      target.textContent = '正在逐文件校验所选模块的 CRC、SHA-256 与冲突…';
+      exactPreview = await bridge.previewArchive(
+        state.selectedFile,
+        options,
+        streamingUiOptions(state.importAbort, target, '预览'),
+      );
+      state.preview = exactPreview;
+      target.textContent = formatExactImportPreview(exactPreview, strategy, 'PureTavern');
+    }
+    const replaceLocal = isCompleteLocalReplacement(strategy);
+    const warning = completeLocalReplacementWarning(strategy);
+    const conflicts = (exactPreview?.modules ?? []).reduce(
+      (total, module) => total + (module.conflicts || 0),
+      0,
+    );
+    if (
+      !(await confirmAction(
+        `${warning ? `${warning}\n\n` : ''}已选择 ${selection.moduleIds.length} 个模块，检测到 ${conflicts} 个冲突。导入前会自动创建恢复点，并逐文件写入。确定继续吗？`,
+        replaceLocal ? { confirmLabel: '清空并导入', danger: true } : {},
+      ))
+    )
+      return;
+
+    let payload;
+    if (bridge?.importArchive) {
+      target.textContent = '正在逐文件导入 PureTavern 数据…';
+      payload = await bridge.importArchive(
+        state.selectedFile,
+        options,
+        streamingUiOptions(state.importAbort, target, '导入'),
+      );
+    } else {
+      const form = new FormData();
+      form.set('file', state.selectedFile);
+      form.set('modules', JSON.stringify(selection.moduleIds));
+      form.set('includeSecrets', String(selection.includeSecrets));
+      form.set('strategy', strategy);
+      form.set('createRecoveryPoint', 'true');
+      const response = await fetch(`${API}/import`, { method: 'POST', body: form });
+      payload = await response.json();
+      if (!response.ok) throw new Error(payload.error || `Import failed: HTTP ${response.status}`);
+    }
+    showReport(payload);
+    notify('success', '数据导入完成，页面即将刷新。');
+    setTimeout(() => location.reload(), 500);
+  } finally {
+    button.disabled = false;
+  }
 }
 
 function showReport(report) {
@@ -816,7 +951,7 @@ function createUi() {
       <div id="ptdm-summary" class="ptdm-grid"></div>
       <progress id="ptdm-quota" class="ptdm-progress" max="100" value="0"></progress>
       <div id="ptdm-persistence" class="ptdm-muted ptdm-hidden"></div>
-      <section class="ptdm-section"><h3>模块</h3><div id="ptdm-modules"></div></section>
+      <section class="ptdm-section"><h3>本地模块（仅用于导出与创建恢复点）</h3><div id="ptdm-modules"></div></section>
       <section class="ptdm-section"><h3>手动导出</h3><div class="ptdm-toolbar"><button id="ptdm-export" class="menu_button">导出 ZIP</button><button id="ptdm-tt-export" class="menu_button">导出为 TauriTavern 格式</button><button id="ptdm-create-backup" class="menu_button">创建本地恢复点</button></div><div class="ptdm-muted">TauriTavern 格式即 SillyTavern 的 data/default-user 目录，可直接被 TauriTavern 的数据迁移扩展导入。</div></section>
       <section class="ptdm-section"><h3>导入与恢复</h3><div class="ptdm-toolbar"><input id="ptdm-import-file" class="ptdm-hidden" type="file" accept=".zip,application/zip,application/x-zip-compressed"><label for="ptdm-import-file" class="menu_button ptdm-file-picker">选择数据 ZIP</label><span id="ptdm-import-file-name" class="ptdm-muted" title="尚未选择文件">尚未选择文件</span><label class="ptdm-strategy-control" for="ptdm-strategy"><span>导入模式</span><select id="ptdm-strategy" aria-label="数据 ZIP 导入模式">${strategyOptions()}</select></label><button id="ptdm-import-confirm" class="menu_button" disabled>执行导入</button></div><pre id="ptdm-preview" class="ptdm-report ptdm-hidden"></pre>
         <div class="ptdm-toolbar ptdm-interop-row"><input id="ptdm-tt-import-file" class="ptdm-hidden" type="file" accept=".zip,application/zip,application/x-zip-compressed"><label for="ptdm-tt-import-file" class="menu_button ptdm-file-picker">导入 TauriTavern 数据</label><span id="ptdm-tt-import-file-name" class="ptdm-muted" title="尚未选择文件">尚未选择文件</span><label class="ptdm-strategy-control" for="ptdm-tt-strategy"><span>导入模式</span><select id="ptdm-tt-strategy" aria-label="TauriTavern 导入模式">${strategyOptions()}</select></label><button id="ptdm-tt-import-confirm" class="menu_button" disabled>执行 TauriTavern 导入</button></div><div class="ptdm-muted">接受 TauriTavern / SillyTavern 导出的数据包，可独立选择冲突处理模式；导入前会自动创建恢复点。</div><pre id="ptdm-tt-preview" class="ptdm-report ptdm-hidden"></pre>
@@ -834,6 +969,28 @@ function createUi() {
     }
   });
   dialog.querySelector('#ptdm-close').addEventListener('click', () => dialog.close());
+  dialog.addEventListener('close', () => {
+    state.importAbort?.abort();
+    state.ttImportAbort?.abort();
+    state.importAbort = null;
+    state.ttImportAbort = null;
+    state.selectedFile = null;
+    state.preview = null;
+    state.ttFile = null;
+    state.ttPreview = null;
+    for (const [inputSelector, nameSelector, buttonSelector] of [
+      ['#ptdm-import-file', '#ptdm-import-file-name', '#ptdm-import-confirm'],
+      ['#ptdm-tt-import-file', '#ptdm-tt-import-file-name', '#ptdm-tt-import-confirm'],
+    ]) {
+      dialog.querySelector(inputSelector).value = '';
+      const name = dialog.querySelector(nameSelector);
+      name.textContent = '尚未选择文件';
+      name.title = '尚未选择文件';
+      dialog.querySelector(buttonSelector).disabled = true;
+    }
+    dialog.querySelector('#ptdm-preview').classList.add('ptdm-hidden');
+    dialog.querySelector('#ptdm-tt-preview').classList.add('ptdm-hidden');
+  });
   dialog.querySelector('#ptdm-export').addEventListener('click', () => void exportArchive());
   dialog.querySelector('#ptdm-tt-export').addEventListener('click', () => void exportTauriTavern());
   dialog.querySelector('#ptdm-create-backup').addEventListener('click', () => void createBackup());

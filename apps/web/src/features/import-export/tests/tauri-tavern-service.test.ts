@@ -272,6 +272,46 @@ describe('TauriTavernMigrationService', () => {
     expect(sessions.map((session) => session.id)).toEqual(['local-session-id']);
   });
 
+  it('inspects cheaply and streams only selected TauriTavern modules', async () => {
+    const source = await createHarness();
+    await seed(source);
+    const exported = await source.migration.exportPackage({ includeSecrets: true });
+
+    const target = await createHarness();
+    const inspection = await target.migration.inspectPackageStreaming(exported.blob);
+    expect(inspection.modules.map((module) => module.moduleId)).toEqual(
+      expect.arrayContaining(['characters', 'chats', 'settings', 'secrets']),
+    );
+    expect(inspection.modules.every((module) => module.inspectionOnly)).toBe(true);
+
+    const preview = await target.migration.previewPackageStreaming(exported.blob, {
+      moduleIds: ['settings'],
+      includeSecrets: false,
+      createRecoveryPoint: false,
+    });
+    expect(preview.modules.find((module) => module.moduleId === 'settings')).toMatchObject({
+      selected: true,
+      incomingRecords: 1,
+      incomingBlobs: 0,
+    });
+    expect(preview.modules.find((module) => module.moduleId === 'characters')).toMatchObject({
+      selected: false,
+      incomingRecords: 0,
+      incomingBlobs: 0,
+    });
+
+    const report = await target.migration.importPackageStreaming(exported.blob, {
+      moduleIds: ['settings'],
+      includeSecrets: false,
+      createRecoveryPoint: false,
+    });
+    expect(report.modules.map((module) => module.moduleId)).toEqual(['settings']);
+    await expect(
+      target.storage.records.forModule('settings').get('documents', 'current'),
+    ).resolves.toMatchObject({ value: { theme: 'dark' } });
+    expect(await target.storage.records.forModule('characters').list('cards')).toEqual([]);
+  });
+
   it('converts a stored local recovery point into a TauriTavern package', async () => {
     const harness = await createHarness();
     await seed(harness);

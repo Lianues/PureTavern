@@ -160,6 +160,8 @@ beforeEach(async () => {
   document.body.replaceChildren();
   delete (globalThis as { __PURE_TAVERN_DATA_MANAGEMENT__?: unknown })
     .__PURE_TAVERN_DATA_MANAGEMENT__;
+  delete (globalThis as { __PURE_TAVERN_DATA_STREAMING__?: unknown })
+    .__PURE_TAVERN_DATA_STREAMING__;
 
   vi.stubGlobal(
     'fetch',
@@ -308,6 +310,47 @@ describe('PureTavern data management panel', () => {
     expect(query('#ptdm-tt-preview').textContent).toContain('导入模式：合并并覆盖冲突');
     // 原生归档的确认按钮不能被这次预览连带打开。
     expect(query<HTMLButtonElement>('#ptdm-import-confirm').disabled).toBe(true);
+  });
+
+  it('uses the direct streaming bridge instead of multipart for a TauriTavern file', async () => {
+    buttonLabelled('打开数据管理').click();
+    await settle();
+    requests.length = 0;
+    const inspectTauriTavern = vi.fn(async () => ({
+      modules: [
+        {
+          moduleId: 'settings',
+          displayName: 'Settings',
+          available: true,
+          selected: true,
+          sensitive: false,
+          incomingRecords: 0,
+          incomingBlobs: 0,
+          conflicts: 0,
+          warnings: [],
+          files: 1,
+          totalBytes: 12,
+          inspectionOnly: true,
+        },
+      ],
+      totalBytes: 12,
+      migration: { files: 1, modules: [{ moduleId: 'settings', files: 1 }], warnings: [] },
+    }));
+    (globalThis as { __PURE_TAVERN_DATA_STREAMING__?: unknown }).__PURE_TAVERN_DATA_STREAMING__ = {
+      inspectTauriTavern,
+    };
+
+    const input = query<HTMLInputElement>('#ptdm-tt-import-file');
+    const file = new File([new Uint8Array([1, 2, 3])], 'large-tauritavern-data.zip', {
+      type: 'application/zip',
+    });
+    Object.defineProperty(input, 'files', { value: [file], configurable: true });
+    input.dispatchEvent(new Event('change'));
+    await settle();
+
+    expect(inspectTauriTavern).toHaveBeenCalledWith(file, expect.any(Object));
+    expect(requests).toEqual([]);
+    expect(query('#ptdm-tt-preview').textContent).toContain('当前仅扫描目录');
   });
 
   it('chooses TauriTavern modules independently before a complete local replacement', async () => {

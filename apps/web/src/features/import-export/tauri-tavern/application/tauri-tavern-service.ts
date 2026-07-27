@@ -1,10 +1,7 @@
-import {
-  PURE_TAVERN_ARCHIVE_FORMAT,
-  PURE_TAVERN_ARCHIVE_SCHEMA_VERSION,
-  type ArchiveImportPreview,
-  type ArchiveImportReport,
-  type PureTavernArchiveManifest,
-  type PureTavernArchiveModule,
+import type {
+  ArchiveImportPreview,
+  ArchiveImportReport,
+  ArchiveModulePreview,
 } from '@pure-tavern/contracts';
 
 import type { ExtensionMigrationCapability } from '@/platform/features/standard-capabilities';
@@ -12,17 +9,46 @@ import { APP_VERSION } from '@/platform/runtime/app-version';
 
 import type { PortableArchiveEntry } from '../../application/archive-participant-registry';
 import type { ArchiveParticipantRegistry } from '../../application/archive-participant-registry';
-import { decodeArchive, type DecodedArchive } from '../../application/archive-codec';
+import type {
+  PortableEntryStreamModule,
+  PortableEntryStreamSource,
+} from '../../application/archive-service';
+import type { StreamingZipOptions } from '../../application/streaming-zip';
+import { decodeArchive } from '../../application/archive-codec';
 import type { ArchiveService } from '../../application/archive-service';
 import type { ArchiveExportOptions, ArchiveImportOptions } from '../../domain/archive';
-import type { MigrationIdentityLookup } from '../ports/migration-identity';
-import { packTauriTavernArchive, unpackTauriTavernArchive } from './tauri-tavern-archive';
-import { toTauriTavernFiles } from './tauri-tavern-export';
-import type { TauriTavernModuleReport } from './tauri-tavern-format';
 import {
+  TAURI_TAVERN_DIRECTORIES,
+  TAURI_TAVERN_EXTENSION_SOURCES_ROOT,
+  TAURI_TAVERN_IMAGE_METADATA_FILE,
+  TAURI_TAVERN_SECRETS_FILE,
+  TAURI_TAVERN_SETTINGS_FILE,
+  TAURI_TAVERN_STATS_FILE,
+  TAURI_TAVERN_THIRD_PARTY_ROOT,
+  deterministicId,
+  isDerivedPath,
+  readDirectory,
+  readUserPath,
+} from '../domain/data-tree';
+import type { MigrationIdentityLookup } from '../ports/migration-identity';
+import {
+  indexTauriTavernArchive,
+  packTauriTavernArchive,
+  readIndexedTauriTavernFile,
+  type IndexedTauriTavernArchive,
+  type IndexedTauriTavernFile,
+} from './tauri-tavern-archive';
+import { toTauriTavernFiles } from './tauri-tavern-export';
+import {
+  PRESET_TYPE_BY_DIRECTORY,
+  createModuleReport,
+  type TauriTavernFile,
+  type TauriTavernModuleReport,
+} from './tauri-tavern-format';
+import {
+  createTauriTavernImportState,
   fromTauriTavernFiles,
   type CharacterCardReader,
-  type TauriTavernImportResult,
 } from './tauri-tavern-import';
 
 export interface TauriTavernMigrationSummary {
@@ -42,6 +68,18 @@ export interface TauriTavernImportPreview extends ArchiveImportPreview {
 }
 
 export interface TauriTavernImportReport extends ArchiveImportReport {
+  migration: TauriTavernMigrationSummary;
+}
+
+export interface TauriTavernInspectionModule extends ArchiveModulePreview {
+  files: number;
+  totalBytes: number;
+  inspectionOnly: true;
+}
+
+export interface TauriTavernPackageInspection {
+  modules: TauriTavernInspectionModule[];
+  totalBytes: number;
   migration: TauriTavernMigrationSummary;
 }
 
@@ -101,22 +139,241 @@ export class TauriTavernMigrationService {
     return this.#pack(decoded.entries);
   }
 
-  async previewPackage(
+  previewPackage(
     archive: Blob,
     options: ArchiveImportOptions = {},
   ): Promise<TauriTavernImportPreview> {
-    const { decoded, migration } = await this.#decode(archive);
-    const preview = await this.#archive.previewDecodedArchive(decoded, options);
-    return { ...preview, warnings: [...preview.warnings, ...migration.warnings], migration };
+    return this.previewPackageStreaming(archive, options);
   }
 
-  async importPackage(
+  importPackage(
     archive: Blob,
     options: ArchiveImportOptions = {},
   ): Promise<TauriTavernImportReport> {
-    const { decoded, migration } = await this.#decode(archive);
-    const report = await this.#archive.importDecodedArchive(decoded, options);
-    return { ...report, warnings: [...report.warnings, ...migration.warnings], migration };
+    return this.importPackageStreaming(archive, options);
+  }
+
+  async inspectPackageStreaming(
+    archive: Blob,
+    stream: StreamingZipOptions = {},
+  ): Promise<TauriTavernPackageInspection> {
+    return this.#inspectIndex(await indexTauriTavernArchive(archive, stream));
+  }
+
+  async previewPackageStreaming(
+    archive: Blob,
+    options: ArchiveImportOptions = {},
+    stream: StreamingZipOptions = {},
+  ): Promise<TauriTavernImportPreview> {
+    const index = await indexTauriTavernArchive(archive, stream);
+    const inspection = this.#inspectIndex(index);
+    const selectedIds = options.moduleIds ?? inspection.modules.map((module) => module.moduleId);
+    const source = await this.#createStreamingSource(index, selectedIds, stream);
+    const preview = await this.#archive.previewEntryStream(source, options);
+    return {
+      ...preview,
+      warnings: [...preview.warnings, ...inspection.migration.warnings],
+      migration: inspection.migration,
+    };
+  }
+
+  async importPackageStreaming(
+    archive: Blob,
+    options: ArchiveImportOptions = {},
+    stream: StreamingZipOptions = {},
+  ): Promise<TauriTavernImportReport> {
+    const index = await indexTauriTavernArchive(archive, stream);
+    const inspection = this.#inspectIndex(index);
+    const selectedIds = options.moduleIds ?? inspection.modules.map((module) => module.moduleId);
+    const source = await this.#createStreamingSource(index, selectedIds, stream);
+    const report = await this.#archive.importEntryStream(source, options);
+    return {
+      ...report,
+      warnings: [...report.warnings, ...inspection.migration.warnings],
+      migration: inspection.migration,
+    };
+  }
+
+  #inspectIndex(index: IndexedTauriTavernArchive): TauriTavernPackageInspection {
+    const reports = new Map<string, TauriTavernModuleReport>();
+    const moduleStats = new Map<string, { files: number; totalBytes: number }>();
+    let totalBytes = 0;
+    for (const file of index.files) {
+      const classified = classifyTauriTavernPath(file.path);
+      const reportId = classified.primaryModule ?? (classified.derived ? 'derived' : 'unsupported');
+      const report = reports.get(reportId) ?? createModuleReport(reportId);
+      report.files += 1;
+      if (classified.derived || !classified.primaryModule) report.skipped += 1;
+      if (!classified.primaryModule && report.notes.length < 12) report.notes.push(file.path);
+      reports.set(reportId, report);
+      if (classified.modules.length === 0) continue;
+      totalBytes += file.entry.uncompressedSize;
+      for (const moduleId of classified.modules) {
+        const stat = moduleStats.get(moduleId) ?? { files: 0, totalBytes: 0 };
+        stat.files += 1;
+        stat.totalBytes += file.entry.uncompressedSize;
+        moduleStats.set(moduleId, stat);
+      }
+    }
+    const warnings: string[] = [];
+    const derived = reports.get('derived');
+    if (derived?.files) {
+      derived.notes.push(
+        'Thumbnails, automatic backups and vector caches are regenerated on demand and will not be imported.',
+      );
+    }
+    const unsupported = reports.get('unsupported');
+    if (unsupported?.files) {
+      warnings.push(
+        `${unsupported.files} file(s) have no PureTavern equivalent and will be skipped.`,
+      );
+    }
+    const modules: TauriTavernInspectionModule[] = [...moduleStats.entries()]
+      .map(([moduleId, stat]) => {
+        const participant = this.#participants.get(moduleId);
+        return {
+          moduleId,
+          displayName: participant?.displayName ?? moduleId,
+          dataVersion: participant?.dataVersion ?? 1,
+          available: Boolean(participant),
+          selected: Boolean(participant),
+          sensitive: participant?.sensitive ?? moduleId === 'secrets',
+          incomingRecords: 0,
+          incomingBlobs: 0,
+          conflicts: 0,
+          newItems: stat.files,
+          warnings: participant ? [] : ['This module is not installed and will be skipped.'],
+          files: stat.files,
+          totalBytes: stat.totalBytes,
+          inspectionOnly: true as const,
+        };
+      })
+      .sort((left, right) => left.moduleId.localeCompare(right.moduleId, 'en'));
+    return {
+      modules,
+      totalBytes,
+      migration: {
+        files: index.files.length,
+        modules: [...reports.values()].sort((left, right) =>
+          left.moduleId.localeCompare(right.moduleId, 'en'),
+        ),
+        warnings,
+      },
+    };
+  }
+
+  async #createStreamingSource(
+    index: IndexedTauriTavernArchive,
+    requestedModuleIds: readonly string[],
+    stream: StreamingZipOptions,
+  ): Promise<PortableEntryStreamSource> {
+    const inspection = this.#inspectIndex(index);
+    const selectedIds = new Set(requestedModuleIds);
+    const modules: PortableEntryStreamModule[] = inspection.modules.map((module) => ({
+      moduleId: module.moduleId,
+      displayName: module.displayName,
+      dataVersion: module.dataVersion,
+      sensitive: module.sensitive,
+    }));
+    const createdAt = this.#clock().toISOString();
+    return {
+      archiveId: `tauri-tavern-${createdAt}`,
+      createdAt,
+      appVersion: this.#appVersion,
+      upstreamVersion: this.#upstreamVersion,
+      totalBytes: inspection.totalBytes,
+      modules,
+      open: () => this.#streamConvertedEntries(index, selectedIds, stream),
+    };
+  }
+
+  async *#streamConvertedEntries(
+    index: IndexedTauriTavernArchive,
+    selectedIds: ReadonlySet<string>,
+    stream: StreamingZipOptions,
+  ): AsyncGenerator<readonly PortableArchiveEntry[]> {
+    const identity = await this.#buildIdentity();
+    const state = createTauriTavernImportState();
+    const importOptions = {
+      identity,
+      state,
+      cardReader: this.#dependencies.cardReader(),
+      extensionMigration: this.#dependencies.extensionMigration(),
+      now: this.#clock().toISOString(),
+    };
+
+    // 表情即使不导入角色模块，也必须得到与角色卡相同的稳定 owner id；这一步只看文件名。
+    for (const file of index.files) {
+      const relativePath = readUserPath(file.path);
+      if (!relativePath) continue;
+      const character = readDirectory(relativePath, TAURI_TAVERN_DIRECTORIES.characters);
+      if (character === null || character.includes('/')) continue;
+      state.characterIds.set(
+        character,
+        identity.characterIdByAvatar(character) ?? (await deterministicId('character', character)),
+      );
+    }
+
+    const metadata = index.files.find((file) => {
+      const relative = readUserPath(file.path);
+      return relative === TAURI_TAVERN_IMAGE_METADATA_FILE;
+    });
+    if (metadata && selectedIds.has('assets')) {
+      const converted = await fromTauriTavernFiles(
+        [await readIndexedTauriTavernFile(index, metadata, stream)],
+        importOptions,
+      );
+      const entries = converted.entries.filter((entry) =>
+        selectedIds.has(entry.descriptor.moduleId),
+      );
+      if (entries.length) yield entries;
+    }
+
+    if (selectedIds.has('extensions') || selectedIds.has('assets')) {
+      const sources = index.files.filter((file) =>
+        file.path.startsWith(`${TAURI_TAVERN_EXTENSION_SOURCES_ROOT}/`),
+      );
+      const sourceFiles: TauriTavernFile[] = [];
+      for (const file of sources) {
+        sourceFiles.push(await readIndexedTauriTavernFile(index, file, stream));
+      }
+      const folders = groupExtensionFiles(index.files);
+      for (const files of folders.values()) {
+        const packageFiles: TauriTavernFile[] = [];
+        for (const file of files) {
+          packageFiles.push(await readIndexedTauriTavernFile(index, file, stream));
+        }
+        const converted = await fromTauriTavernFiles(
+          [...packageFiles, ...sourceFiles],
+          importOptions,
+        );
+        const entries = converted.entries.filter((entry) =>
+          selectedIds.has(entry.descriptor.moduleId),
+        );
+        if (entries.length) yield entries;
+      }
+    }
+
+    const regular = index.files
+      .filter((file) => {
+        if (file === metadata) return false;
+        if (file.path.startsWith(`${TAURI_TAVERN_THIRD_PARTY_ROOT}/`)) return false;
+        if (file.path.startsWith(`${TAURI_TAVERN_EXTENSION_SOURCES_ROOT}/`)) return false;
+        return classifyTauriTavernPath(file.path).modules.some((moduleId) =>
+          selectedIds.has(moduleId),
+        );
+      })
+      .sort((left, right) => streamingPriority(left.path) - streamingPriority(right.path));
+    for (const file of regular) {
+      const converted = await fromTauriTavernFiles(
+        [await readIndexedTauriTavernFile(index, file, stream)],
+        importOptions,
+      );
+      const entries = converted.entries.filter((entry) =>
+        selectedIds.has(entry.descriptor.moduleId),
+      );
+      if (entries.length) yield entries;
+    }
   }
 
   #pack(entries: readonly PortableArchiveEntry[]): TauriTavernPackage {
@@ -130,68 +387,6 @@ export class TauriTavernMigrationService {
         warnings: converted.warnings,
       },
     };
-  }
-
-  async #decode(
-    archive: Blob,
-  ): Promise<{ decoded: DecodedArchive; migration: TauriTavernMigrationSummary }> {
-    const files = await unpackTauriTavernArchive(archive);
-    const converted = await fromTauriTavernFiles(files, {
-      identity: await this.#buildIdentity(),
-      cardReader: this.#dependencies.cardReader(),
-      extensionMigration: this.#dependencies.extensionMigration(),
-      now: this.#clock().toISOString(),
-    });
-    return {
-      decoded: this.#toDecodedArchive(converted),
-      migration: {
-        files: files.length,
-        modules: converted.modules,
-        warnings: converted.warnings,
-      },
-    };
-  }
-
-  #toDecodedArchive(converted: TauriTavernImportResult): DecodedArchive {
-    const counters = new Map<string, { records: number; blobs: number; bytes: number }>();
-    let totalBytes = 0;
-    for (const entry of converted.entries) {
-      const counter = counters.get(entry.descriptor.moduleId) ?? { records: 0, blobs: 0, bytes: 0 };
-      if (entry.descriptor.kind === 'record') counter.records += 1;
-      else counter.blobs += 1;
-      counter.bytes += entry.data.byteLength;
-      totalBytes += entry.data.byteLength;
-      counters.set(entry.descriptor.moduleId, counter);
-    }
-
-    const modules: PureTavernArchiveModule[] = [...counters.entries()]
-      .map(([moduleId, counter]) => {
-        const participant = this.#participants.get(moduleId);
-        return {
-          moduleId,
-          displayName: participant?.displayName ?? moduleId,
-          dataVersion: participant?.dataVersion ?? 1,
-          sensitive: participant?.sensitive ?? false,
-          recordCount: counter.records,
-          blobCount: counter.blobs,
-          totalBytes: counter.bytes,
-        };
-      })
-      .sort((left, right) => left.moduleId.localeCompare(right.moduleId, 'en'));
-
-    const createdAt = this.#clock().toISOString();
-    const manifest: PureTavernArchiveManifest = {
-      format: PURE_TAVERN_ARCHIVE_FORMAT,
-      schemaVersion: PURE_TAVERN_ARCHIVE_SCHEMA_VERSION,
-      archiveId: `tauri-tavern-${createdAt}`,
-      createdAt,
-      appVersion: this.#appVersion,
-      upstreamVersion: this.#upstreamVersion,
-      includeSecrets: modules.some((module) => module.sensitive),
-      modules,
-      files: converted.entries.map((entry) => entry.descriptor),
-    };
-    return { manifest, entries: converted.entries, totalBytes };
   }
 
   /**
@@ -271,4 +466,98 @@ function migrationFileName(date: Date): string {
     pad(date.getSeconds()),
   ].join('');
   return `tauritavern-data-${stamp}.zip`;
+}
+
+interface ClassifiedTauriTavernPath {
+  modules: string[];
+  primaryModule: string | null;
+  derived: boolean;
+}
+
+function classifyTauriTavernPath(path: string): ClassifiedTauriTavernPath {
+  if (path.startsWith(`${TAURI_TAVERN_THIRD_PARTY_ROOT}/`)) {
+    return { modules: ['extensions', 'assets'], primaryModule: 'extensions', derived: false };
+  }
+  if (path.startsWith(`${TAURI_TAVERN_EXTENSION_SOURCES_ROOT}/`)) {
+    return { modules: ['extensions'], primaryModule: 'extensions', derived: false };
+  }
+  const relative = readUserPath(path);
+  if (!relative) return { modules: [], primaryModule: null, derived: false };
+  if (isDerivedPath(relative)) return { modules: [], primaryModule: null, derived: true };
+  if (relative === TAURI_TAVERN_SETTINGS_FILE) {
+    return { modules: ['settings'], primaryModule: 'settings', derived: false };
+  }
+  if (relative === TAURI_TAVERN_SECRETS_FILE) {
+    return { modules: ['secrets'], primaryModule: 'secrets', derived: false };
+  }
+  if (relative === TAURI_TAVERN_STATS_FILE) {
+    return { modules: ['stats'], primaryModule: 'stats', derived: false };
+  }
+  if (relative === TAURI_TAVERN_IMAGE_METADATA_FILE) {
+    return { modules: ['assets'], primaryModule: 'assets', derived: false };
+  }
+
+  const character = readDirectory(relative, TAURI_TAVERN_DIRECTORIES.characters);
+  if (character !== null) {
+    const moduleId = character.includes('/') ? 'assets' : 'characters';
+    return { modules: [moduleId], primaryModule: moduleId, derived: false };
+  }
+  if (readDirectory(relative, TAURI_TAVERN_DIRECTORIES.chats) !== null) {
+    return { modules: ['chats'], primaryModule: 'chats', derived: false };
+  }
+  if (readDirectory(relative, TAURI_TAVERN_DIRECTORIES.worlds) !== null) {
+    return { modules: ['world-books'], primaryModule: 'world-books', derived: false };
+  }
+  const directory = relative.slice(0, relative.lastIndexOf('/'));
+  if (PRESET_TYPE_BY_DIRECTORY[directory]) {
+    return { modules: ['presets'], primaryModule: 'presets', derived: false };
+  }
+  for (const assetDirectory of [
+    TAURI_TAVERN_DIRECTORIES.backgrounds,
+    TAURI_TAVERN_DIRECTORIES.userAvatars,
+    TAURI_TAVERN_DIRECTORIES.userImages,
+    TAURI_TAVERN_DIRECTORIES.userFiles,
+    TAURI_TAVERN_DIRECTORIES.assets,
+  ]) {
+    if (readDirectory(relative, assetDirectory) !== null) {
+      return { modules: ['assets'], primaryModule: 'assets', derived: false };
+    }
+  }
+  return { modules: [], primaryModule: null, derived: false };
+}
+
+function groupExtensionFiles(
+  files: readonly IndexedTauriTavernFile[],
+): Map<string, IndexedTauriTavernFile[]> {
+  const groups = new Map<string, IndexedTauriTavernFile[]>();
+  const prefix = `${TAURI_TAVERN_THIRD_PARTY_ROOT}/`;
+  for (const file of files) {
+    if (!file.path.startsWith(prefix)) continue;
+    const remainder = file.path.slice(prefix.length);
+    const separator = remainder.indexOf('/');
+    if (separator <= 0) continue;
+    const folder = remainder.slice(0, separator);
+    const group = groups.get(folder) ?? [];
+    group.push(file);
+    groups.set(folder, group);
+  }
+  return groups;
+}
+
+function streamingPriority(path: string): number {
+  const relative = readUserPath(path);
+  if (!relative) return 100;
+  if (readDirectory(relative, TAURI_TAVERN_DIRECTORIES.characters) !== null) return 10;
+  if (readDirectory(relative, TAURI_TAVERN_DIRECTORIES.chats) !== null) return 20;
+  if (readDirectory(relative, TAURI_TAVERN_DIRECTORIES.worlds) !== null) return 30;
+  const directory = relative.slice(0, relative.lastIndexOf('/'));
+  if (PRESET_TYPE_BY_DIRECTORY[directory]) return 40;
+  if (
+    relative === TAURI_TAVERN_SETTINGS_FILE ||
+    relative === TAURI_TAVERN_SECRETS_FILE ||
+    relative === TAURI_TAVERN_STATS_FILE
+  ) {
+    return 60;
+  }
+  return 50;
 }

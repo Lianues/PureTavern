@@ -33,7 +33,7 @@ export function registerImportExportLegacyRoutes(
   router.register('POST', '/api/backups/archive/import/preview', async (request) => {
     try {
       const { archive, options } = await readImportForm(request);
-      return jsonResponse(await service.previewArchive(archive, options));
+      return jsonResponse(await service.previewArchiveStreaming(archive, options));
     } catch (error) {
       return archiveErrorResponse(error);
     }
@@ -42,7 +42,7 @@ export function registerImportExportLegacyRoutes(
   router.register('POST', '/api/backups/archive/import', async (request) => {
     try {
       const { archive, options } = await readImportForm(request);
-      return jsonResponse(await service.importArchive(archive, options));
+      return jsonResponse(await service.importArchiveStreaming(archive, options));
     } catch (error) {
       return archiveErrorResponse(error);
     }
@@ -123,7 +123,7 @@ export function registerImportExportLegacyRoutes(
   router.register('POST', '/api/backups/tauritavern/import/preview', async (request) => {
     try {
       const { archive, options } = await readImportForm(request);
-      return jsonResponse(await tauriTavern.previewPackage(archive, options));
+      return jsonResponse(await tauriTavern.previewPackageStreaming(archive, options));
     } catch (error) {
       return archiveErrorResponse(error);
     }
@@ -132,7 +132,7 @@ export function registerImportExportLegacyRoutes(
   router.register('POST', '/api/backups/tauritavern/import', async (request) => {
     try {
       const { archive, options } = await readImportForm(request);
-      return jsonResponse(await tauriTavern.importPackage(archive, options));
+      return jsonResponse(await tauriTavern.importPackageStreaming(archive, options));
     } catch (error) {
       return archiveErrorResponse(error);
     }
@@ -150,8 +150,9 @@ async function archiveResponse(
   fileName: string,
   summary?: unknown,
 ): Promise<Response> {
-  const bytes = await archive.arrayBuffer();
-  return new Response(bytes, {
+  const body =
+    typeof archive.stream === 'function' ? archive.stream() : await archive.arrayBuffer();
+  return new Response(body, {
     status: 200,
     headers: {
       'Content-Type': 'application/zip',

@@ -20,6 +20,11 @@ export interface PortableArchiveEntry {
   data: Uint8Array;
 }
 
+export interface StreamingArchiveExportEntry {
+  descriptor: PureTavernArchiveFile;
+  data: Uint8Array | Blob;
+}
+
 export class ArchiveParticipantRegistry implements ArchiveParticipantRegistryCapability {
   readonly #participants = new Map<string, ScopedArchiveParticipant>();
 
@@ -143,6 +148,53 @@ export class ScopedArchiveParticipant {
     );
   }
 
+  async *streamExportEntries(): AsyncGenerator<StreamingArchiveExportEntry> {
+    const recordPages =
+      this.#registration.records.iterateAll?.() ??
+      singlePage(await this.#registration.records.listAll());
+    for await (const records of recordPages) {
+      for (const record of records) {
+        const data = textEncoder.encode(JSON.stringify(record.value));
+        yield {
+          descriptor: {
+            path: archivePath(this.moduleId, 'record', record.collection, record.id, 'json'),
+            moduleId: this.moduleId,
+            kind: 'record',
+            collection: record.collection,
+            id: record.id,
+            size: data.byteLength,
+            sha256: '',
+            updatedAt: record.updatedAt,
+            contentType: 'application/json',
+          },
+          data,
+        };
+      }
+    }
+    const blobPages =
+      this.#registration.blobs.iterateAll?.() ??
+      singlePage(await this.#registration.blobs.listAll());
+    for await (const blobs of blobPages) {
+      for (const blob of blobs) {
+        yield {
+          descriptor: {
+            path: archivePath(this.moduleId, 'blob', blob.collection, blob.id, 'bin'),
+            moduleId: this.moduleId,
+            kind: 'blob',
+            collection: blob.collection,
+            id: blob.id,
+            size: blob.data.size,
+            sha256: '',
+            updatedAt: blob.updatedAt,
+            contentType: blob.data.type || 'application/octet-stream',
+            metadata: blob.metadata,
+          },
+          data: blob.data,
+        };
+      }
+    }
+  }
+
   async preview(
     entries: readonly PortableArchiveEntry[],
     selected: boolean,
@@ -230,6 +282,10 @@ export class ScopedArchiveParticipant {
     }
     return result;
   }
+}
+
+async function* singlePage<T>(items: T[]): AsyncGenerator<T[]> {
+  if (items.length > 0) yield items;
 }
 
 function archivePath(

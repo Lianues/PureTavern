@@ -8,6 +8,14 @@ import {
   assertSafeMigrationPath,
   failTauriTavern,
 } from '../domain/data-tree';
+import {
+  readStreamingZipDirectory,
+  readZipEntryBytes,
+  StreamingZipError,
+  type StreamingZipDirectory,
+  type StreamingZipEntry,
+  type StreamingZipOptions,
+} from '../../application/streaming-zip';
 import type { TauriTavernFile } from './tauri-tavern-format';
 
 const DATA_USER_PREFIX = `${TAURI_TAVERN_DATA_ROOT}/${TAURI_TAVERN_USER_HANDLE}/`;
@@ -31,6 +39,70 @@ export function packTauriTavernArchive(files: readonly TauriTavernFile[]): Blob 
   const bytes = zipSync(zipped, { level: 6 });
   const copy = bytes.slice();
   return new Blob([copy.buffer], { type: 'application/zip' });
+}
+
+export interface IndexedTauriTavernFile {
+  path: string;
+  entry: StreamingZipEntry;
+}
+
+export interface IndexedTauriTavernArchive {
+  archive: Blob;
+  files: IndexedTauriTavernFile[];
+  sourceFileCount: number;
+}
+
+export async function indexTauriTavernArchive(
+  archive: Blob,
+  options: StreamingZipOptions = {},
+): Promise<IndexedTauriTavernArchive> {
+  if (archive.size <= 0) failTauriTavern('archive-size', 'Package must not be empty.');
+  let directory: StreamingZipDirectory;
+  try {
+    directory = await readStreamingZipDirectory(archive, options);
+  } catch (error) {
+    if (error instanceof StreamingZipError) failTauriTavern(error.code, error.message);
+    throw error;
+  }
+  const entries = directory.entries.filter((entry) => !entry.directory);
+  if (entries.length === 0) failTauriTavern('empty-package', 'Package does not contain any files.');
+
+  const paths = entries.map((entry) => normalizeSeparators(entry.path));
+  const rebase = createRebaser(paths);
+  const files: IndexedTauriTavernFile[] = [];
+  const seen = new Set<string>();
+  for (const entry of entries) {
+    const rebased = rebase(normalizeSeparators(entry.path));
+    if (!rebased) continue;
+    assertSafeMigrationPath(rebased);
+    const key = rebased.normalize('NFKC').toLowerCase();
+    if (seen.has(key)) {
+      failTauriTavern('duplicate-path', `Package contains the same path twice: ${rebased}`);
+    }
+    seen.add(key);
+    files.push({ path: rebased, entry });
+  }
+  if (files.length === 0) {
+    failTauriTavern(
+      'not-a-migration-package',
+      'This ZIP does not look like a TauriTavern data package. Expected a data/default-user/ folder.',
+    );
+  }
+  files.sort((left, right) => left.path.localeCompare(right.path, 'en'));
+  return { archive, files, sourceFileCount: entries.length };
+}
+
+export async function readIndexedTauriTavernFile(
+  index: IndexedTauriTavernArchive,
+  file: IndexedTauriTavernFile,
+  options: StreamingZipOptions = {},
+): Promise<TauriTavernFile> {
+  try {
+    return { path: file.path, data: await readZipEntryBytes(index.archive, file.entry, options) };
+  } catch (error) {
+    if (error instanceof StreamingZipError) failTauriTavern(error.code, error.message);
+    throw error;
+  }
 }
 
 export async function unpackTauriTavernArchive(archive: Blob): Promise<TauriTavernFile[]> {

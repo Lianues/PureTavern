@@ -14,6 +14,7 @@ import { ResilientBackupRepository } from './infrastructure/resilient-backup-rep
 import { registerImportExportLegacyRoutes } from './legacy/register-routes';
 import type { BackupRepository } from './ports/backup-repository';
 import type { BackupTransport } from './ports/backup-transport';
+import { installDataManagementRuntimeBridge } from './runtime-bridge';
 import { TauriTavernMigrationService } from './tauri-tavern/application/tauri-tavern-service';
 
 export interface DataManagementRuntimeCapability {
@@ -60,6 +61,7 @@ export function createImportExportFeature(options: ImportExportFeatureOptions = 
         tauriTavern,
       });
       registerImportExportLegacyRoutes(context.router, service, tauriTavern);
+      installDataManagementRuntimeBridge(service, tauriTavern);
 
       const participantDiagnostics = {
         get count() {

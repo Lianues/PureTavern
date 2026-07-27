@@ -71,9 +71,14 @@ app data, or uninstalling. Container detection is re-evaluated on every read bec
 bridge may not be injected yet during early startup.
 
 PureTavern does not impose a feature-specific byte, file-count or compression-ratio quota on archive
-import/export. Format, path and integrity validation still applies. The practical ceiling is browser
-memory: decoding reads the whole archive in and inflates it in memory, so a multi-gigabyte package
-may exhaust the tab.
+import/export. Format, path and integrity validation still applies. Both the native PureTavern format
+and TauriTavern migration packages are indexed through ZIP/ZIP64 central-directory slices and then
+processed one selected entry at a time. Unselected module payloads are never read; selected entries
+are CRC/SHA checked, previewed and written before the next file is inflated. Native exports and
+pre-import recovery points likewise use paged storage reads and a streaming ZIP writer. The practical
+memory ceiling is therefore the largest individual file being parsed (plus the manifest/directory and
+small identity indexes), rather than the compressed package or an entire module. A single enormous
+character PNG or JSON document can still exceed a constrained WebKit process limit.
 
 ## Storage
 

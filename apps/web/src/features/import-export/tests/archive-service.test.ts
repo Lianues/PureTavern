@@ -108,6 +108,45 @@ describe('ArchiveService', () => {
     expect(withSecrets.manifest.modules.map((module) => module.moduleId)).toContain('secrets');
   });
 
+  it('streams selected PureTavern modules without materializing the complete archive', async () => {
+    const { storage, service } = await createHarness();
+    await storage.records.forModule('settings').put('documents', 'current', { theme: 'dark' });
+    await storage.records
+      .forModule('characters')
+      .put('documents', 'alice', { name: 'Alice', avatar: 'Alice.png' });
+    const exported = await service.exportArchive();
+
+    const inspection = await service.inspectArchiveStreaming(exported.blob);
+    expect(inspection.modules.map((module) => module.moduleId)).toEqual(['characters', 'settings']);
+    const preview = await service.previewArchiveStreaming(exported.blob, {
+      moduleIds: ['settings'],
+      includeSecrets: false,
+      createRecoveryPoint: false,
+    });
+    expect(preview.modules.find((module) => module.moduleId === 'settings')).toMatchObject({
+      selected: true,
+      conflicts: 1,
+    });
+    expect(preview.modules.find((module) => module.moduleId === 'characters')).toMatchObject({
+      selected: false,
+      conflicts: 0,
+    });
+
+    await storage.records.forModule('settings').put('documents', 'current', { theme: 'changed' });
+    const report = await service.importArchiveStreaming(exported.blob, {
+      moduleIds: ['settings'],
+      strategy: 'replace-module',
+      createRecoveryPoint: false,
+    });
+    expect(report.modules.map((module) => module.moduleId)).toEqual(['settings']);
+    await expect(
+      storage.records.forModule('settings').get('documents', 'current'),
+    ).resolves.toMatchObject({ value: { theme: 'dark' } });
+    await expect(
+      storage.records.forModule('characters').get('documents', 'alice'),
+    ).resolves.toMatchObject({ value: { name: 'Alice', avatar: 'Alice.png' } });
+  });
+
   it('creates, downloads, restores, rotates and deletes local opaque backups through BackupTransport', async () => {
     const { storage, service, transport } = await createHarness();
     const settings = storage.records.forModule('settings');
