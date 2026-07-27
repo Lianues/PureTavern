@@ -159,14 +159,6 @@ export async function validateLegacyExtensionPackage(
     fail('manifest-size', `manifest.json exceeds the ${limits.maxManifestBytes} byte limit.`);
   }
   const manifest = await parseLegacyManifest(manifestFile.data, limits.maxPathLength);
-  const paths = new Set(files.map((file) => file.path));
-  for (const referencedPath of [manifest.js, manifest.css].filter(
-    (value): value is string => typeof value === 'string' && Boolean(value),
-  )) {
-    if (!paths.has(referencedPath)) {
-      fail('missing-entrypoint', `Manifest references a missing package file: ${referencedPath}`);
-    }
-  }
 
   const validatedFiles: ValidatedExtensionPackageFile[] = [];
   for (const file of files) {
@@ -256,8 +248,8 @@ async function parseLegacyManifest(
   const displayName = requiredString(value.display_name, 'display_name', 160);
   const version = optionalString(value.version, 'version', 80);
   const author = optionalString(value.author, 'author', 160);
-  const js = optionalPackagePath(value.js, 'js', maxPathLength);
-  const css = optionalPackagePath(value.css, 'css', maxPathLength);
+  const js = optionalManifestResource(value.js, 'js', maxPathLength);
+  const css = optionalManifestResource(value.css, 'css', maxPathLength);
   if (!js && !css) {
     fail('manifest-entrypoint', 'SillyTavern extension manifest must declare js and/or css.');
   }
@@ -269,16 +261,6 @@ async function parseLegacyManifest(
     ...(js ? { js } : {}),
     ...(css ? { css } : {}),
   };
-}
-
-function optionalPackagePath(
-  value: unknown,
-  field: string,
-  maxPathLength: number,
-): string | undefined {
-  if (value === undefined || value === null || value === '') return undefined;
-  if (typeof value !== 'string') fail('manifest-schema', `Manifest ${field} must be a string.`);
-  return validatePackagePath(value, maxPathLength);
 }
 
 function requiredString(value: unknown, field: string, maxLength: number): string {
@@ -297,6 +279,14 @@ function optionalString(value: unknown, field: string, maxLength: number): strin
     fail('manifest-schema', `Manifest ${field} must be a string up to ${maxLength} characters.`);
   }
   return value.trim();
+}
+
+function optionalManifestResource(value: unknown, field: string, maxLength: number): string {
+  if (value === undefined || value === null) return '';
+  if (typeof value !== 'string' || value.length > maxLength) {
+    fail('manifest-schema', `Manifest ${field} must be a string up to ${maxLength} characters.`);
+  }
+  return value;
 }
 
 function assertSafeZipEntry(info: UnzipFileInfo, maxPathLength: number): void {

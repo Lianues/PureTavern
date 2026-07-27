@@ -24,12 +24,25 @@ describe('Legacy extension package validation', () => {
     expect(result.files).toHaveLength(3);
   });
 
-  it('rejects missing entry files and unsafe duplicate paths', async () => {
-    const missing = makeLegacyPackage().filter((file) => file.path !== 'index.js');
-    await expect(validateLegacyExtensionPackage(missing)).rejects.toMatchObject({
-      code: 'missing-entrypoint',
-    });
+  it('passes manifest script and style references through without requiring package entries', async () => {
+    const manifest = {
+      display_name: 'BaiBai Book',
+      version: '1.1.6',
+      js: 'dist/index.js?ver=1.1.6',
+      css: 'dist/index.css#theme',
+    };
+    const result = await validateLegacyExtensionPackage([
+      {
+        path: 'manifest.json',
+        data: new Blob([JSON.stringify(manifest)], { type: 'application/json' }),
+      },
+    ]);
 
+    expect(result.manifest.js).toBe('dist/index.js?ver=1.1.6');
+    expect(result.manifest.css).toBe('dist/index.css#theme');
+  });
+
+  it('still rejects unsafe duplicate package paths', async () => {
     await expect(
       validateLegacyExtensionPackage([
         ...makeLegacyPackage(),
@@ -51,17 +64,17 @@ describe('Legacy extension package validation', () => {
     );
   });
 
-  it.each(['../evil.js', 'nested/../evil.js', 'nested\\evil.js', 'nested/%2e%2e/evil.js'])(
-    'rejects truly unsafe package path %s',
-    async (path) => {
-      await expect(
-        validateLegacyExtensionPackage([
-          ...makeLegacyPackage(),
-          { path, data: new Blob(['evil']) },
-        ]),
-      ).rejects.toMatchObject({ code: 'unsafe-path' });
-    },
-  );
+  it.each([
+    '../evil.js',
+    'nested/../evil.js',
+    'nested\\evil.js',
+    'nested/%2e%2e/evil.js',
+    'dist/index.js?ver=1.1.6',
+  ])('rejects truly unsafe package path %s', async (path) => {
+    await expect(
+      validateLegacyExtensionPackage([...makeLegacyPackage(), { path, data: new Blob(['evil']) }]),
+    ).rejects.toMatchObject({ code: 'unsafe-path' });
+  });
 
   it('strips one archive root and validates the extracted package', async () => {
     const zip = zipSync({

@@ -26,9 +26,9 @@ No CORS proxy or private-repository credential relay exists. A remote host that 
 
 ## Original package format
 
-Packages use SillyTavern's existing root `manifest.json`, including `display_name`, `version`, `author`, `js`, `css`, `i18n`, `requires`, `optional`, `dependencies`, `hooks`, and future opaque fields. M11 validates only structural and resource safety; all extension behavior remains owned by the upstream loader.
+Packages use SillyTavern's existing root `manifest.json`, including `display_name`, `version`, `author`, `js`, `css`, `i18n`, `requires`, `optional`, `dependencies`, `hooks`, and future opaque fields. The `js` and `css` values are passed through to the unchanged upstream loader, including cache-busting query strings and fragments; PureTavern does not require those references to match a package file during installation. All extension behavior remains owned by the upstream loader.
 
-Archives and remote file catalogs are bounded by compressed size, expanded size, per-file size, file count, path length, and compression ratio. Absolute paths, drive paths, backslashes, control characters, `.`/`..`, zip-slip, duplicate Unicode/case paths, missing manifest entries, and unsupported URLs are rejected.
+Archives and remote file catalogs are bounded by compressed size, expanded size, per-file size, file count, path length, and compression ratio. Absolute package paths, drive paths, backslashes, control characters, `.`/`..`, zip-slip, duplicate Unicode/case package paths, and unsupported source URLs are rejected.
 
 ## Lifecycle
 
