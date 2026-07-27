@@ -9,6 +9,12 @@ const state = {
   ttFile: null,
   ttPreview: null,
 };
+const IMPORT_STRATEGIES = Object.freeze([
+  { value: 'merge', label: '合并并覆盖冲突' },
+  { value: 'skip', label: '跳过冲突' },
+  { value: 'replace-module', label: '替换选中模块' },
+  { value: 'replace-all', label: '替换归档模块' },
+]);
 
 function headers() {
   return { 'Content-Type': 'application/json' };
@@ -46,6 +52,21 @@ function selectedModules() {
   return [...document.querySelectorAll('#ptdm-modules input[data-module]:checked')].map(
     (input) => input.dataset.module,
   );
+}
+
+function strategyOptions() {
+  return IMPORT_STRATEGIES.map(
+    (strategy) => `<option value="${strategy.value}">${strategy.label}</option>`,
+  ).join('');
+}
+
+function selectedStrategy(selector) {
+  const selected = document.querySelector(selector)?.value;
+  return IMPORT_STRATEGIES.some((strategy) => strategy.value === selected) ? selected : 'merge';
+}
+
+function strategyLabel(value) {
+  return IMPORT_STRATEGIES.find((strategy) => strategy.value === value)?.label ?? value;
 }
 
 // 敏感模块（Secrets / API key）自己就是那个开关：勾上它即代表同意导出明文。
@@ -441,10 +462,11 @@ async function previewTauriTavernImport(file) {
   document.querySelector('#ptdm-tt-import-confirm').disabled = true;
   document.querySelector('#ptdm-tt-preview').classList.add('ptdm-hidden');
 
+  const strategy = selectedStrategy('#ptdm-tt-strategy');
   const form = new FormData();
   form.set('file', file);
   form.set('includeSecrets', String(includeSecrets()));
-  form.set('strategy', document.querySelector('#ptdm-strategy').value);
+  form.set('strategy', strategy);
   const response = await fetch(`${TT_API}/import/preview`, { method: 'POST', body: form });
   const payload = await response.json();
   if (!response.ok) throw new Error(payload.error || `Preview failed: HTTP ${response.status}`);
@@ -455,6 +477,7 @@ async function previewTauriTavernImport(file) {
   target.classList.remove('ptdm-hidden');
   target.textContent = [
     `TauriTavern 数据包：${payload.migration.files} 个文件`,
+    `导入模式：${strategyLabel(strategy)}`,
     `将写入 ${payload.modules.length} 个模块 · ${formatBytes(payload.totalBytes)}`,
     ...payload.modules.map(
       (module) =>
@@ -468,9 +491,10 @@ async function previewTauriTavernImport(file) {
 
 async function importTauriTavern() {
   if (!state.ttFile) return;
+  const strategy = selectedStrategy('#ptdm-tt-strategy');
   if (
     !(await confirmAction(
-      '将把 TauriTavern 数据写入当前浏览器数据库，导入前会自动创建恢复点。确定继续吗？',
+      `导入模式：${strategyLabel(strategy)}。将把 TauriTavern 数据写入当前浏览器数据库，导入前会自动创建恢复点。确定继续吗？`,
     ))
   ) {
     return;
@@ -478,7 +502,7 @@ async function importTauriTavern() {
   const form = new FormData();
   form.set('file', state.ttFile);
   form.set('includeSecrets', String(includeSecrets()));
-  form.set('strategy', document.querySelector('#ptdm-strategy').value);
+  form.set('strategy', strategy);
   form.set('createRecoveryPoint', 'true');
   const response = await fetch(`${TT_API}/import`, { method: 'POST', body: form });
   const payload = await response.json();
@@ -647,8 +671,8 @@ function createUi() {
       <div id="ptdm-persistence" class="ptdm-muted ptdm-hidden"></div>
       <section class="ptdm-section"><h3>模块</h3><div id="ptdm-modules"></div></section>
       <section class="ptdm-section"><h3>手动导出</h3><div class="ptdm-toolbar"><button id="ptdm-export" class="menu_button">导出 ZIP</button><button id="ptdm-tt-export" class="menu_button">导出为 TauriTavern 格式</button><button id="ptdm-create-backup" class="menu_button">创建本地恢复点</button></div><div class="ptdm-muted">TauriTavern 格式即 SillyTavern 的 data/default-user 目录，可直接被 TauriTavern 的数据迁移扩展导入。</div></section>
-      <section class="ptdm-section"><h3>导入与恢复</h3><div class="ptdm-toolbar"><input id="ptdm-import-file" class="ptdm-hidden" type="file" accept=".zip,application/zip,application/x-zip-compressed"><label for="ptdm-import-file" class="menu_button ptdm-file-picker">选择数据 ZIP</label><span id="ptdm-import-file-name" class="ptdm-muted" title="尚未选择文件">尚未选择文件</span><select id="ptdm-strategy"><option value="merge">合并并覆盖冲突</option><option value="skip">跳过冲突</option><option value="replace-module">替换选中模块</option><option value="replace-all">替换归档模块</option></select><button id="ptdm-import-confirm" class="menu_button" disabled>执行导入</button></div><pre id="ptdm-preview" class="ptdm-report ptdm-hidden"></pre>
-        <div class="ptdm-toolbar ptdm-interop-row"><input id="ptdm-tt-import-file" class="ptdm-hidden" type="file" accept=".zip,application/zip,application/x-zip-compressed"><label for="ptdm-tt-import-file" class="menu_button ptdm-file-picker">导入 TauriTavern 数据</label><span id="ptdm-tt-import-file-name" class="ptdm-muted" title="尚未选择文件">尚未选择文件</span><button id="ptdm-tt-import-confirm" class="menu_button" disabled>执行 TauriTavern 导入</button></div><div class="ptdm-muted">接受 TauriTavern / SillyTavern 导出的数据包，冲突策略与恢复点沿用上方设置。</div><pre id="ptdm-tt-preview" class="ptdm-report ptdm-hidden"></pre>
+      <section class="ptdm-section"><h3>导入与恢复</h3><div class="ptdm-toolbar"><input id="ptdm-import-file" class="ptdm-hidden" type="file" accept=".zip,application/zip,application/x-zip-compressed"><label for="ptdm-import-file" class="menu_button ptdm-file-picker">选择数据 ZIP</label><span id="ptdm-import-file-name" class="ptdm-muted" title="尚未选择文件">尚未选择文件</span><label class="ptdm-strategy-control" for="ptdm-strategy"><span>导入模式</span><select id="ptdm-strategy" aria-label="数据 ZIP 导入模式">${strategyOptions()}</select></label><button id="ptdm-import-confirm" class="menu_button" disabled>执行导入</button></div><pre id="ptdm-preview" class="ptdm-report ptdm-hidden"></pre>
+        <div class="ptdm-toolbar ptdm-interop-row"><input id="ptdm-tt-import-file" class="ptdm-hidden" type="file" accept=".zip,application/zip,application/x-zip-compressed"><label for="ptdm-tt-import-file" class="menu_button ptdm-file-picker">导入 TauriTavern 数据</label><span id="ptdm-tt-import-file-name" class="ptdm-muted" title="尚未选择文件">尚未选择文件</span><label class="ptdm-strategy-control" for="ptdm-tt-strategy"><span>导入模式</span><select id="ptdm-tt-strategy" aria-label="TauriTavern 导入模式">${strategyOptions()}</select></label><button id="ptdm-tt-import-confirm" class="menu_button" disabled>执行 TauriTavern 导入</button></div><div class="ptdm-muted">接受 TauriTavern / SillyTavern 导出的数据包，可独立选择冲突处理模式；导入前会自动创建恢复点。</div><pre id="ptdm-tt-preview" class="ptdm-report ptdm-hidden"></pre>
         <pre id="ptdm-report" class="ptdm-report ptdm-hidden"></pre></section>
       <section class="ptdm-section"><h3>本地恢复点</h3><div id="ptdm-backups"></div></section>
     </div>`;
@@ -675,6 +699,11 @@ function createUi() {
   );
   bindConfirm(dialog, '#ptdm-import-confirm', importArchive);
   bindConfirm(dialog, '#ptdm-tt-import-confirm', importTauriTavern);
+  dialog.querySelector('#ptdm-tt-strategy').addEventListener('change', () => {
+    const file = state.ttFile;
+    if (!file) return;
+    void previewTauriTavernImport(file).catch((error) => notify('error', error.message));
+  });
   globalThis.__PURE_TAVERN_DATA_MANAGEMENT__ = {
     installed: true,
     open: () => entry.querySelector('button').click(),

@@ -64,6 +64,13 @@ const PREVIEW = {
 function respond(url: string): Response {
   if (url.endsWith('/archive/inspect')) return jsonResponse(INSPECTION);
   if (url.endsWith('/tauritavern/import/preview')) return jsonResponse(PREVIEW);
+  if (url.endsWith('/tauritavern/import')) {
+    return jsonResponse({
+      strategy: 'replace-module',
+      recoveryBackupId: 'recovery-1',
+      modules: [],
+    });
+  }
   if (url.includes('/tauritavern/')) return zipResponse();
   return jsonResponse({ ok: true });
 }
@@ -153,6 +160,14 @@ describe('PureTavern data management panel', () => {
     expect(query('#ptdm-tt-export').textContent).toBe('导出为 TauriTavern 格式');
     expect(query('label[for="ptdm-tt-import-file"]').textContent).toBe('导入 TauriTavern 数据');
     expect(query<HTMLButtonElement>('#ptdm-tt-import-confirm').disabled).toBe(true);
+    const strategy = query<HTMLSelectElement>('#ptdm-tt-strategy');
+    expect(strategy.value).toBe('merge');
+    expect([...strategy.options].map((option) => option.value)).toEqual([
+      'merge',
+      'skip',
+      'replace-module',
+      'replace-all',
+    ]);
     // 恢复点每一行都要有自己的 TauriTavern 导出入口。
     expect(query('#ptdm-backups').textContent).toContain('下载为 TauriTavern 格式');
   });
@@ -249,10 +264,54 @@ describe('PureTavern data management panel', () => {
     await settle();
 
     expect(requests[0]?.url).toBe('/api/backups/tauritavern/import/preview');
+    expect((requests[0]?.body as FormData).get('strategy')).toBe('merge');
     expect(query('#ptdm-tt-import-file-name').textContent).toBe('tauritavern-data.zip');
     expect(query<HTMLButtonElement>('#ptdm-tt-import-confirm').disabled).toBe(false);
     expect(query('#ptdm-tt-preview').textContent).toContain('TauriTavern 数据包：1 个文件');
+    expect(query('#ptdm-tt-preview').textContent).toContain('导入模式：合并并覆盖冲突');
     // 原生归档的确认按钮不能被这次预览连带打开。
     expect(query<HTMLButtonElement>('#ptdm-import-confirm').disabled).toBe(true);
+  });
+
+  it('uses the independently selected TauriTavern mode for preview and import', async () => {
+    vi.useFakeTimers();
+    try {
+      buttonLabelled('打开数据管理').click();
+      await settle();
+      requests.length = 0;
+
+      const strategy = query<HTMLSelectElement>('#ptdm-tt-strategy');
+      strategy.value = 'skip';
+      const input = query<HTMLInputElement>('#ptdm-tt-import-file');
+      const file = new File([new Uint8Array([1, 2, 3])], 'tauritavern-data.zip', {
+        type: 'application/zip',
+      });
+      Object.defineProperty(input, 'files', { value: [file], configurable: true });
+      input.dispatchEvent(new Event('change'));
+      await settle();
+
+      expect((requests[0]?.body as FormData).get('strategy')).toBe('skip');
+      expect(query('#ptdm-tt-preview').textContent).toContain('导入模式：跳过冲突');
+
+      strategy.value = 'replace-module';
+      strategy.dispatchEvent(new Event('change'));
+      await settle();
+      expect(requests[1]?.url).toBe('/api/backups/tauritavern/import/preview');
+      expect((requests[1]?.body as FormData).get('strategy')).toBe('replace-module');
+      expect(query('#ptdm-tt-preview').textContent).toContain('导入模式：替换选中模块');
+
+      query<HTMLButtonElement>('#ptdm-tt-import-confirm').click();
+      await settle();
+      expect(query('.ptdm-confirm-dialog').textContent).toContain('导入模式：替换选中模块');
+      query<HTMLButtonElement>('.ptdm-confirm-dialog [data-action="confirm"]').click();
+      await settle();
+
+      expect(requests[2]?.url).toBe('/api/backups/tauritavern/import');
+      expect((requests[2]?.body as FormData).get('strategy')).toBe('replace-module');
+      expect((requests[2]?.body as FormData).get('createRecoveryPoint')).toBe('true');
+    } finally {
+      vi.clearAllTimers();
+      vi.useRealTimers();
+    }
   });
 });

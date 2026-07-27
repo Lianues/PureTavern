@@ -45,6 +45,17 @@
   flex-wrap: wrap;
 }
 
+.ptdm-strategy-control {
+  display: inline-flex;
+  gap: 0.4rem;
+  align-items: center;
+  white-space: nowrap;
+}
+
+.ptdm-strategy-control select {
+  min-width: 11rem;
+}
+
 .ptdm-header,
 .ptdm-toolbar,
 .ptdm-section,

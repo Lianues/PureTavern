@@ -64,11 +64,12 @@ async function postForm(
   router: CompatibilityRouter,
   pathname: string,
   archive: Blob,
+  strategy = 'merge',
 ): Promise<Response> {
   const form = {
     get(name: string) {
       if (name === 'file') return archive;
-      if (name === 'strategy') return 'merge';
+      if (name === 'strategy') return strategy;
       return null;
     },
   } as FormData;
@@ -153,5 +154,21 @@ describe('M21 routes and module', () => {
     );
     expect(response.status).toBe(400);
     await expect(response.json()).resolves.toMatchObject({ pureTavern: true });
+  });
+
+  it('rejects an invalid TauriTavern import mode before reading the package', async () => {
+    const { router } = await createHarness();
+    const response = await postForm(
+      router,
+      '/api/backups/tauritavern/import/preview',
+      new Blob(['not-a-zip']),
+      'unknown-mode',
+    );
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toMatchObject({
+      code: 'invalid-strategy',
+      pureTavern: true,
+    });
   });
 });
