@@ -151,4 +151,62 @@ describe('ArchiveService', () => {
       value: { stage: 'completed', archiveId: archive.manifest.archiveId },
     });
   });
+
+  it('fully replaces local modules and forces a complete recovery point including Secrets', async () => {
+    const { storage, service } = await createHarness();
+    const settings = storage.records.forModule('settings');
+    const characters = storage.records.forModule('characters');
+    const secrets = storage.records.forModule('secrets');
+
+    await settings.put('documents', 'current', { marker: 'from-archive' });
+    const archive = await service.exportArchive({ moduleIds: ['settings'] });
+    await settings.put('documents', 'current', { marker: 'local-before-replacement' });
+    await characters.put('documents', 'local-character', { name: 'Keep in recovery only' });
+    await secrets.put('store', 'current', { value: 'local-secret' });
+
+    const preview = await service.previewArchive(archive.blob, { strategy: 'replace-local' });
+    expect(preview.warnings.join('\n')).toContain('including Secrets');
+
+    await expect(
+      service.importArchive(archive.blob, {
+        strategy: 'replace-local',
+        moduleIds: [],
+      }),
+    ).rejects.toMatchObject({ code: 'no-modules-selected' });
+    expect(await service.listBackups()).toEqual([]);
+    await expect(characters.listAll()).resolves.toHaveLength(1);
+    await expect(secrets.listAll()).resolves.toHaveLength(1);
+
+    const report = await service.importArchive(archive.blob, {
+      strategy: 'replace-local',
+      // 完全替换模式必须忽略关闭恢复点的请求，防止包外模块被清空后无法找回。
+      createRecoveryPoint: false,
+    });
+    expect(report).toMatchObject({
+      strategy: 'replace-local',
+      recoveryBackupId: expect.any(String),
+    });
+    await expect(settings.get('documents', 'current')).resolves.toMatchObject({
+      value: { marker: 'from-archive' },
+    });
+    await expect(characters.listAll()).resolves.toEqual([]);
+    await expect(secrets.listAll()).resolves.toEqual([]);
+
+    const recovery = await service.downloadBackup(report.recoveryBackupId!);
+    expect(recovery).toBeInstanceOf(Blob);
+    const decodedRecovery = await decodeArchive(recovery!);
+    expect(decodedRecovery.manifest.includeSecrets).toBe(true);
+    expect(decodedRecovery.manifest.modules.map((module) => module.moduleId)).toEqual([
+      'characters',
+      'secrets',
+      'settings',
+    ]);
+    const recoveryText = decodedRecovery.entries
+      .filter((entry) => entry.descriptor.kind === 'record')
+      .map((entry) => new TextDecoder().decode(entry.data))
+      .join('\n');
+    expect(recoveryText).toContain('local-before-replacement');
+    expect(recoveryText).toContain('Keep in recovery only');
+    expect(recoveryText).toContain('local-secret');
+  });
 });

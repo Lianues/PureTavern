@@ -11,7 +11,7 @@ M21 provides a versioned, hashed ZIP archive over all registered browser data mo
 - `manifest.json` identifies schema/app/upstream versions, modules, sizes and SHA-256 for every payload.
 - Module records and blobs are exported under stable logical paths, not IndexedDB physical keys.
 - ZIP path traversal, unsafe paths, duplicate and Unicode/case-conflicting targets, manifest consistency and payload hashes are validated before import.
-- Import supports merge, skip, replace-module and replace-all.
+- Import supports merge, skip, replace-module, replace-all and a guarded replace-local mode that backs up every module (including Secrets) before clearing local data.
 - Dry-run preview reports new items, conflicts, unavailable modules, sensitive data and version differences.
 - A recovery archive is created before import/restore and an import journal records the active module/stage.
 

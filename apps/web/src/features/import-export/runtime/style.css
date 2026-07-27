@@ -15,7 +15,8 @@
 #pure-tavern-data-management-entry button,
 #pure-tavern-data-management-dialog button,
 #pure-tavern-data-management-dialog .ptdm-file-picker,
-.ptdm-confirm-dialog button {
+.ptdm-confirm-dialog button,
+.ptdm-module-dialog button {
   width: auto !important;
   min-width: max-content;
   flex: 0 0 auto;
@@ -140,8 +141,8 @@
   background: rgb(0 0 0 / 20%);
 }
 
-.ptdm-confirm-dialog {
-  width: min(440px, 90vw);
+.ptdm-confirm-dialog,
+.ptdm-module-dialog {
   color: var(--SmartThemeBodyColor);
   background: var(--SmartThemeBlurTintColor);
   border: 1px solid var(--SmartThemeBorderColor);
@@ -149,12 +150,64 @@
   padding: 0;
 }
 
-.ptdm-confirm-dialog::backdrop {
+.ptdm-confirm-dialog {
+  width: min(440px, 90vw);
+}
+
+.ptdm-module-dialog {
+  width: min(760px, 92vw);
+  max-height: 88vh;
+}
+
+.ptdm-confirm-dialog::backdrop,
+.ptdm-module-dialog::backdrop {
   background: rgb(0 0 0 / 70%);
 }
 
-.ptdm-confirm-body {
+.ptdm-confirm-body,
+.ptdm-module-dialog-body {
   padding: 1rem;
+}
+
+.ptdm-module-dialog-body {
+  overflow: auto;
+  max-height: calc(88vh - 2rem);
+}
+
+.ptdm-module-selection-warning {
+  margin-top: 0.75rem;
+  padding: 0.75rem;
+  border: 1px solid currentcolor;
+  border-radius: 6px;
+  white-space: pre-wrap;
+}
+
+.ptdm-module-selection-tools {
+  margin: 0.75rem 0;
+}
+
+.ptdm-module-selection-list {
+  border: 1px solid var(--SmartThemeBorderColor);
+  border-radius: 6px;
+}
+
+.ptdm-module-selection-row {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.65rem;
+  border-bottom: 1px solid color-mix(in srgb, var(--SmartThemeBorderColor) 50%, transparent);
+}
+
+.ptdm-module-selection-row:last-child {
+  border-bottom: 0;
+}
+
+.ptdm-module-selection-row > span:first-child {
+  display: inline-flex;
+  gap: 0.4rem;
+  align-items: center;
 }
 
 .ptdm-confirm-body h3 {

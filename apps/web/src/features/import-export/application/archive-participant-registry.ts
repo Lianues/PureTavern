@@ -170,15 +170,20 @@ export class ScopedArchiveParticipant {
     };
   }
 
+  async clearAllData(): Promise<void> {
+    await Promise.all([this.#registration.records.clearAll(), this.#registration.blobs.clearAll()]);
+  }
+
   async importEntries(
     entries: readonly PortableArchiveEntry[],
     strategy: ArchiveConflictStrategy,
   ): Promise<ArchiveModuleImportResult> {
-    if (strategy === 'replace-module' || strategy === 'replace-all') {
-      await Promise.all([
-        this.#registration.records.clearAll(),
-        this.#registration.blobs.clearAll(),
-      ]);
+    if (
+      strategy === 'replace-module' ||
+      strategy === 'replace-all' ||
+      strategy === 'replace-local'
+    ) {
+      await this.clearAllData();
     }
 
     const result: ArchiveModuleImportResult = {

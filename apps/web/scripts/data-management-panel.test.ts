@@ -49,11 +49,46 @@ const PREVIEW = {
     {
       moduleId: 'characters',
       displayName: 'Characters',
+      available: true,
       selected: true,
+      sensitive: false,
       incomingRecords: 1,
       incomingBlobs: 1,
       conflicts: 0,
       warnings: [],
+    },
+    {
+      moduleId: 'settings',
+      displayName: 'Settings',
+      available: true,
+      selected: true,
+      sensitive: false,
+      incomingRecords: 1,
+      incomingBlobs: 0,
+      conflicts: 1,
+      warnings: [],
+    },
+    {
+      moduleId: 'secrets',
+      displayName: 'Secrets (API key)',
+      available: true,
+      selected: true,
+      sensitive: true,
+      incomingRecords: 1,
+      incomingBlobs: 0,
+      conflicts: 1,
+      warnings: [],
+    },
+    {
+      moduleId: 'missing-module',
+      displayName: 'Missing Module',
+      available: false,
+      selected: false,
+      sensitive: false,
+      incomingRecords: 1,
+      incomingBlobs: 0,
+      conflicts: 0,
+      warnings: ['not installed'],
     },
   ],
   totalBytes: 42,
@@ -63,13 +98,13 @@ const PREVIEW = {
 
 function respond(url: string): Response {
   if (url.endsWith('/archive/inspect')) return jsonResponse(INSPECTION);
+  if (url.endsWith('/archive/import/preview')) return jsonResponse(PREVIEW);
+  if (url.endsWith('/archive/import')) {
+    return jsonResponse({ strategy: 'merge', recoveryBackupId: 'recovery-1', modules: [] });
+  }
   if (url.endsWith('/tauritavern/import/preview')) return jsonResponse(PREVIEW);
   if (url.endsWith('/tauritavern/import')) {
-    return jsonResponse({
-      strategy: 'replace-module',
-      recoveryBackupId: 'recovery-1',
-      modules: [],
-    });
+    return jsonResponse({ strategy: 'replace-local', recoveryBackupId: 'recovery-1', modules: [] });
   }
   if (url.includes('/tauritavern/')) return zipResponse();
   return jsonResponse({ ok: true });
@@ -167,6 +202,7 @@ describe('PureTavern data management panel', () => {
       'skip',
       'replace-module',
       'replace-all',
+      'replace-local',
     ]);
     // 恢复点每一行都要有自己的 TauriTavern 导出入口。
     expect(query('#ptdm-backups').textContent).toContain('下载为 TauriTavern 格式');
@@ -265,6 +301,7 @@ describe('PureTavern data management panel', () => {
 
     expect(requests[0]?.url).toBe('/api/backups/tauritavern/import/preview');
     expect((requests[0]?.body as FormData).get('strategy')).toBe('merge');
+    expect((requests[0]?.body as FormData).get('includeSecrets')).toBe('true');
     expect(query('#ptdm-tt-import-file-name').textContent).toBe('tauritavern-data.zip');
     expect(query<HTMLButtonElement>('#ptdm-tt-import-confirm').disabled).toBe(false);
     expect(query('#ptdm-tt-preview').textContent).toContain('TauriTavern 数据包：1 个文件');
@@ -273,7 +310,7 @@ describe('PureTavern data management panel', () => {
     expect(query<HTMLButtonElement>('#ptdm-import-confirm').disabled).toBe(true);
   });
 
-  it('uses the independently selected TauriTavern mode for preview and import', async () => {
+  it('chooses TauriTavern modules independently before a complete local replacement', async () => {
     vi.useFakeTimers();
     try {
       buttonLabelled('打开数据管理').click();
@@ -293,22 +330,108 @@ describe('PureTavern data management panel', () => {
       expect((requests[0]?.body as FormData).get('strategy')).toBe('skip');
       expect(query('#ptdm-tt-preview').textContent).toContain('导入模式：跳过冲突');
 
-      strategy.value = 'replace-module';
+      strategy.value = 'replace-local';
       strategy.dispatchEvent(new Event('change'));
       await settle();
       expect(requests[1]?.url).toBe('/api/backups/tauritavern/import/preview');
-      expect((requests[1]?.body as FormData).get('strategy')).toBe('replace-module');
-      expect(query('#ptdm-tt-preview').textContent).toContain('导入模式：替换选中模块');
+      expect((requests[1]?.body as FormData).get('strategy')).toBe('replace-local');
+      expect(query('#ptdm-tt-preview').textContent).toContain('完全替换本地');
+      expect(query('#ptdm-tt-preview').textContent).toContain('未勾选的 Secrets/API Key');
 
       query<HTMLButtonElement>('#ptdm-tt-import-confirm').click();
       await settle();
-      expect(query('.ptdm-confirm-dialog').textContent).toContain('导入模式：替换选中模块');
-      query<HTMLButtonElement>('.ptdm-confirm-dialog [data-action="confirm"]').click();
+      const moduleDialog = query('.ptdm-module-dialog');
+      expect(moduleDialog.textContent).toContain('选择要导入的 TauriTavern 模块');
+      expect(moduleDialog.textContent).toContain('未勾选的 Secrets/API Key');
+      const available = [
+        query<HTMLInputElement>('.ptdm-module-dialog input[value="characters"]'),
+        query<HTMLInputElement>('.ptdm-module-dialog input[value="settings"]'),
+        query<HTMLInputElement>('.ptdm-module-dialog input[value="secrets"]'),
+      ];
+      expect(available.every((checkbox) => checkbox.checked)).toBe(true);
+      expect(
+        query<HTMLInputElement>('.ptdm-module-dialog input[value="missing-module"]').disabled,
+      ).toBe(true);
+
+      query<HTMLButtonElement>('.ptdm-module-dialog [data-action="none"]').click();
+      expect(query<HTMLButtonElement>('.ptdm-module-dialog [data-action="confirm"]').disabled).toBe(
+        true,
+      );
+      query<HTMLButtonElement>('.ptdm-module-dialog [data-action="all"]').click();
+      query<HTMLInputElement>('.ptdm-module-dialog input[value="settings"]').checked = false;
+      query<HTMLInputElement>('.ptdm-module-dialog input[value="settings"]').dispatchEvent(
+        new Event('change'),
+      );
+      query<HTMLButtonElement>('.ptdm-module-dialog [data-action="confirm"]').click();
+      await settle();
+
+      const confirmDialog = query('.ptdm-confirm-dialog');
+      expect(confirmDialog.textContent).toContain('已选择 2 个模块');
+      expect(confirmDialog.textContent).toContain('未勾选的 Secrets/API Key');
+      const destructiveConfirm = query<HTMLButtonElement>(
+        '.ptdm-confirm-dialog [data-action="confirm"]',
+      );
+      expect(destructiveConfirm.textContent).toBe('清空并导入');
+      expect(destructiveConfirm.classList.contains('ptdm-danger')).toBe(true);
+      destructiveConfirm.click();
       await settle();
 
       expect(requests[2]?.url).toBe('/api/backups/tauritavern/import');
-      expect((requests[2]?.body as FormData).get('strategy')).toBe('replace-module');
-      expect((requests[2]?.body as FormData).get('createRecoveryPoint')).toBe('true');
+      const importForm = requests[2]?.body as FormData;
+      expect(importForm.get('strategy')).toBe('replace-local');
+      expect(JSON.parse(String(importForm.get('modules')))).toEqual(['characters', 'secrets']);
+      expect(importForm.get('includeSecrets')).toBe('true');
+      expect(importForm.get('createRecoveryPoint')).toBe('true');
+    } finally {
+      vi.clearAllTimers();
+      vi.useRealTimers();
+    }
+  });
+
+  it('supports cancelling and partially selecting modules for a PureTavern ZIP', async () => {
+    vi.useFakeTimers();
+    try {
+      buttonLabelled('打开数据管理').click();
+      await settle();
+      requests.length = 0;
+
+      const input = query<HTMLInputElement>('#ptdm-import-file');
+      const file = new File([new Uint8Array([1, 2, 3])], 'pure-tavern-data.zip', {
+        type: 'application/zip',
+      });
+      Object.defineProperty(input, 'files', { value: [file], configurable: true });
+      input.dispatchEvent(new Event('change'));
+      await settle();
+      expect(requests[0]?.url).toBe('/api/backups/archive/import/preview');
+      expect((requests[0]?.body as FormData).get('includeSecrets')).toBe('true');
+
+      query<HTMLButtonElement>('#ptdm-import-confirm').click();
+      await settle();
+      expect(
+        [
+          ...query('.ptdm-module-dialog').querySelectorAll<HTMLInputElement>(
+            'input[type="checkbox"]:not(:disabled)',
+          ),
+        ].every((checkbox) => checkbox.checked),
+      ).toBe(true);
+      query<HTMLButtonElement>('.ptdm-module-dialog [data-action="cancel"]').click();
+      await settle();
+      expect(requests).toHaveLength(1);
+
+      query<HTMLButtonElement>('#ptdm-import-confirm').click();
+      await settle();
+      query<HTMLInputElement>('.ptdm-module-dialog input[value="settings"]').checked = false;
+      query<HTMLInputElement>('.ptdm-module-dialog input[value="secrets"]').checked = false;
+      query<HTMLButtonElement>('.ptdm-module-dialog [data-action="confirm"]').click();
+      await settle();
+      query<HTMLButtonElement>('.ptdm-confirm-dialog [data-action="confirm"]').click();
+      await settle();
+
+      expect(requests[1]?.url).toBe('/api/backups/archive/import');
+      const importForm = requests[1]?.body as FormData;
+      expect(JSON.parse(String(importForm.get('modules')))).toEqual(['characters']);
+      expect(importForm.get('includeSecrets')).toBe('false');
+      expect(importForm.get('strategy')).toBe('merge');
     } finally {
       vi.clearAllTimers();
       vi.useRealTimers();

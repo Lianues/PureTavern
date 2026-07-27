@@ -215,12 +215,18 @@ export class ArchiveService implements ArchiveExporter, ArchiveImporter {
     decoded: DecodedArchive,
     options: ArchiveImportOptions,
   ): Promise<ArchiveImportPreview> {
+    const strategy = normalizeStrategy(options.strategy);
     const selectedIds = new Set(
       options.moduleIds ?? decoded.manifest.modules.map((item) => item.moduleId),
     );
     const includeSecrets = Boolean(options.includeSecrets);
     const modules: ArchiveModulePreview[] = [];
-    const warnings: string[] = [];
+    const warnings: string[] =
+      strategy === 'replace-local'
+        ? [
+            'Complete local replacement will clear every registered local data module, including Secrets and modules absent from this archive.',
+          ]
+        : [];
     for (const incoming of decoded.manifest.modules) {
       const participant = this.#participants.get(incoming.moduleId);
       const selected =
@@ -266,18 +272,34 @@ export class ArchiveService implements ArchiveExporter, ArchiveImporter {
     recoveryReason: BackupDescriptor['reason'],
   ): Promise<ArchiveImportReport> {
     const strategy = normalizeStrategy(options.strategy);
+    const replaceLocal = strategy === 'replace-local';
     const preview = await this.#previewDecoded(decoded, options);
     const selected = preview.modules.filter((module) => module.selected && module.available);
     const selectedIds = selected.map((module) => module.moduleId);
+    if (selectedIds.length === 0) {
+      throw new ArchiveValidationError(
+        'no-modules-selected',
+        'At least one available archive module must be selected for import.',
+      );
+    }
     const includeSecrets = selected.some((module) => module.sensitive);
+    const allParticipantIds = this.#participants.list().map((participant) => participant.moduleId);
+    const recoveryModuleIds = replaceLocal ? allParticipantIds : selectedIds;
+    const recoveryIncludesSecrets = replaceLocal || includeSecrets;
+    const mustCreateRecoveryPoint = replaceLocal || options.createRecoveryPoint !== false;
     const startedAt = this.#clock().toISOString();
     let recoveryBackupId: string | null = null;
 
-    if (options.createRecoveryPoint !== false && selectedIds.length > 0) {
-      const recovery = await this.#exportWithoutQueue({ moduleIds: selectedIds, includeSecrets });
+    if (mustCreateRecoveryPoint && recoveryModuleIds.length > 0) {
+      const recovery = await this.#exportWithoutQueue({
+        moduleIds: recoveryModuleIds,
+        includeSecrets: recoveryIncludesSecrets,
+      });
       recoveryBackupId = (
         await this.#backups.upload({
-          label: `Recovery before ${recoveryReason === 'pre-restore' ? 'restore' : 'import'}`,
+          label: replaceLocal
+            ? 'Recovery before complete local replacement'
+            : `Recovery before ${recoveryReason === 'pre-restore' ? 'restore' : 'import'}`,
           archive: recovery.blob,
           manifest: recovery.manifest,
           reason: recoveryReason,
@@ -298,6 +320,12 @@ export class ArchiveService implements ArchiveExporter, ArchiveImporter {
 
     const results: ArchiveModuleImportResult[] = [];
     try {
+      if (replaceLocal) {
+        await Promise.all(
+          this.#participants.list().map((participant) => participant.clearAllData()),
+        );
+      }
+      const participantStrategy = replaceLocal ? 'merge' : strategy;
       for (const moduleId of selectedIds) {
         await this.#journal.put(JOURNAL_COLLECTION, JOURNAL_ID, {
           archiveId: decoded.manifest.archiveId,
@@ -311,7 +339,7 @@ export class ArchiveService implements ArchiveExporter, ArchiveImporter {
         const participant = this.#participants.get(moduleId);
         if (!participant) continue;
         const entries = decoded.entries.filter((entry) => entry.descriptor.moduleId === moduleId);
-        results.push(await participant.importEntries(entries, strategy));
+        results.push(await participant.importEntries(entries, participantStrategy));
       }
       const completedAt = this.#clock().toISOString();
       await this.#journal.put(JOURNAL_COLLECTION, JOURNAL_ID, {

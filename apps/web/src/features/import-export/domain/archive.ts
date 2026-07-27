@@ -47,7 +47,8 @@ export function normalizeStrategy(value: unknown): ArchiveConflictStrategy {
     value === 'merge' ||
     value === 'skip' ||
     value === 'replace-module' ||
-    value === 'replace-all'
+    value === 'replace-all' ||
+    value === 'replace-local'
   ) {
     return value;
   }

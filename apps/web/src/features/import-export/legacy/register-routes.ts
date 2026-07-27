@@ -97,7 +97,7 @@ export function registerImportExportLegacyRoutes(
   });
 
   // TauriTavern（= SillyTavern 的 data 目录）互通。导入方向刻意复用同一条归档流水线，
-  // 所以冲突预览、导入前恢复点和四种冲突策略在这里和原生归档完全一致。
+  // 所以冲突预览、导入前恢复点和全部冲突策略在这里和原生归档完全一致。
   router.register('POST', '/api/backups/tauritavern/export', async (request) => {
     try {
       const options = readExportOptions(await readOptionalJson(request));

@@ -14,6 +14,7 @@ const IMPORT_STRATEGIES = Object.freeze([
   { value: 'skip', label: '跳过冲突' },
   { value: 'replace-module', label: '替换选中模块' },
   { value: 'replace-all', label: '替换归档模块' },
+  { value: 'replace-local', label: '完全替换本地（含 Secrets）' },
 ]);
 
 function headers() {
@@ -69,6 +70,16 @@ function strategyLabel(value) {
   return IMPORT_STRATEGIES.find((strategy) => strategy.value === value)?.label ?? value;
 }
 
+function isCompleteLocalReplacement(strategy) {
+  return strategy === 'replace-local';
+}
+
+function completeLocalReplacementWarning(strategy) {
+  return isCompleteLocalReplacement(strategy)
+    ? '⚠ 将清空所有本地数据模块，包括导入包中没有的模块和未勾选的 Secrets/API Key；随后只写入本次选择导入的内容。'
+    : '';
+}
+
 // 敏感模块（Secrets / API key）自己就是那个开关：勾上它即代表同意导出明文。
 function includeSecrets() {
   return (
@@ -113,6 +124,103 @@ function confirmAction(message, options = {}) {
       finish(false);
     });
     dialog.addEventListener('close', () => finish(false));
+    dialog.showModal();
+  });
+}
+
+function chooseImportModules(preview, options = {}) {
+  const { title = '选择要导入的模块', strategy = 'merge' } = options;
+  const modules = Array.isArray(preview?.modules) ? preview.modules : [];
+  return new Promise((resolve) => {
+    const dialog = document.createElement('dialog');
+    dialog.className = 'ptdm-module-dialog';
+    dialog.innerHTML = `
+      <div class="ptdm-module-dialog-body">
+        <h3></h3>
+        <div class="ptdm-muted">模块选择决定从数据包写入哪些内容；导入模式决定这些内容如何处理本地冲突。</div>
+        <div class="ptdm-module-selection-warning ptdm-danger ptdm-hidden"></div>
+        <div class="ptdm-toolbar ptdm-module-selection-tools">
+          <button type="button" class="menu_button" data-action="all">全部选择</button>
+          <button type="button" class="menu_button" data-action="none">全部取消</button>
+          <span class="ptdm-muted" data-selection-count></span>
+        </div>
+        <div class="ptdm-module-selection-list"></div>
+        <div class="ptdm-toolbar ptdm-confirm-actions">
+          <button type="button" class="menu_button" data-action="cancel">取消</button>
+          <button type="button" class="menu_button" data-action="confirm">继续</button>
+        </div>
+      </div>`;
+    dialog.querySelector('h3').textContent = title;
+    const warning = completeLocalReplacementWarning(strategy);
+    const warningTarget = dialog.querySelector('.ptdm-module-selection-warning');
+    warningTarget.textContent = warning;
+    warningTarget.classList.toggle('ptdm-hidden', !warning);
+
+    const list = dialog.querySelector('.ptdm-module-selection-list');
+    const inputs = modules.map((module) => {
+      const row = document.createElement('label');
+      row.className = module.sensitive
+        ? 'ptdm-module-selection-row ptdm-danger'
+        : 'ptdm-module-selection-row';
+      const heading = document.createElement('span');
+      const input = document.createElement('input');
+      input.type = 'checkbox';
+      input.value = module.moduleId;
+      input.checked = module.available !== false;
+      input.disabled = module.available === false;
+      const name = document.createElement('strong');
+      name.textContent = module.displayName;
+      heading.append(input, name);
+      if (module.sensitive) heading.append(' ⚠ Secrets/API Key');
+      if (module.available === false) heading.append('（不可用）');
+      const meta = document.createElement('span');
+      meta.className = 'ptdm-module-meta';
+      meta.textContent = `${module.incomingRecords} records · ${module.incomingBlobs} blobs · ${module.conflicts} conflicts`;
+      row.append(heading, meta);
+      list.appendChild(row);
+      return { input, module };
+    });
+    const confirm = dialog.querySelector('[data-action="confirm"]');
+    const count = dialog.querySelector('[data-selection-count]');
+    const update = () => {
+      const selected = inputs.filter(({ input }) => input.checked && !input.disabled).length;
+      count.textContent = `已选择 ${selected} / ${inputs.filter(({ input }) => !input.disabled).length} 个可用模块`;
+      confirm.disabled = selected === 0;
+    };
+    for (const { input } of inputs) input.addEventListener('change', update);
+    dialog.querySelector('[data-action="all"]').addEventListener('click', () => {
+      for (const { input } of inputs) if (!input.disabled) input.checked = true;
+      update();
+    });
+    dialog.querySelector('[data-action="none"]').addEventListener('click', () => {
+      for (const { input } of inputs) if (!input.disabled) input.checked = false;
+      update();
+    });
+
+    document.body.appendChild(dialog);
+    let settled = false;
+    const finish = (selection) => {
+      if (settled) return;
+      settled = true;
+      if (dialog.open) dialog.close();
+      dialog.remove();
+      resolve(selection);
+    };
+    dialog.querySelector('[data-action="cancel"]').addEventListener('click', () => finish(null));
+    confirm.addEventListener('click', () => {
+      const selected = inputs.filter(({ input }) => input.checked && !input.disabled);
+      if (!selected.length) return;
+      finish({
+        moduleIds: selected.map(({ module }) => module.moduleId),
+        includeSecrets: selected.some(({ module }) => module.sensitive),
+      });
+    });
+    dialog.addEventListener('cancel', (event) => {
+      event.preventDefault();
+      finish(null);
+    });
+    dialog.addEventListener('close', () => finish(null));
+    update();
     dialog.showModal();
   });
 }
@@ -465,7 +573,8 @@ async function previewTauriTavernImport(file) {
   const strategy = selectedStrategy('#ptdm-tt-strategy');
   const form = new FormData();
   form.set('file', file);
-  form.set('includeSecrets', String(includeSecrets()));
+  // 预览先包含敏感模块，随后由模块选择对话框让用户逐项决定是否导入。
+  form.set('includeSecrets', 'true');
   form.set('strategy', strategy);
   const response = await fetch(`${TT_API}/import/preview`, { method: 'POST', body: form });
   const payload = await response.json();
@@ -478,6 +587,7 @@ async function previewTauriTavernImport(file) {
   target.textContent = [
     `TauriTavern 数据包：${payload.migration.files} 个文件`,
     `导入模式：${strategyLabel(strategy)}`,
+    completeLocalReplacementWarning(strategy),
     `将写入 ${payload.modules.length} 个模块 · ${formatBytes(payload.totalBytes)}`,
     ...payload.modules.map(
       (module) =>
@@ -492,16 +602,25 @@ async function previewTauriTavernImport(file) {
 async function importTauriTavern() {
   if (!state.ttFile) return;
   const strategy = selectedStrategy('#ptdm-tt-strategy');
+  const selection = await chooseImportModules(state.ttPreview, {
+    title: '选择要导入的 TauriTavern 模块',
+    strategy,
+  });
+  if (!selection) return;
+  const replaceLocal = isCompleteLocalReplacement(strategy);
+  const warning = completeLocalReplacementWarning(strategy);
   if (
     !(await confirmAction(
-      `导入模式：${strategyLabel(strategy)}。将把 TauriTavern 数据写入当前浏览器数据库，导入前会自动创建恢复点。确定继续吗？`,
+      `${warning ? `${warning}\n\n` : ''}已选择 ${selection.moduleIds.length} 个模块。导入模式：${strategyLabel(strategy)}。将把 TauriTavern 数据写入当前浏览器数据库，导入前会自动创建完整恢复点。确定继续吗？`,
+      replaceLocal ? { confirmLabel: '清空并导入', danger: true } : {},
     ))
   ) {
     return;
   }
   const form = new FormData();
   form.set('file', state.ttFile);
-  form.set('includeSecrets', String(includeSecrets()));
+  form.set('modules', JSON.stringify(selection.moduleIds));
+  form.set('includeSecrets', String(selection.includeSecrets));
   form.set('strategy', strategy);
   form.set('createRecoveryPoint', 'true');
   const response = await fetch(`${TT_API}/import`, { method: 'POST', body: form });
@@ -548,11 +667,20 @@ async function deleteBackup(id) {
 }
 
 async function restoreBackup(id) {
-  if (!(await confirmAction('恢复会修改当前数据，并自动创建恢复前快照。是否继续？'))) return;
+  const strategy = selectedStrategy('#ptdm-strategy');
+  const replaceLocal = isCompleteLocalReplacement(strategy);
+  const warning = completeLocalReplacementWarning(strategy);
+  if (
+    !(await confirmAction(
+      `${warning ? `${warning}\n\n` : ''}恢复会修改当前数据，并自动创建恢复前快照。是否继续？`,
+      replaceLocal ? { confirmLabel: '清空并恢复', danger: true } : {},
+    ))
+  )
+    return;
   try {
     const report = await postJson(`${API}/local/restore`, {
       id,
-      strategy: document.querySelector('#ptdm-strategy').value,
+      strategy,
       includeSecrets: includeSecrets(),
     });
     showReport(report);
@@ -570,10 +698,12 @@ async function previewImport(file) {
   state.preview = null;
   document.querySelector('#ptdm-import-confirm').disabled = true;
   document.querySelector('#ptdm-preview').classList.add('ptdm-hidden');
+  const strategy = selectedStrategy('#ptdm-strategy');
   const form = new FormData();
   form.set('file', file);
-  form.set('includeSecrets', String(includeSecrets()));
-  form.set('strategy', document.querySelector('#ptdm-strategy').value);
+  // 与 TauriTavern 导入一致，先展示包内全部模块，再由用户逐项选择。
+  form.set('includeSecrets', 'true');
+  form.set('strategy', strategy);
   const response = await fetch(`${API}/import/preview`, { method: 'POST', body: form });
   const payload = await response.json();
   if (!response.ok) throw new Error(payload.error || `Preview failed: HTTP ${response.status}`);
@@ -584,6 +714,8 @@ async function previewImport(file) {
   target.textContent = [
     `Archive: ${payload.manifest.archiveId}`,
     `Created: ${payload.manifest.createdAt}`,
+    `导入模式：${strategyLabel(strategy)}`,
+    completeLocalReplacementWarning(strategy),
     `Modules: ${payload.modules.length}`,
     `Payload: ${formatBytes(payload.totalBytes)}`,
     ...payload.modules.map(
@@ -596,11 +728,26 @@ async function previewImport(file) {
 
 async function importArchive() {
   if (!state.selectedFile) return;
-  if (!(await confirmAction('导入前会自动创建恢复点。确定继续吗？'))) return;
+  const strategy = selectedStrategy('#ptdm-strategy');
+  const selection = await chooseImportModules(state.preview, {
+    title: '选择要导入的 PureTavern 模块',
+    strategy,
+  });
+  if (!selection) return;
+  const replaceLocal = isCompleteLocalReplacement(strategy);
+  const warning = completeLocalReplacementWarning(strategy);
+  if (
+    !(await confirmAction(
+      `${warning ? `${warning}\n\n` : ''}已选择 ${selection.moduleIds.length} 个模块。导入前会自动创建完整恢复点。确定继续吗？`,
+      replaceLocal ? { confirmLabel: '清空并导入', danger: true } : {},
+    ))
+  )
+    return;
   const form = new FormData();
   form.set('file', state.selectedFile);
-  form.set('includeSecrets', String(includeSecrets()));
-  form.set('strategy', document.querySelector('#ptdm-strategy').value);
+  form.set('modules', JSON.stringify(selection.moduleIds));
+  form.set('includeSecrets', String(selection.includeSecrets));
+  form.set('strategy', strategy);
   form.set('createRecoveryPoint', 'true');
   const response = await fetch(`${API}/import`, { method: 'POST', body: form });
   const payload = await response.json();
@@ -699,6 +846,11 @@ function createUi() {
   );
   bindConfirm(dialog, '#ptdm-import-confirm', importArchive);
   bindConfirm(dialog, '#ptdm-tt-import-confirm', importTauriTavern);
+  dialog.querySelector('#ptdm-strategy').addEventListener('change', () => {
+    const file = state.selectedFile;
+    if (!file) return;
+    void previewImport(file).catch((error) => notify('error', error.message));
+  });
   dialog.querySelector('#ptdm-tt-strategy').addEventListener('change', () => {
     const file = state.ttFile;
     if (!file) return;

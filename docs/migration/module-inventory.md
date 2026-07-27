@@ -515,7 +515,7 @@ features/<module>/
 - **已实现 Port**：`ArchiveExporter`、`ArchiveImporter`、`BackupRepository`、`BackupTransport`、`ArchiveParticipantRegistry`。
 - **归档格式**：`@pure-tavern/contracts` 定义 `pure-tavern-archive` schema v1；manifest 包含 app/upstream/data version、模块摘要、逻辑 collection/id、大小与每个 payload 的 SHA-256。ZIP 不暴露 IndexedDB 物理 key。
 - **模块覆盖**：Settings/Snapshots、Characters、Chats、Personas、World Books、Presets、Assets、Extensions、Stats 和可选 Secrets 均通过模块作用域参与者接入；stable ID、Blob metadata 与 opaque 字段原样保留。
-- **导入语义**：dry-run 差异/冲突预览，支持 merge、skip、replace-module、replace-all；正式导入和恢复前自动建立恢复点，并用 journal 记录模块级阶段。
+- **导入语义**：dry-run 差异/冲突预览，支持 merge、skip、replace-module、replace-all，以及先完整备份（含 Secrets）再清空全部本地模块的 replace-local；导入时可逐项选择包内模块，正式导入和恢复前自动建立恢复点，并用 journal 记录模块级阶段。
 - **浏览器实现**：IndexedDB 本地恢复点默认轮换 5 份；File System Access 可用时直接保存，其他浏览器使用下载和文件选择回退。ZIP 路径、重复、大小、数量、展开体积、压缩比和 hash 均校验。
 - **第一方面板**：原版 Extensions loader 加载 `PureTavern Data Management`，来源为独立 `pure-tavern-first-party`；提供容量、模块、导出、导入预览、本地恢复/下载/删除可视化，不修改 upstream。
 - **Secrets**：默认不导出；显式选择仍是明文 ZIP，必须危险确认。

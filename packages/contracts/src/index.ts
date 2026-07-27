@@ -56,7 +56,8 @@ export interface PureTavernArchiveManifest {
   files: PureTavernArchiveFile[];
 }
 
-export type ArchiveConflictStrategy = 'merge' | 'skip' | 'replace-module' | 'replace-all';
+export type ArchiveConflictStrategy =
+  'merge' | 'skip' | 'replace-module' | 'replace-all' | 'replace-local';
 
 export interface ArchiveModulePreview {
   moduleId: string;

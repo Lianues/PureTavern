@@ -64,7 +64,7 @@ export interface TauriTavernDependencies {
  * PureTavern <-> TauriTavern 数据互通。
  *
  * 两个方向都只做「格式转换」：导入时把 data 目录转成标准归档条目再交给 ArchiveService，
- * 因此冲突预览、导入前恢复点、导入日志和四种冲突策略全部复用，不存在第二条写入路径。
+ * 因此冲突预览、导入前恢复点、导入日志和全部冲突策略都复用，不存在第二条写入路径。
  */
 export class TauriTavernMigrationService {
   readonly #participants: ArchiveParticipantRegistry;

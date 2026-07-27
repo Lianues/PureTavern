@@ -220,6 +220,28 @@ describe('TauriTavernMigrationService', () => {
     ).resolves.toMatchObject({ value: { secrets: { api_key_openai: [{ value: 'sk-secret' }] } } });
   });
 
+  it('imports only the modules selected from a TauriTavern package', async () => {
+    const source = await createHarness();
+    await seed(source);
+    const exported = await source.migration.exportPackage({ includeSecrets: true });
+
+    const target = await createHarness();
+    const report = await target.migration.importPackage(exported.blob, {
+      moduleIds: ['settings'],
+      includeSecrets: false,
+      createRecoveryPoint: false,
+    });
+
+    expect(report.modules.map((module) => module.moduleId)).toEqual(['settings']);
+    expect(await target.storage.records.forModule('characters').list('cards')).toEqual([]);
+    await expect(
+      target.storage.records.forModule('settings').get('documents', 'current'),
+    ).resolves.toMatchObject({ value: { theme: 'dark' } });
+    await expect(
+      target.storage.records.forModule('secrets').get('store', 'current'),
+    ).resolves.toBeNull();
+  });
+
   it('importing the same package twice does not duplicate characters or chats', async () => {
     const source = await createHarness();
     await seed(source);
