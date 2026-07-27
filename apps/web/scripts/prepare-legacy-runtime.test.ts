@@ -88,6 +88,8 @@ describe('generateHookedIndex', () => {
     expect(prepare).toContain('Cache-Control: no-cache, no-store, must-revalidate');
     expect(prepare).toContain('copyBrandingAssets');
     expect(prepare).toContain('pure-tavern-favicon.ico');
+    expect(prepare).toContain('validateBundledExtensionManifest');
+    expect(prepare).toContain('/__pure_tavern/bundled-extensions/*.zip');
   });
 
   it('keeps Chinese Custom parameter examples valid and copyable as YAML', () => {

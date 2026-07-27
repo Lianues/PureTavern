@@ -1,0 +1,16 @@
+{
+  "assets": [
+    {
+      "source": "bundled-packages/manifest.json",
+      "publicPath": "__pure_tavern/bundled-extensions/manifest.json"
+    },
+    {
+      "source": "bundled-packages/js-slash-runner-4.8.19.zip",
+      "publicPath": "__pure_tavern/bundled-extensions/js-slash-runner-4.8.19.zip"
+    },
+    {
+      "source": "bundled-packages/st-prompt-template-1.16.zip",
+      "publicPath": "__pure_tavern/bundled-extensions/st-prompt-template-1.16.zip"
+    }
+  ]
+}

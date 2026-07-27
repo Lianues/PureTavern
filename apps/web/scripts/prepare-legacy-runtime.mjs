@@ -6,6 +6,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { build } from 'esbuild';
 import mime from 'mime';
 
+import { validateBundledExtensionManifest } from './bundled-extension-manifest.mjs';
 import { generateDefaultAssetManifest } from './default-asset-manifest-generator.mjs';
 import { generateHookedIndex } from './legacy-index-generator.mjs';
 import { normalizeChineseCustomParameterExamples } from './legacy-runtime-text-patches.mjs';
@@ -26,6 +27,7 @@ const upstreamMetadataPath = path.join(packageRoot, 'legacy', 'upstream.json');
 const generatedPublicRoot = path.join(packageRoot, '.generated', 'public');
 const generatedIndexPath = path.join(packageRoot, 'index.html');
 const featuresRoot = path.join(packageRoot, 'src', 'features');
+const bundledExtensionsRoot = path.join(featuresRoot, 'extensions', 'bundled-packages');
 const brandingRoot = path.join(packageRoot, 'src', 'branding');
 const BRANDING_ASSETS = Object.freeze([
   ['pure-tavern-favicon.ico', 'favicon.ico'],
@@ -54,6 +56,10 @@ const CLOUDFLARE_PAGES_HEADERS = `
   Cache-Control: no-cache, must-revalidate
 /pure-tavern-assets-service-worker.js
   Cache-Control: no-cache, must-revalidate
+/__pure_tavern/bundled-extensions/manifest.json
+  Cache-Control: no-cache, must-revalidate
+/__pure_tavern/bundled-extensions/*.zip
+  Cache-Control: public, max-age=31536000, immutable
 /scripts/extensions/pure-tavern-data-management/*
   Cache-Control: no-cache, must-revalidate
 `.trimStart();
@@ -67,6 +73,7 @@ export async function prepareLegacyRuntime() {
   );
   const buildId = randomUUID().replaceAll('-', '');
   const generatedIndex = generateHookedIndex(upstreamIndex, buildId);
+  await validateBundledExtensionManifest(bundledExtensionsRoot);
 
   await rm(generatedPublicRoot, { recursive: true, force: true });
   await mkdir(generatedPublicRoot, { recursive: true });

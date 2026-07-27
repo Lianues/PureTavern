@@ -474,6 +474,100 @@ try {
 
   let snapshot = await waitForApplicationSnapshot();
 
+  // The bundled extensions intentionally modify broad Legacy UI/runtime behavior. Exercise their
+  // real first-run import and script loading in the fresh profile, then disable them and reload so
+  // the remaining browser gate continues to test the unchanged baseline deterministically.
+  const bundledStartupEvaluation = await client.send('Runtime.evaluate', {
+    expression: `(async () => {
+      const extensionModule = await import('/scripts/extensions.js');
+      const scriptModule = await import('/script.js');
+      const headers = scriptModule.getRequestHeaders();
+      const definitions = [
+        {
+          name: 'third-party/JS-Slash-Runner',
+          version: '4.8.19',
+          scriptPath: '/scripts/extensions/third-party/JS-Slash-Runner/dist/index.js',
+        },
+        {
+          name: 'third-party/ST-Prompt-Template',
+          version: '1.16.3.0',
+          scriptPath: '/scripts/extensions/third-party/ST-Prompt-Template/dist/index.js',
+        },
+      ];
+      const waitFor = async (read, timeoutMs = 20_000) => {
+        const deadline = Date.now() + timeoutMs;
+        while (Date.now() < deadline) {
+          const value = read();
+          if (value) return value;
+          await new Promise((resolve) => setTimeout(resolve, 50));
+        }
+        return null;
+      };
+      await waitFor(() => extensionModule.extensionNames.length >= 15 + definitions.length);
+      const discoverResponse = await fetch('/api/extensions/discover', { headers });
+      const discovered = discoverResponse.ok ? await discoverResponse.json() : [];
+      const manifestsLoaded = definitions.every(
+        ({ name, version }) =>
+          discovered.some((extension) => extension.name === name && extension.type === 'local') &&
+          extensionModule.getExtensionManifest(name)?.version === version,
+      );
+      const scriptsLoaded = definitions.every(({ scriptPath }) =>
+        [...document.scripts].some((script) => script.src.endsWith(scriptPath)),
+      );
+      const manifestResponses = await Promise.all(
+        definitions.map(({ name }) =>
+          fetch('/scripts/extensions/' + name + '/manifest.json', { cache: 'no-store' }),
+        ),
+      );
+      const assetsServed = manifestResponses.every(
+        (response) =>
+          response.ok && response.headers.get('X-Pure-Tavern-Asset') === 'assets/extensions',
+      );
+      const feature = globalThis.__PURE_TAVERN__?.features?.extensions;
+      const seed = feature?.bundledExtensions ? { ...feature.bundledExtensions } : null;
+
+      for (const { name } of definitions) await extensionModule.disableExtension(name, false);
+      const settingsResponse = await fetch('/api/settings/get', {
+        method: 'POST',
+        headers,
+        body: '{}',
+      });
+      const settings = settingsResponse.ok
+        ? JSON.parse((await settingsResponse.json()).settings)
+        : null;
+      const disabledPersisted = definitions.every((definition) =>
+        settings?.extension_settings?.disabledExtensions?.includes(definition.name),
+      );
+      return {
+        available: true,
+        discoveredCount: discovered.length,
+        expectedCount: 15 + definitions.length,
+        manifestsLoaded,
+        scriptsLoaded,
+        assetsServed,
+        disabledPersisted,
+        seed,
+      };
+    })()`,
+    awaitPromise: true,
+    returnByValue: true,
+  });
+  const bundledStartupWorkflow = {
+    ...(bundledStartupEvaluation.result?.value ?? {}),
+    runtimeExceptions: runtimeExceptions.splice(0),
+    consoleErrors: consoleErrors.splice(0),
+  };
+  const loadsBeforeBundledDisableReload = pageLoadEvents;
+  await client.send('Page.reload');
+  const bundledDisableReloadDeadline = Date.now() + 10_000;
+  while (
+    pageLoadEvents <= loadsBeforeBundledDisableReload &&
+    Date.now() < bundledDisableReloadDeadline
+  ) {
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+  snapshot = await waitForApplicationSnapshot();
+
   const brandingEvaluation = await client.send('Runtime.evaluate', {
     expression: `(async () => {
       const waitFor = async (read, timeoutMs = 5_000) => {
@@ -1024,6 +1118,7 @@ try {
         discoveredCount: discovered.length,
         discoveredNames: discovered.map((extension) => extension.name),
         originalRuntimeCount,
+        expectedRuntimeCount: 17,
         manifestLoaded: manifest?.display_name === 'Regex',
         dataManagementManifestLoaded:
           dataManagementManifest?.display_name === 'PureTavern Data Management',
@@ -1087,6 +1182,7 @@ try {
         },
         registry: feature?.registry ? { ...feature.registry } : null,
         trustedBuiltIns: feature?.trustedBuiltIns ? { ...feature.trustedBuiltIns } : null,
+        bundledExtensions: feature?.bundledExtensions ? { ...feature.bundledExtensions } : null,
         localPackageAssetsInjected: feature?.localPackageAssetsInjected === true,
         executionModel: feature?.executionModel ?? null,
         originalRiskWarningOwnedByLegacyUi:
@@ -3282,13 +3378,16 @@ try {
       extensionWorkflow?.trustedBuiltIns?.status === 'ready' &&
       extensionWorkflow?.trustedBuiltIns?.source === 'generated-manifest' &&
       extensionWorkflow?.trustedBuiltIns?.count === 15 &&
+      extensionWorkflow?.bundledExtensions?.status === 'ready' &&
+      extensionWorkflow?.bundledExtensions?.completed === true &&
+      extensionWorkflow?.bundledExtensions?.pending === 0 &&
       extensionWorkflow?.localPackageAssetsInjected === true &&
       extensionWorkflow?.executionModel === 'legacy-same-context-user-approved' &&
       extensionWorkflow?.originalRiskWarningOwnedByLegacyUi === true,
     trustedExtensionsBrowserWorkflow:
       extensionWorkflow?.available === true &&
-      extensionWorkflow?.discoveredCount === 15 &&
-      extensionWorkflow?.originalRuntimeCount === 15 &&
+      extensionWorkflow?.discoveredCount === extensionWorkflow?.expectedRuntimeCount &&
+      extensionWorkflow?.originalRuntimeCount === extensionWorkflow?.expectedRuntimeCount &&
       extensionWorkflow?.discoveredNames?.includes('regex') === true &&
       extensionWorkflow?.manifestLoaded === true &&
       extensionWorkflow?.regexScriptLoaded === true &&
@@ -3300,10 +3399,24 @@ try {
       extensionWorkflow?.versionOk === true &&
       extensionWorkflow?.disabledPersisted === true &&
       extensionWorkflow?.enabledPersisted === true,
+    bundledExtensionsBrowserWorkflow:
+      bundledStartupWorkflow?.available === true &&
+      bundledStartupWorkflow?.discoveredCount === bundledStartupWorkflow?.expectedCount &&
+      bundledStartupWorkflow?.manifestsLoaded === true &&
+      bundledStartupWorkflow?.scriptsLoaded === true &&
+      bundledStartupWorkflow?.assetsServed === true &&
+      bundledStartupWorkflow?.disabledPersisted === true &&
+      bundledStartupWorkflow?.seed?.status === 'ready' &&
+      bundledStartupWorkflow?.seed?.installed === 2 &&
+      bundledStartupWorkflow?.seed?.skipped === 0 &&
+      bundledStartupWorkflow?.seed?.pending === 0 &&
+      bundledStartupWorkflow?.seed?.completed === true &&
+      bundledStartupWorkflow?.runtimeExceptions?.length === 0 &&
+      bundledStartupWorkflow?.consoleErrors?.length === 0,
     thirdPartyExtensionsBrowserWorkflow:
       extensionWorkflow?.warningShown === true &&
       extensionWorkflow?.installOk === true &&
-      extensionWorkflow?.runtimeCountAfterInstall >= 16 &&
+      extensionWorkflow?.runtimeCountAfterInstall >= extensionWorkflow?.expectedRuntimeCount + 1 &&
       extensionWorkflow?.thirdPartyManifestLoaded === true &&
       extensionWorkflow?.manifestAssetServed === true &&
       extensionWorkflow?.scriptAssetServed === true &&
@@ -3631,6 +3744,7 @@ try {
     moduleContracts,
     settingsPersistence,
     settingsSnapshotWorkflow,
+    bundledStartupWorkflow,
     extensionWorkflow,
     tokenizerWorkflow,
     secretWorkflow,

@@ -14,7 +14,15 @@ upstream extensions.js + thirdPartyExtensionWarning
   -> upstream loader imports manifest/js/css in the page context
 ```
 
-The original warning is shown before a non-official repository is installed. Once accepted, third-party code has the same authority it has in upstream SillyTavern: it can access the DOM, globals, browser storage, network, and credentials available to same-origin scripts. This module does not claim sandbox isolation.
+The original warning is shown before a non-official repository is installed manually. Once accepted, third-party code has the same authority it has in upstream SillyTavern: it can access the DOM, globals, browser storage, network, and credentials available to same-origin scripts. This module does not claim sandbox isolation.
+
+## Bundled Release snapshots
+
+PureTavern ships immutable ZIP snapshots of JS-Slash-Runner `4.8.19` and ST-Prompt-Template `1.16`. The archives and a SHA-256-pinned source manifest live in this feature rather than the read-only SillyTavern snapshot. Runtime preparation validates and copies them to `/__pure_tavern/bundled-extensions/`.
+
+On a Profile's first startup, M11 reads those local assets, runs the normal ZIP/package validator, and saves them as ordinary `third-party/*` records and M13 assets. Per-item seed state resumes an interrupted import. Once both entries are handled, startup checks the completion marker before even fetching the bundled manifest: later launches do not overwrite, update, or restore packages, including ones the user removes. Existing repository/path conflicts are respected and marked handled. Because these two snapshots are selected as part of the application distribution, this one-time import does not show the manual-install warning; they still execute in the same unsandboxed Legacy page context described above.
+
+The resulting records retain their GitHub repository, Release tag, and commit metadata, so the existing version/branch APIs remain available without creating a second extension ecosystem.
 
 ## Supported remote sources
 
@@ -55,8 +63,7 @@ Settings remains the owner of `extension_settings.disabledExtensions`; M11 synch
 
 ## Validation
 
-- Unit/integration tests cover original manifests, CORS source adapters, ZIP security, registry fallback, all lifecycle routes, branch/scope changes, update stability, and M13 resource paths.
-- A live validation run downloaded `https://github.com/Lianues/cocktail` through browser-CORS endpoints and validated its original manifest and resources.
+- Unit/integration tests cover original manifests, CORS source adapters, ZIP security, registry fallback, all lifecycle routes, branch/scope changes, update stability, M13 resource paths, pinned bundled archives, one-time import, deletion tombstones, conflicts, and partial-failure resume.
 - Production Chrome verifies the original warning, installation, manifest/JS/CSS loading, install/enable/disable/delete hooks, update detection, branch/switch/move routes, removal, IndexedDB persistence, and zero runtime/console/network compatibility errors.
 
 Node server plugins, npm install scripts, arbitrary server routes, private repository proxies, and non-CORS Git hosts remain outside a pure-browser extension system.

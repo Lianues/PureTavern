@@ -119,6 +119,18 @@ export class ExtensionService {
     signal?: AbortSignal,
   ): Promise<LegacyInstallExtensionDto> {
     const snapshot = await this.#sources.fetchSnapshot(url, ref, signal);
+    return this.installSnapshot(snapshot, scope);
+  }
+
+  /**
+   * Installs an already acquired package snapshot through the same validation and persistence
+   * path as a normal remote install. PureTavern's one-time bundled import uses this entry point so
+   * first launch stays offline while the resulting extension remains a regular remote extension.
+   */
+  async installSnapshot(
+    snapshot: ExtensionSourceSnapshot,
+    scope: Exclude<ExtensionScope, 'system'>,
+  ): Promise<LegacyInstallExtensionDto> {
     const extensionId = await extensionIdForRepository(snapshot.repositoryUrl);
     return this.#serialize(extensionId, async () => {
       if (await this.#registry.get(extensionId)) {

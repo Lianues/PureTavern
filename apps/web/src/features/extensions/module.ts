@@ -10,6 +10,10 @@ import {
 
 import { ExtensionService } from './application/extension-service';
 import type { TrustedLegacyBuiltInDefinition } from './domain/extension';
+import {
+  createBundledExtensionSeedDiagnostics,
+  seedBundledExtensions,
+} from './infrastructure/bundled-extension-seeder';
 import { CorsExtensionSourceGateway } from './infrastructure/cors-extension-source';
 import {
   RecordExtensionRegistry,
@@ -42,6 +46,7 @@ export interface ExtensionsFeatureOptions {
   loadTrustedBuiltIns?: (
     context: FeatureInstallContext,
   ) => Promise<readonly TrustedLegacyBuiltInDefinition[]>;
+  seedBundledPackages?: boolean;
 }
 
 export function createExtensionsFeature(options: ExtensionsFeatureOptions = {}): FeatureModule {
@@ -69,6 +74,11 @@ export function createExtensionsFeature(options: ExtensionsFeatureOptions = {}):
         count: 0,
         message: null as string | null,
       };
+      const bundledSeedDiagnostics = createBundledExtensionSeedDiagnostics();
+      if (!options.seedBundledPackages) {
+        bundledSeedDiagnostics.status = 'ready';
+        bundledSeedDiagnostics.completed = true;
+      }
       const ready = (async () => {
         await (capabilities.get(assetServiceWorkerCapability)?.ready ?? Promise.resolve());
         let definitions = options.trustedBuiltIns ?? TRUSTED_LEGACY_BUILTINS;
@@ -87,6 +97,14 @@ export function createExtensionsFeature(options: ExtensionsFeatureOptions = {}):
         }
         seedDiagnostics.count = definitions.length;
         await service.registerTrustedBuiltIns(definitions);
+        if (options.seedBundledPackages) {
+          await seedBundledExtensions(
+            service,
+            records,
+            context.nativeFetch,
+            bundledSeedDiagnostics,
+          );
+        }
       })();
 
       const runtime: ExtensionsRuntimeCapability = { ready, registry, service };
@@ -124,6 +142,7 @@ export function createExtensionsFeature(options: ExtensionsFeatureOptions = {}):
           registry: registry.diagnostics,
           localPackageAssetsInjected: Boolean(options.packageAssets || options.createPackageAssets),
           trustedBuiltIns: seedDiagnostics,
+          bundledExtensions: bundledSeedDiagnostics,
           executionModel: 'legacy-same-context-user-approved',
           remoteSources: ['github-jsdelivr-cors', 'gitlab-cors-api', 'direct-cors-zip'],
           originalRiskWarningOwnedByLegacyUi: true,
@@ -134,6 +153,7 @@ export function createExtensionsFeature(options: ExtensionsFeatureOptions = {}):
 }
 
 export const extensionsFeature = createExtensionsFeature({
+  seedBundledPackages: true,
   createPackageAssets({ capabilities }) {
     return (
       capabilities.get(extensionPackageAssetsCapability) ?? new MissingExtensionPackageAssets()
