@@ -1,6 +1,6 @@
 {
   "name": "@pure-tavern/desktop",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "private": true,
   "scripts": {
     "dev:desktop": "pnpm --dir ../.. build && tauri dev --ci",

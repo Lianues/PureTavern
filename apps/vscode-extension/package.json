@@ -2,7 +2,7 @@
   "name": "pure-tavern",
   "displayName": "PureTavern",
   "description": "Open the complete PureTavern web application inside VS Code.",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "publisher": "Lianues",
   "author": {
     "name": "Limerence",
