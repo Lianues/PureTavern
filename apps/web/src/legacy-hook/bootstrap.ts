@@ -11,6 +11,7 @@ import { APP_VERSION } from '../platform/runtime/app-version';
 import { RUNTIME_BUILD_ID } from '../platform/runtime/build-id';
 import { installLegacyBranding } from '../platform/runtime/legacy-branding';
 import { installLegacyFileAccept } from '../platform/runtime/legacy-file-accept';
+import { installReleaseUpdateCheck } from '../platform/runtime/release-update';
 import { installRuntimeUpdateWatcher } from '../platform/runtime/runtime-update';
 import { appStorage } from '../platform/storage/app-storage';
 import { initializeStorageSafely } from '../platform/storage/initialize-storage';
@@ -56,6 +57,7 @@ void upstreamMetadata.then((metadata) => {
   globalThis.__PURE_TAVERN__.upstreamVersion = metadata.version;
 });
 installRuntimeUpdateWatcher(nativeFetch, RUNTIME_BUILD_ID);
+installReleaseUpdateCheck(nativeFetch, APP_VERSION);
 
 document.documentElement.dataset.pureTavernHook = 'installed';
 console.info('[PureTavern Hook] Legacy compatibility runtime installed.');
