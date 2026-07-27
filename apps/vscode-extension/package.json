@@ -33,10 +33,6 @@
     "Chat"
   ],
   "main": "./dist/extension.cjs",
-  "activationEvents": [
-    "onView:pureTavern.launcher",
-    "onCommand:pureTavern.open"
-  ],
   "contributes": {
     "commands": [
       {
@@ -59,7 +55,8 @@
         {
           "id": "pureTavern.launcher",
           "name": "PureTavern",
-          "type": "webview"
+          "type": "webview",
+          "icon": "media/pt.svg"
         }
       ]
     }
