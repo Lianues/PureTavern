@@ -188,6 +188,9 @@ importers:
       jsdom:
         specifier: ^29.1.1
         version: 29.1.1
+      mime:
+        specifier: 1.6.0
+        version: 1.6.0
       typescript:
         specifier: ^5.9.3
         version: 5.9.3

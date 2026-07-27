@@ -2,7 +2,8 @@
   "assets": [
     {
       "source": "infrastructure/pure-tavern-assets-service-worker.js",
-      "publicPath": "pure-tavern-assets-service-worker.js"
+      "publicPath": "pure-tavern-assets-service-worker.js",
+      "bundle": true
     }
   ]
 }

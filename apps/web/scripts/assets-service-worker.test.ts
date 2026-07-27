@@ -1,4 +1,5 @@
 import { readFile } from 'node:fs/promises';
+import { createRequire } from 'node:module';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { runInNewContext } from 'node:vm';
@@ -10,6 +11,9 @@ const workerPath = path.resolve(
   scriptsDirectory,
   '../src/features/assets/infrastructure/pure-tavern-assets-service-worker.js',
 );
+const require = createRequire(import.meta.url);
+const TEST_UPSTREAM_MIME_TYPES = (require('mime') as { types: Readonly<Record<string, string>> })
+  .types;
 
 describe('shared Assets Service Worker', () => {
   it('opens the existing Dexie database without owning a native schema version', async () => {
@@ -38,7 +42,7 @@ describe('shared Assets Service Worker', () => {
     expect(source).toContain("[CHARACTERS_MODULE, 'avatars', avatarFile]");
     expect(source).toContain("[ASSETS_MODULE, 'path-aliases', legacyPath]");
     expect(source).toContain("return 'assets/extensions'");
-    expect(source).toContain("const WORKER_VERSION = '3'");
+    expect(source).toContain("const WORKER_VERSION = '4'");
     expect(source).toContain("const RUNTIME_CACHE_PREFIX = 'pure-tavern-runtime-'");
     expect(source).toContain("data.type !== 'warm-runtime-cache'");
     expect(source).toContain("cache: 'force-cache'");
@@ -46,6 +50,72 @@ describe('shared Assets Service Worker', () => {
     expect(source).toContain("segment === '..'");
     expect(source).not.toContain("segment.startsWith('.')");
     expect(source).not.toContain("segment.includes('..')");
+  });
+
+  it('injects the same MIME database used by the upstream Express sendFile route', async () => {
+    const [prepareSource, runtimeManifestSource] = await Promise.all([
+      readFile(path.resolve(scriptsDirectory, 'prepare-legacy-runtime.mjs'), 'utf8'),
+      readFile(
+        path.resolve(scriptsDirectory, '../src/features/assets/runtime-assets.json'),
+        'utf8',
+      ),
+    ]);
+    const runtimeManifest = JSON.parse(runtimeManifestSource) as {
+      assets: Array<{ bundle?: boolean }>;
+    };
+
+    expect(prepareSource).toContain("import mime from 'mime'");
+    expect(prepareSource).toContain('JSON.stringify(mime.types)');
+    expect(runtimeManifest.assets[0]?.bundle).toBe(true);
+  });
+
+  it('serves imported extension files with upstream sendFile MIME semantics', async () => {
+    const source = await readFile(workerPath, 'utf8');
+    const storedAssetContentType = runInNewContext(`${source}\nstoredAssetContentType`, {
+      self: {
+        location: new URL(
+          'https://pure-tavern.local/pure-tavern-assets-service-worker.js?v=build-test-0001',
+        ),
+        addEventListener() {},
+      },
+      URL,
+      Response,
+      Request,
+      Headers,
+      fetch: vi.fn(),
+      console,
+      indexedDB: {},
+      caches: {},
+      __PURE_TAVERN_UPSTREAM_MIME_TYPES__: TEST_UPSTREAM_MIME_TYPES,
+    }) as (legacyPath: string, indexedType: string, blobType: string) => string;
+
+    expect(
+      storedAssetContentType(
+        '/scripts/extensions/third-party/JS-Slash-Runner/dist/index.js',
+        'application/octet-stream',
+        '',
+      ),
+    ).toBe('application/javascript; charset=UTF-8');
+    expect(
+      storedAssetContentType(
+        '/scripts/extensions/third-party/ST-Prompt-Template/libs/faker.mjs',
+        'application/octet-stream',
+        'application/octet-stream',
+      ),
+    ).toBe('application/javascript; charset=UTF-8');
+    expect(
+      storedAssetContentType(
+        '/scripts/extensions/third-party/JS-Slash-Runner/dist/index.css',
+        'application/octet-stream',
+        'application/octet-stream',
+      ),
+    ).toBe('text/css; charset=UTF-8');
+    expect(storedAssetContentType('/user/files/untrusted.js', 'application/octet-stream', '')).toBe(
+      'application/octet-stream',
+    );
+    expect(
+      storedAssetContentType('/scripts/extensions/third-party/example/index.js', 'text/plain', ''),
+    ).toBe('application/javascript; charset=UTF-8');
   });
 
   it('serves code cache-first within one Build ID and switches namespaces without stale reuse', async () => {
@@ -169,6 +239,7 @@ async function createWorkerHarness(buildId: string) {
     console,
     indexedDB: {},
     caches,
+    __PURE_TAVERN_UPSTREAM_MIME_TYPES__: TEST_UPSTREAM_MIME_TYPES,
   });
 
   return {

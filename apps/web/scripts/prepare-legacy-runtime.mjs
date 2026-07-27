@@ -4,6 +4,7 @@ import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import { build } from 'esbuild';
+import mime from 'mime';
 
 import { generateDefaultAssetManifest } from './default-asset-manifest-generator.mjs';
 import { generateHookedIndex } from './legacy-index-generator.mjs';
@@ -265,6 +266,7 @@ async function copyFeatureRuntimeAssets() {
           logLevel: 'silent',
           define: {
             'process.env.NODE_ENV': '"production"',
+            __PURE_TAVERN_UPSTREAM_MIME_TYPES__: JSON.stringify(mime.types),
           },
         });
       } else {

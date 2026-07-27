@@ -1,14 +1,15 @@
-/* global self, URL, Response, Request, fetch, Headers, console, indexedDB, caches */
+/* global self, URL, Response, Request, fetch, Headers, console, indexedDB, caches, __PURE_TAVERN_UPSTREAM_MIME_TYPES__ */
 
 const DATABASE_NAME = 'pure-tavern-modular-dev';
 const KEY_SEPARATOR = '\u001f';
 const ASSETS_MODULE = 'assets';
 const CHARACTERS_MODULE = 'characters';
 const ASSET_MARKER_HEADER = 'X-Pure-Tavern-Asset';
-const WORKER_VERSION = '3';
+const WORKER_VERSION = '4';
 const RUNTIME_BUILD_QUERY = '__pt_build';
 const RUNTIME_CACHE_PREFIX = 'pure-tavern-runtime-';
 const BUILD_ID_PATTERN = /^[a-zA-Z0-9_-]{8,128}$/u;
+const UPSTREAM_MIME_TYPES = Object.freeze(__PURE_TAVERN_UPSTREAM_MIME_TYPES__);
 const RUNTIME_FILE_PATTERN = /\.(?:css|eot|htm|html|js|json|mjs|otf|ttf|wasm|woff|woff2)$/iu;
 const WORKER_BUILD_ID =
   readBuildId(new URL(self.location.href).searchParams.get('v')) || 'development';
@@ -316,11 +317,34 @@ async function readIndexedAsset(legacyPath) {
     if (!record?.data) return null;
     return {
       data: record.data,
-      contentType: String(index.value.mimeType || record.data.type || 'application/octet-stream'),
+      contentType: storedAssetContentType(legacyPath, index.value.mimeType, record.data.type),
     };
   } finally {
     db.close();
   }
+}
+
+/**
+ * The upstream extension route serves files with Express res.sendFile(), whose send@0.19.0
+ * dependency resolves Content-Type through mime@1.6.0. The build injects that package's complete
+ * type map here, so the browser-only route has the same behavior without a hand-maintained list.
+ */
+function storedAssetContentType(legacyPath, indexedType, blobType) {
+  if (legacyPath.startsWith('/scripts/extensions/third-party/')) {
+    return upstreamExtensionContentType(legacyPath);
+  }
+  for (const candidate of [indexedType, blobType]) {
+    const normalized = typeof candidate === 'string' ? candidate.trim() : '';
+    if (normalized) return normalized;
+  }
+  return 'application/octet-stream';
+}
+
+function upstreamExtensionContentType(pathname) {
+  const extension = pathname.replace(/^.*[./\\]/u, '').toLowerCase();
+  const type = UPSTREAM_MIME_TYPES[extension] || 'application/octet-stream';
+  const charset = /^text\/|^application\/(?:javascript|json)/u.test(type) ? 'UTF-8' : '';
+  return type + (charset ? `; charset=${charset}` : '');
 }
 
 function makeBlobResponse(request, blob, contentType, marker) {
