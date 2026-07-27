@@ -41,6 +41,32 @@ describe('chat completion provider registry', () => {
     });
     expect(descriptors.find((entry) => entry.source === 'custom')?.keyOptional).toBe(true);
   });
+
+  it('supports reverse proxy for every source the legacy frontend allowlist sends', () => {
+    // Sources listed in `proxySupportedSources` in
+    // apps/web/legacy/upstream/public/scripts/openai.js. The frontend sends
+    // `reverse_proxy` + `proxy_password` for these sources, so the backend
+    // MUST mark them supportsReverseProxy=true to honor the override and to
+    // avoid #resolveCredential leaking the proxy password to the default
+    // endpoint. Keep this list in sync with the frontend allowlist.
+    const frontendAllowlist = [
+      'claude',
+      'openai',
+      'mistralai',
+      'makersuite',
+      'vertexai',
+      'deepseek',
+      'xai',
+      'zai',
+      'moonshot',
+    ] as const;
+    const descriptors = listProviderDescriptors();
+    const backendSupported = new Set(
+      descriptors.filter((entry) => entry.supportsReverseProxy).map((entry) => entry.source),
+    );
+    const missing = frontendAllowlist.filter((source) => !backendSupported.has(source));
+    expect(missing).toEqual([]);
+  });
 });
 
 describe('GenerationService provider adapters', () => {
@@ -230,6 +256,92 @@ describe('GenerationService provider adapters', () => {
     expect(calls[1]!.body).toHaveProperty('systemInstruction');
     expect(calls[2]!.url).toBe('https://api.cohere.ai/v2/chat');
     expect(calls[2]!.body).toMatchObject({ model: 'command-browser', max_tokens: 100 });
+  });
+
+  it('honors zai reverse_proxy over the zai_endpoint=coding default', async () => {
+    const calls: string[] = [];
+    const nativeFetch = vi.fn(async (input: RequestInfo | URL) => {
+      calls.push(String(input));
+      return new Response(JSON.stringify({ choices: [{ message: { content: 'ok' } }] }), {
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }) as typeof window.fetch;
+    const service = createService(nativeFetch);
+
+    await service.generate({
+      chat_completion_source: 'zai',
+      zai_endpoint: 'coding',
+      reverse_proxy: 'https://proxy.example/v1',
+      proxy_password: 'proxy-secret',
+      model: 'glm-4.6',
+      messages: [{ role: 'user', content: 'Hi' }],
+    });
+
+    expect(calls[0]).toBe('https://proxy.example/v1/chat/completions');
+  });
+
+  it('still routes zai to the coding endpoint when no reverse_proxy is set', async () => {
+    const calls: string[] = [];
+    const nativeFetch = vi.fn(async (input: RequestInfo | URL) => {
+      calls.push(String(input));
+      return new Response(JSON.stringify({ choices: [{ message: { content: 'ok' } }] }), {
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }) as typeof window.fetch;
+    const service = createService(nativeFetch);
+
+    await service.generate({
+      chat_completion_source: 'zai',
+      zai_endpoint: 'coding',
+      model: 'glm-4.6',
+      messages: [{ role: 'user', content: 'Hi' }],
+    });
+
+    expect(calls[0]).toBe('https://api.z.ai/api/coding/paas/v4/chat/completions');
+  });
+
+  it('does not use proxy_password as credential when source lacks supportsReverseProxy', async () => {
+    const calls: Array<{ headers: Headers }> = [];
+    const nativeFetch = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      calls.push({ headers: new Headers(init?.headers) });
+      return new Response(JSON.stringify({ choices: [{ message: { content: 'ok' } }] }), {
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }) as typeof window.fetch;
+    const service = createService(nativeFetch);
+
+    await service.generate({
+      chat_completion_source: 'openrouter',
+      reverse_proxy: 'https://proxy.example/v1',
+      proxy_password: 'must-not-be-used',
+      model: 'openrouter-model',
+      messages: [{ role: 'user', content: 'Hi' }],
+    });
+
+    expect(calls[0]!.headers.get('Authorization')).toBe(
+      'Bearer credential-for-api_key_openrouter',
+    );
+  });
+
+  it('uses proxy_password as credential when source supports reverse proxy', async () => {
+    const calls: Array<{ headers: Headers }> = [];
+    const nativeFetch = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      calls.push({ headers: new Headers(init?.headers) });
+      return new Response(JSON.stringify({ choices: [{ message: { content: 'ok' } }] }), {
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }) as typeof window.fetch;
+    const service = createService(nativeFetch);
+
+    await service.generate({
+      chat_completion_source: 'openai',
+      reverse_proxy: 'https://proxy.example/v1',
+      proxy_password: 'proxy-secret',
+      model: 'gpt-4o',
+      messages: [{ role: 'user', content: 'Hi' }],
+    });
+
+    expect(calls[0]!.headers.get('Authorization')).toBe('Bearer proxy-secret');
   });
 
   it('normalizes Pollinations arrays, Workers results and Azure configured deployments', async () => {

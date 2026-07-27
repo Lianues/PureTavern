@@ -42,7 +42,7 @@ const descriptors: readonly ProviderDescriptor[] = [
   ),
   descriptor('chutes', 'openai-compatible', 'api_key_chutes', 'https://llm.chutes.ai/v1'),
   descriptor('nanogpt', 'openai-compatible', 'api_key_nanogpt', 'https://nano-gpt.com/api/v1'),
-  descriptor('deepseek', 'openai-compatible', 'api_key_deepseek', 'https://api.deepseek.com'),
+  descriptor('deepseek', 'openai-compatible', 'api_key_deepseek', 'https://api.deepseek.com', true),
   descriptor('aimlapi', 'openai-compatible', 'api_key_aimlapi', 'https://api.aimlapi.com/v1'),
   descriptor('xai', 'openai-compatible', 'api_key_xai', 'https://api.x.ai/v1', true),
   descriptor(

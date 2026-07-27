@@ -12,13 +12,6 @@ export function resolveProviderBaseUrl(
   let value = descriptor.baseUrl;
   if (descriptor.source === 'custom')
     value = readRequiredString(request.custom_url, 'Custom API URL');
-  if (
-    descriptor.supportsReverseProxy &&
-    typeof request.reverse_proxy === 'string' &&
-    request.reverse_proxy.trim()
-  ) {
-    value = request.reverse_proxy.trim();
-  }
   if (descriptor.source === 'azure_openai') {
     value = readRequiredString(request.azure_base_url, 'Azure base URL');
   }
@@ -30,6 +23,15 @@ export function resolveProviderBaseUrl(
   }
   if (descriptor.source === 'zai' && request.zai_endpoint === 'coding') {
     value = 'https://api.z.ai/api/coding/paas/v4';
+  }
+  // An explicit reverse_proxy override takes precedence over source-specific
+  // endpoint selections above so user-configured proxies are honored.
+  if (
+    descriptor.supportsReverseProxy &&
+    typeof request.reverse_proxy === 'string' &&
+    request.reverse_proxy.trim()
+  ) {
+    value = request.reverse_proxy.trim();
   }
 
   let url: URL;

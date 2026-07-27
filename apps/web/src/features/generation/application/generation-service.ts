@@ -132,6 +132,7 @@ export class GenerationService implements GenerationGateway, ModelCatalogGateway
       const credential = await this.#resolveCredential(
         descriptor.secretKey,
         descriptor.keyOptional,
+        descriptor.supportsReverseProxy,
         request,
       );
       const context: ProviderAdapterContext = {
@@ -153,9 +154,11 @@ export class GenerationService implements GenerationGateway, ModelCatalogGateway
   async #resolveCredential(
     secretKey: string | null,
     keyOptional: boolean,
+    supportsReverseProxy: boolean,
     request: LegacyGenerationRequest,
   ): Promise<string | null> {
     if (
+      supportsReverseProxy &&
       typeof request.reverse_proxy === 'string' &&
       request.reverse_proxy.trim() &&
       typeof request.proxy_password === 'string' &&
