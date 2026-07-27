@@ -75,6 +75,16 @@ jobs:
             exit 1
           fi
 
+      - name: Require Open VSX publishing token
+        env:
+          OPEN_VSX_TOKEN: ${{ secrets.OPEN_VSX_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [[ -z "$OPEN_VSX_TOKEN" ]]; then
+            echo "Missing repository secret: OPEN_VSX_TOKEN" >&2
+            exit 1
+          fi
+
       - name: Report desktop signing mode
         env:
           WINDOWS_CERTIFICATE: ${{ secrets.WINDOWS_CERTIFICATE }}
@@ -684,3 +694,32 @@ jobs:
             --title "PureTavern $RELEASE_VERSION" \
             --notes-file release-notes.md \
             "${MODE_ARGS[@]}"
+
+  publish-open-vsx:
+    name: Publish Open VSX extension
+    needs: publish
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Download VSIX
+        uses: actions/download-artifact@v4
+        with:
+          name: release-vscode
+          path: release-vscode
+
+      - name: Publish extension to Open VSX
+        env:
+          OVSX_PAT: ${{ secrets.OPEN_VSX_TOKEN }}
+        run: |
+          set -euo pipefail
+          mapfile -d '' VSIX_FILES < <(find release-vscode -type f -name '*.vsix' -print0)
+          if [[ "${#VSIX_FILES[@]}" -ne 1 ]]; then
+            echo "Expected exactly one VSIX package, found ${#VSIX_FILES[@]}." >&2
+            exit 1
+          fi
+          npx --yes ovsx@1.0.2 --registryUrl https://open-vsx.org publish "${VSIX_FILES[0]}" --skip-duplicate
