@@ -12,6 +12,11 @@ export interface CompatibilityDiagnostics {
 
 export type CompatibilityHandler = (request: Request, url: URL) => Promise<Response> | Response;
 
+// Safari/WebKit can fail when a browser-owned File is serialized into multipart by Request and then
+// immediately parsed back through Request.formData(). Keep a same-realm snapshot for compatibility
+// routes so Unicode filenames, empty MIME types and File identity survive without that round trip.
+const preservedFormDataBodies = new WeakMap<Request, FormData>();
+
 export interface SynchronousCompatibilityResponse {
   status: number;
   statusText?: string;
@@ -142,12 +147,18 @@ export function emptyResponse(status = 204): Response {
   });
 }
 
+export function readCompatibilityFormData(request: Request): Promise<FormData> {
+  const preserved = preservedFormDataBodies.get(request);
+  return preserved ? Promise.resolve(preserved) : request.formData();
+}
+
 export function installCompatibilityFetch(router: CompatibilityRouter) {
   const nativeFetch = window.fetch.bind(window);
 
   window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
     const resolvedInput = typeof input === 'string' ? new URL(input, window.location.href) : input;
     const request = new Request(resolvedInput, init);
+    preserveFormDataBody(request, init?.body);
     const url = new URL(request.url);
 
     if (url.origin === window.location.origin) {
@@ -386,6 +397,7 @@ export function installCompatibilityXhr(router: CompatibilityRouter): () => void
           headers: this.#requestHeaders,
           body: hasBody ? (body as BodyInit) : null,
         });
+        preserveFormDataBody(request, body);
         const response = await router.dispatch(request, new URL(this.#url));
         if (!response || this.#aborted) return;
         this.#readyState = CompatibilityXmlHttpRequest.HEADERS_RECEIVED;
@@ -443,4 +455,11 @@ export function installCompatibilityXhr(router: CompatibilityRouter): () => void
   return () => {
     window.XMLHttpRequest = NativeXmlHttpRequest;
   };
+}
+
+function preserveFormDataBody(request: Request, body: unknown): void {
+  if (typeof FormData === 'undefined' || !(body instanceof FormData)) return;
+  const snapshot = new FormData();
+  for (const [name, value] of body.entries()) snapshot.append(name, value);
+  preservedFormDataBodies.set(request, snapshot);
 }

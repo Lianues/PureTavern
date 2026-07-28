@@ -1,5 +1,5 @@
 import type { CompatibilityRouter } from '@/platform/legacy/compatibility-router';
-import { jsonResponse } from '@/platform/legacy/compatibility-router';
+import { jsonResponse, readCompatibilityFormData } from '@/platform/legacy/compatibility-router';
 
 import {
   ChatConflictError,
@@ -162,7 +162,7 @@ async function readFormBody(
 ): Promise<{ fields: Record<string, string>; file: Blob | null }> {
   let formData: FormData;
   try {
-    formData = await request.formData();
+    formData = await readCompatibilityFormData(request);
   } catch (error) {
     throw new ChatValidationError(`Request body must be form data: ${String(error)}`);
   }

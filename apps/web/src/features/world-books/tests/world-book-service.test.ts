@@ -200,7 +200,6 @@ describe('WorldBook repository and service', () => {
       message: 'IndexedDB unavailable',
     });
   });
-
 });
 
 describe('WorldBookImportCodec', () => {
@@ -228,6 +227,28 @@ describe('WorldBookImportCodec', () => {
       ),
     ).resolves.toBe('Converted');
     await expect(service.getWorldBook('Converted')).resolves.toEqual(converted);
+  });
+
+  it('imports an iOS Files-style Unicode world book with empty MIME and object entries', async () => {
+    const repository = new MemoryWorldBookRepository();
+    const service = new WorldBookService(repository, undefined, () => 'ios-world-book');
+    const document = {
+      entries: Object.fromEntries(
+        Array.from({ length: 19 }, (_, uid) => [
+          String(uid),
+          {
+            uid,
+            key: uid === 0 ? ['韓國', '대한민국'] : [`財閥-${uid}`],
+            comment: uid === 0 ? 'Republic of Korea' : `Entry ${uid}`,
+            content: uid === 0 ? '<韓國>繁體中文世界觀</韓國>' : `內容 ${uid}`,
+          },
+        ]),
+      ),
+    };
+    const file = namedBlob([JSON.stringify(document)], '韓國財閥世界觀.json', '');
+
+    await expect(service.importWorldBook(file)).resolves.toBe('韓國財閥世界觀');
+    await expect(service.getWorldBook('韓國財閥世界觀')).resolves.toEqual(document);
   });
 
   it('rejects invalid JSON, missing/invalid entries and unsafe names', async () => {

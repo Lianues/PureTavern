@@ -1,5 +1,9 @@
 import type { CompatibilityRouter } from '@/platform/legacy/compatibility-router';
-import { jsonResponse, textResponse } from '@/platform/legacy/compatibility-router';
+import {
+  jsonResponse,
+  readCompatibilityFormData,
+  textResponse,
+} from '@/platform/legacy/compatibility-router';
 import { parseAvatarCrop } from '@/platform/legacy/parse-avatar-crop';
 
 import { AssetError, AssetValidationError } from '../application/asset-errors';
@@ -65,7 +69,7 @@ export function registerAssetsLegacyRoutes(
   router.register('POST', '/api/backgrounds/upload', async (request) => {
     try {
       await backgroundsReady;
-      const form = await request.formData();
+      const form = await readCompatibilityFormData(request);
       const file = requireFormFile(form, 'avatar');
       const filename = fileNameOf(file, 'background.png');
       return textResponse(await assets.uploadBackground(file, filename));
@@ -152,7 +156,7 @@ export function registerAssetsLegacyRoutes(
   registerJson(router, 'POST', '/api/avatars/get', () => assets.listAvatars());
   router.register('POST', '/api/avatars/upload', async (request, url) => {
     try {
-      const form = await request.formData();
+      const form = await readCompatibilityFormData(request);
       const file = requireFormFile(form, 'avatar');
       const overwriteName = form.get('overwrite_name');
       const crop = parseAvatarCrop(url.searchParams.get('crop'));
@@ -178,7 +182,7 @@ export function registerAssetsLegacyRoutes(
   );
   router.register('POST', '/api/sprites/upload', async (request) => {
     try {
-      const form = await request.formData();
+      const form = await readCompatibilityFormData(request);
       const file = requireFormFile(form, 'avatar');
       return jsonResponse(
         await assets.uploadSprite({
@@ -195,7 +199,7 @@ export function registerAssetsLegacyRoutes(
   });
   router.register('POST', '/api/sprites/upload-zip', async (request) => {
     try {
-      const form = await request.formData();
+      const form = await readCompatibilityFormData(request);
       const file = requireFormFile(form, 'avatar');
       return jsonResponse(await assets.uploadSpriteZip(form.get('name'), file));
     } catch (error) {

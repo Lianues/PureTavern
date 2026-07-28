@@ -1,5 +1,9 @@
 import type { CompatibilityRouter } from '@/platform/legacy/compatibility-router';
-import { jsonResponse, textResponse } from '@/platform/legacy/compatibility-router';
+import {
+  jsonResponse,
+  readCompatibilityFormData,
+  textResponse,
+} from '@/platform/legacy/compatibility-router';
 
 import type { WorldBookService } from '../application/world-book-service';
 import {
@@ -46,7 +50,7 @@ export function registerWorldBooksLegacyRoutes(
 
   router.register('POST', '/api/worldinfo/import', async (request) => {
     try {
-      const formData = await request.formData();
+      const formData = await readCompatibilityFormData(request);
       const avatar = formData.get('avatar');
       if (!avatar || typeof avatar === 'string') {
         throw new WorldBookValidationError('World Book import requires an avatar file.');

@@ -1,5 +1,9 @@
 import type { CompatibilityRouter } from '@/platform/legacy/compatibility-router';
-import { jsonResponse, textResponse } from '@/platform/legacy/compatibility-router';
+import {
+  jsonResponse,
+  readCompatibilityFormData,
+  textResponse,
+} from '@/platform/legacy/compatibility-router';
 import { parseAvatarCrop } from '@/platform/legacy/parse-avatar-crop';
 
 import {
@@ -168,7 +172,7 @@ async function readLegacyBodyWithOptionalFile(
     contentType.includes('multipart/form-data') ||
     contentType.includes('application/x-www-form-urlencoded')
   ) {
-    const formData = await request.formData();
+    const formData = await readCompatibilityFormData(request);
     return formDataToFields(formData);
   }
   const fields = await readJsonBody(request);

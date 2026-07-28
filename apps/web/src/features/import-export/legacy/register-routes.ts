@@ -1,5 +1,9 @@
 import type { CompatibilityRouter } from '@/platform/legacy/compatibility-router';
-import { emptyResponse, jsonResponse } from '@/platform/legacy/compatibility-router';
+import {
+  emptyResponse,
+  jsonResponse,
+  readCompatibilityFormData,
+} from '@/platform/legacy/compatibility-router';
 
 import type { ArchiveService } from '../application/archive-service';
 import {
@@ -171,7 +175,7 @@ async function readImportForm(
 ): Promise<{ archive: Blob; options: ArchiveImportOptions }> {
   let form: FormData;
   try {
-    form = await request.formData();
+    form = await readCompatibilityFormData(request);
   } catch {
     throw new ArchiveValidationError(
       'invalid-form',
