@@ -47,6 +47,14 @@ iOS 工程位于：
 apps/mobile/ios/App/App.xcodeproj
 ```
 
+iOS 的页面 origin 是 `capacitor://localhost`，WebKit 不允许该自定义 scheme 注册 Service Worker。原生外壳因此使用 `PureTavernBridgeViewController` 包装 Capacitor 的 scheme handler，并通过仅随 iOS 打包的 IndexedDB bridge 提供与 Web Assets Service Worker 相同的动态资源路径，包括角色/Persona 头像、缩略图、背景、附件、用户图片、表情资源、资产库和任意第三方扩展文件。非动态文件仍委托给 Capacitor 原 handler，页面 origin 和现有 Web 存储不会改变。
+
+第三方扩展的 iOS MIME 映射固定为 Web 当前使用的 `mime@1.6.0` 数据。升级该依赖后执行：
+
+```bash
+pnpm --filter @pure-tavern/mobile generate:ios-mime
+```
+
 GitHub Actions 中的 **Build iOS IPA** workflow 仅手动触发，并在 macOS runner 生成：
 
 ```text

@@ -3,7 +3,8 @@
   "version": "0.1.6",
   "private": true,
   "scripts": {
-    "test": "node scripts/verify-file-saver.mjs && node scripts/verify-ios-shell.mjs && node scripts/verify-gradle-runner.mjs",
+    "test": "node scripts/verify-file-saver.mjs && node scripts/generate-ios-extension-mime-types.mjs --check && node scripts/verify-ios-shell.mjs && node scripts/verify-ios-asset-bridge.mjs && node scripts/verify-gradle-runner.mjs",
+    "generate:ios-mime": "node scripts/generate-ios-extension-mime-types.mjs",
     "brand:mobile": "python scripts/generate_mobile_branding.py",
     "sync:android": "cap sync android",
     "open:android": "cap sync android && cap open android",

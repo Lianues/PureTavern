@@ -1,11 +1,14 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
+import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 
 const mobileRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const projectRoot = mobileRoot.replace(/[\\/]apps[\\/]mobile$/u, '');
 const iosRoot = path.join(mobileRoot, 'ios');
+const requireFromWeb = createRequire(path.join(projectRoot, 'apps/web/package.json'));
+const webMimeTypes = requireFromWeb('mime').types;
 
 const [
   project,
@@ -18,21 +21,36 @@ const [
   capacitorConfigSource,
   icon,
   splash,
+  storyboard,
+  bridgeViewController,
+  assetSchemeHandler,
+  iosAssetBridge,
+  extensionMimeTypesSource,
+  webAssetServiceWorker,
 ] = await Promise.all([
-    readFile(path.join(iosRoot, 'App/App.xcodeproj/project.pbxproj'), 'utf8'),
-    readFile(path.join(iosRoot, 'App/App/Info.plist'), 'utf8'),
-    readFile(
-      path.join(iosRoot, 'App/App/Assets.xcassets/AppIcon.appiconset/Contents.json'),
-      'utf8',
+  readFile(path.join(iosRoot, 'App/App.xcodeproj/project.pbxproj'), 'utf8'),
+  readFile(path.join(iosRoot, 'App/App/Info.plist'), 'utf8'),
+  readFile(path.join(iosRoot, 'App/App/Assets.xcassets/AppIcon.appiconset/Contents.json'), 'utf8'),
+  readFile(path.join(iosRoot, 'App/App.xcodeproj/xcshareddata/xcschemes/App.xcscheme'), 'utf8'),
+  readFile(path.join(projectRoot, '.github/workflows/ios-ipa.yml'), 'utf8'),
+  readFile(path.join(iosRoot, '.gitignore'), 'utf8'),
+  readFile(path.join(mobileRoot, 'package.json'), 'utf8'),
+  readFile(path.join(mobileRoot, 'capacitor.config.ts'), 'utf8'),
+  readFile(path.join(iosRoot, 'App/App/Assets.xcassets/AppIcon.appiconset/AppIcon-512@2x.png')),
+  readFile(path.join(iosRoot, 'App/App/Assets.xcassets/Splash.imageset/splash-2732x2732.png')),
+  readFile(path.join(iosRoot, 'App/App/Base.lproj/Main.storyboard'), 'utf8'),
+  readFile(path.join(iosRoot, 'App/App/PureTavernBridgeViewController.swift'), 'utf8'),
+  readFile(path.join(iosRoot, 'App/App/PureTavernAssetSchemeHandler.swift'), 'utf8'),
+  readFile(path.join(iosRoot, 'App/App/PureTavernAssetBridge.js'), 'utf8'),
+  readFile(path.join(iosRoot, 'App/App/PureTavernExtensionMimeTypes.json'), 'utf8'),
+  readFile(
+    path.join(
+      projectRoot,
+      'apps/web/src/features/assets/infrastructure/pure-tavern-assets-service-worker.js',
     ),
-    readFile(path.join(iosRoot, 'App/App.xcodeproj/xcshareddata/xcschemes/App.xcscheme'), 'utf8'),
-    readFile(path.join(projectRoot, '.github/workflows/ios-ipa.yml'), 'utf8'),
-    readFile(path.join(iosRoot, '.gitignore'), 'utf8'),
-    readFile(path.join(mobileRoot, 'package.json'), 'utf8'),
-    readFile(path.join(mobileRoot, 'capacitor.config.ts'), 'utf8'),
-    readFile(path.join(iosRoot, 'App/App/Assets.xcassets/AppIcon.appiconset/AppIcon-512@2x.png')),
-    readFile(path.join(iosRoot, 'App/App/Assets.xcassets/Splash.imageset/splash-2732x2732.png')),
-  ]);
+    'utf8',
+  ),
+]);
 
 function pngMetadata(buffer) {
   assert.equal(buffer.toString('ascii', 1, 4), 'PNG');
@@ -57,17 +75,87 @@ assert.match(info, /<string>PureTavern<\/string>/u);
 assert.match(info, /<key>UIStatusBarHidden<\/key>\s*<true\/>/u);
 assert.match(info, /<key>UIViewControllerBasedStatusBarAppearance<\/key>\s*<true\/>/u);
 assert.match(capacitorConfigSource, /backgroundColor:\s*['"]#171717['"]/u);
-assert.match(
-  capacitorConfigSource,
-  /ios:\s*\{[\s\S]*?contentInset:\s*['"]never['"],?[\s\S]*?\}/u,
-);
+assert.match(capacitorConfigSource, /ios:\s*\{[\s\S]*?contentInset:\s*['"]never['"],?[\s\S]*?\}/u);
 assert.doesNotMatch(capacitorConfigSource, /contentInset:\s*['"]always['"]/u);
-assert.match(
-  capacitorConfigSource,
-  /SystemBars:\s*\{[\s\S]*?hidden:\s*true,?[\s\S]*?\}/u,
-);
+assert.match(capacitorConfigSource, /SystemBars:\s*\{[\s\S]*?hidden:\s*true,?[\s\S]*?\}/u);
 assert.match(iconContents, /AppIcon-512@2x\.png/u);
 assert.match(scheme, /BlueprintIdentifier = "504EC3031FED79650016851F"/u);
+assert.match(
+  storyboard,
+  /customClass="PureTavernBridgeViewController"\s+customModule="App"\s+customModuleProvider="target"/u,
+);
+for (const source of [
+  'PureTavernBridgeViewController.swift',
+  'PureTavernAssetSchemeHandler.swift',
+]) {
+  assert.match(project, new RegExp(`${source.replaceAll('.', '\\.')} in Sources`, 'u'));
+}
+assert.match(project, /PureTavernAssetBridge\.js in Resources/u);
+assert.match(project, /PureTavernExtensionMimeTypes\.json in Resources/u);
+assert.match(bridgeViewController, /override func webView\(with frame:/u);
+assert.match(bridgeViewController, /urlSchemeHandler\(forURLScheme: localScheme\)/u);
+assert.match(bridgeViewController, /setURLSchemeHandler\(nil, forURLScheme: localScheme\)/u);
+assert.match(
+  bridgeViewController,
+  /WKUserScript\(source: source, injectionTime: \.atDocumentStart/u,
+);
+assert.match(assetSchemeHandler, /WKURLSchemeHandler/u);
+assert.match(assetSchemeHandler, /final class FallbackTaskProxy: NSObject, WKURLSchemeTask/u);
+assert.match(assetSchemeHandler, /fallbackHandler\.webView\(webView, start: proxy\)/u);
+assert.match(assetSchemeHandler, /callAsyncJavaScript/u);
+assert.match(assetSchemeHandler, /method == "GET" \|\| method == "HEAD"/u);
+assert.match(assetSchemeHandler, /private static let chunkBytes: Int64 = 512 \* 1024/u);
+assert.match(assetSchemeHandler, /private static let bridgeTimeoutSeconds: TimeInterval = 15/u);
+assert.match(assetSchemeHandler, /DispatchSource\.makeTimerSource\(queue: \.main\)/u);
+assert.doesNotMatch(assetSchemeHandler, /DispatchQueue\.main\.asyncAfter/u);
+assert.match(assetSchemeHandler, /task\.request\.httpMethod == "HEAD"/u);
+assert.match(assetSchemeHandler, /case \.delegated\(let delegatedTask\)/u);
+assert.match(assetSchemeHandler, /self\.releaseAsset\(token, in: webView\)/u);
+assert.match(assetSchemeHandler, /let status = range == nil \? 200 : 206/u);
+assert.match(assetSchemeHandler, /"mjs": "application\/javascript; charset=UTF-8"/u);
+assert.match(assetSchemeHandler, /PureTavernExtensionMimeTypes/u);
+assert.match(assetSchemeHandler, /"wasm": "application\/wasm"/u);
+assert.match(assetSchemeHandler, /segment != "\.\."/u);
+assert.match(assetSchemeHandler, /readStaticData\(fileURL, range: range\)/u);
+for (const contract of [
+  "const DATABASE_NAME = 'pure-tavern-modular-dev'",
+  "const KEY_SEPARATOR = '\\u001f'",
+  "[ASSETS_MODULE, 'path-aliases', legacyPath]",
+  "[ASSETS_MODULE, 'index', assetId]",
+  "[CHARACTERS_MODULE, 'avatars', avatarFile]",
+]) {
+  assert.ok(iosAssetBridge.includes(contract), `Missing iOS bridge storage contract: ${contract}`);
+  assert.ok(webAssetServiceWorker.includes(contract), `Web worker contract changed: ${contract}`);
+}
+for (const namespace of [
+  '/thumbnail',
+  '/backgrounds/',
+  '/User Avatars/',
+  '/user/files/',
+  '/user/images/',
+  '/characters/',
+  '/assets/',
+  '/scripts/extensions/third-party/',
+]) {
+  assert.ok(iosAssetBridge.includes(namespace), `Missing iOS bridge namespace: ${namespace}`);
+  assert.ok(
+    webAssetServiceWorker.includes(namespace),
+    `Web worker namespace changed: ${namespace}`,
+  );
+}
+assert.match(iosAssetBridge, /async function readChunk\(token, offset, length\)/u);
+assert.match(iosAssetBridge, /function scheduleExpiry\(token, entry\)/u);
+assert.match(iosAssetBridge, /Expired iOS asset bridge token/u);
+assert.match(iosAssetBridge, /openExistingDatabase/u);
+assert.match(iosAssetBridge, /request\.transaction\?\.abort\(\)/u);
+assert.match(iosAssetBridge, /globalThis\.__PURE_TAVERN_IOS_ASSET_BRIDGE__/u);
+const extensionMimeTypes = JSON.parse(extensionMimeTypesSource);
+assert.deepEqual(
+  extensionMimeTypes,
+  Object.fromEntries(
+    Object.entries(webMimeTypes).sort(([left], [right]) => left.localeCompare(right, 'en')),
+  ),
+);
 assert.match(workflow, /^\s*workflow_dispatch:\s*$/mu);
 assert.doesNotMatch(workflow, /^\s*push:\s*$/mu);
 assert.match(workflow, /CODE_SIGNING_ALLOWED=NO/u);
