@@ -4,8 +4,9 @@ const config: CapacitorConfig = {
   appId: 'com.puretavern.app',
   appName: 'PureTavern',
   webDir: '../web/dist',
+  backgroundColor: '#171717',
   ios: {
-    contentInset: 'always',
+    contentInset: 'never',
   },
   server: {
     androidScheme: 'https',

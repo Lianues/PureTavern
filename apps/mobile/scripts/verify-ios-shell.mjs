@@ -56,10 +56,12 @@ assert.equal(
 assert.match(info, /<string>PureTavern<\/string>/u);
 assert.match(info, /<key>UIStatusBarHidden<\/key>\s*<true\/>/u);
 assert.match(info, /<key>UIViewControllerBasedStatusBarAppearance<\/key>\s*<true\/>/u);
+assert.match(capacitorConfigSource, /backgroundColor:\s*['"]#171717['"]/u);
 assert.match(
   capacitorConfigSource,
-  /ios:\s*\{[\s\S]*?contentInset:\s*['"]always['"],?[\s\S]*?\}/u,
+  /ios:\s*\{[\s\S]*?contentInset:\s*['"]never['"],?[\s\S]*?\}/u,
 );
+assert.doesNotMatch(capacitorConfigSource, /contentInset:\s*['"]always['"]/u);
 assert.match(
   capacitorConfigSource,
   /SystemBars:\s*\{[\s\S]*?hidden:\s*true,?[\s\S]*?\}/u,

@@ -1,3 +1,9 @@
+:root {
+    --mobile-safe-area-inset-top: max(env(safe-area-inset-top, 0px), var(--safe-area-inset-top, 0px));
+    --mobile-top-bar-offset: calc(var(--topBarBlockSize) + var(--mobile-safe-area-inset-top));
+    --mobile-panel-height-offset: calc(45px + var(--mobile-safe-area-inset-top));
+}
+
 /*will apply to anything 1000px or less. this catches ipads, horizontal phones, and vertical phones)*/
 @media screen and (max-width: 1000px) {
 
@@ -292,6 +298,15 @@
         width: 100dvw;
     }
 
+    #top-bar {
+        height: calc(var(--bottomFormBlockSize) + var(--mobile-safe-area-inset-top));
+    }
+
+    #top-settings-holder {
+        height: var(--mobile-top-bar-offset);
+        padding-top: var(--mobile-safe-area-inset-top);
+    }
+
     #bg1,
     #bg_custom {
         height: 100vh !important;
@@ -311,7 +326,13 @@
         max-width: 100dvw;
         left: 0 !important;
         resize: none !important;
-        top: var(--topBarBlockSize);
+        top: var(--mobile-top-bar-offset);
+    }
+
+    #sheld {
+        height: calc(100vh - var(--mobile-top-bar-offset) - 1px);
+        height: calc(100dvh - var(--mobile-top-bar-offset) - 1px);
+        max-height: calc(100dvh - var(--mobile-top-bar-offset) - 1px);
     }
 
     .wi-settings {
@@ -376,8 +397,8 @@
     #logprobsViewer,
     #movingDivs>div {
         /* 100vh are fallback units for browsers that don't support dvh */
-        height: calc(100vh - 45px);
-        height: calc(100dvh - 45px);
+        height: calc(100vh - var(--mobile-panel-height-offset));
+        height: calc(100dvh - var(--mobile-panel-height-offset));
         min-width: 100dvw !important;
         width: 100dvw !important;
         max-width: 100dvw !important;
@@ -386,7 +407,7 @@
         border-right: 1px solid var(--SmartThemeBorderColor);
         border-bottom: 1px solid var(--SmartThemeBorderColor);
         border-radius: 0 0 20px 20px;
-        top: var(--topBarBlockSize) !important;
+        top: var(--mobile-top-bar-offset) !important;
         left: 0 !important;
         backdrop-filter: blur(calc(var(--SmartThemeBlurStrength) * 2));
 
@@ -429,7 +450,7 @@
         width: 100%;
         border-radius: 0 0 20px 20px;
         margin-top: 0px;
-        height: calc(100% - var(--topBarBlockSize));
+        height: calc(100% - var(--mobile-top-bar-offset));
     }
 
     .drawer25pWidth {
@@ -600,8 +621,8 @@
         max-height: unset;
         width: 100vw;
         width: 100dvw;
-        height: calc(100vh - 36px);
-        height: calc(100dvh - 36px);
+        height: calc(100vh - var(--mobile-top-bar-offset));
+        height: calc(100dvh - var(--mobile-top-bar-offset));
         padding-right: max(env(safe-area-inset-right), 0px);
         padding-left: max(env(safe-area-inset-left), 0px);
         padding-bottom: 0;
@@ -642,7 +663,7 @@
     #character_popup,
     #world_popup,
     .drawer-content {
-        margin-top: 36px;
+        margin-top: var(--mobile-top-bar-offset);
     }
 
     .scrollableInner {

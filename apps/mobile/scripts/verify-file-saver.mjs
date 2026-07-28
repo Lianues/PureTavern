@@ -28,11 +28,8 @@ assert.match(activity, /BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE/u);
 assert.match(activity, /void onWindowFocusChanged\(boolean hasFocus\)/u);
 assert.match(activity, /void onResume\(\)/u);
 assert.match(activity, /LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES/u);
-assert.match(activity, /WindowInsetsCompat\.Type\.displayCutout\(\)/u);
-assert.match(
-  activity,
-  /view\.setPadding\(cutout\.left, cutout\.top, cutout\.right, cutout\.bottom\)/u,
-);
+assert.doesNotMatch(activity, /WindowInsetsCompat\.Type\.displayCutout\(\)/u);
+assert.doesNotMatch(activity, /setOnApplyWindowInsetsListener|view\.setPadding\(/u);
 assert.equal(
   (styles.match(/<item name="android:windowFullscreen">true<\/item>/gu) ?? []).length,
   2,
