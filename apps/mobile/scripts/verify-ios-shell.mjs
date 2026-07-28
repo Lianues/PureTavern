@@ -92,9 +92,29 @@ for (const source of [
 }
 assert.match(project, /PureTavernAssetBridge\.js in Resources/u);
 assert.match(project, /PureTavernExtensionMimeTypes\.json in Resources/u);
-assert.match(bridgeViewController, /override func webView\(with frame:/u);
-assert.match(bridgeViewController, /urlSchemeHandler\(forURLScheme: localScheme\)/u);
-assert.match(bridgeViewController, /setURLSchemeHandler\(nil, forURLScheme: localScheme\)/u);
+assert.match(
+  bridgeViewController,
+  /final class PureTavernWebViewConfiguration: WKWebViewConfiguration/u,
+);
+assert.match(bridgeViewController, /override func webViewConfiguration\(/u);
+assert.match(bridgeViewController, /override func setURLSchemeHandler\(/u);
+assert.match(bridgeViewController, /let fallbackHandler = urlSchemeHandler/u);
+assert.match(
+  bridgeViewController,
+  /super\.setURLSchemeHandler\(handler, forURLScheme: urlScheme\)/u,
+);
+assert.match(bridgeViewController, /inheritCapacitorSettings/u);
+assert.match(bridgeViewController, /websiteDataStore = source\.websiteDataStore/u);
+assert.match(
+  bridgeViewController,
+  /defaultWebpagePreferences = source\.defaultWebpagePreferences/u,
+);
+assert.doesNotMatch(bridgeViewController, /setURLSchemeHandler\(nil/u);
+const webViewFactory = bridgeViewController.match(
+  /override func webView\(with frame:[\s\S]*?(?=\n\s*override func capacitorDidLoad)/u,
+)?.[0];
+assert.ok(webViewFactory, 'The PureTavern WKWebView factory override is missing.');
+assert.doesNotMatch(webViewFactory, /setURLSchemeHandler/u);
 assert.match(
   bridgeViewController,
   /WKUserScript\(source: source, injectionTime: \.atDocumentStart/u,
