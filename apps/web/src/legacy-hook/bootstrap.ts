@@ -1,3 +1,4 @@
+import { installLegacyExtensionInstallDefaultBranch } from '../features/extensions/legacy/install-default-branch';
 import { featureModules } from '../features/registry';
 import { installFeatureModules } from '../platform/features/feature-module';
 import {
@@ -23,6 +24,8 @@ const upstreamMetadata = loadUpstreamMetadata(nativeFetch);
 installLegacyBranding(upstreamMetadata);
 // 手机上的系统选择器只认 MIME，不放宽的话 .jsonl 之类的扩展名在导入时根本选不中。
 installLegacyFileAccept();
+// 原版扩展安装弹窗动态创建，使用自有 DOM hook 默认选择 main，不修改 Legacy 上游源码。
+installLegacyExtensionInstallDefaultBranch();
 registerCoreLegacyRoutes(router, upstreamMetadata);
 
 const features = installFeatureModules(featureModules, {
