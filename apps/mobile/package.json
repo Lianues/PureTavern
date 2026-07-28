@@ -1,6 +1,6 @@
 {
   "name": "@pure-tavern/mobile",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "private": true,
   "scripts": {
     "test": "node scripts/verify-file-saver.mjs && node scripts/generate-ios-extension-mime-types.mjs --check && node scripts/verify-ios-shell.mjs && node scripts/verify-ios-asset-bridge.mjs && node scripts/verify-gradle-runner.mjs",

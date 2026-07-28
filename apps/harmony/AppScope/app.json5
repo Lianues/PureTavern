@@ -2,8 +2,8 @@
   app: {
     bundleName: 'com.puretavern.app',
     vendor: 'Limerence',
-    versionCode: 1007,
-    versionName: '0.1.6',
+    versionCode: 1008,
+    versionName: '0.1.7',
     icon: '$media:app_icon',
     label: '$string:app_name',
   },

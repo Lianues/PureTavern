@@ -1,6 +1,6 @@
 [package]
 name = "pure-tavern-desktop"
-version = "0.1.6"
+version = "0.1.7"
 description = "PureTavern desktop shell"
 authors = ["PureTavern contributors"]
 license = "AGPL-3.0-only"
