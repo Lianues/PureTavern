@@ -14,6 +14,7 @@ public class MainActivity extends BridgeActivity {
     protected void onCreate(Bundle savedInstanceState) {
         registerPlugin(PureTavernFileSaverPlugin.class);
         super.onCreate(savedInstanceState);
+        configureResizableWindow();
         configureDisplayCutout();
         enterImmersiveMode();
     }
@@ -32,8 +33,13 @@ public class MainActivity extends BridgeActivity {
         }
     }
 
+    @SuppressWarnings("deprecation") // Compatibility path for pre-edge-to-edge and translated runtimes.
+    private void configureResizableWindow() {
+        getWindow().clearFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN);
+        getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE);
+    }
+
     private void enterImmersiveMode() {
-        WindowCompat.setDecorFitsSystemWindows(getWindow(), false);
         WindowInsetsControllerCompat controller =
                 WindowCompat.getInsetsController(getWindow(), getWindow().getDecorView());
         controller.hide(WindowInsetsCompat.Type.systemBars());

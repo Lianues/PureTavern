@@ -28,11 +28,22 @@ assert.match(activity, /BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE/u);
 assert.match(activity, /void onWindowFocusChanged\(boolean hasFocus\)/u);
 assert.match(activity, /void onResume\(\)/u);
 assert.match(activity, /LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES/u);
+assert.match(activity, /clearFlags\(WindowManager\.LayoutParams\.FLAG_FULLSCREEN\)/u);
+assert.match(
+  activity,
+  /setSoftInputMode\(WindowManager\.LayoutParams\.SOFT_INPUT_ADJUST_RESIZE\)/u,
+);
+assert.doesNotMatch(activity, /setDecorFitsSystemWindows/u);
 assert.doesNotMatch(activity, /WindowInsetsCompat\.Type\.displayCutout\(\)/u);
 assert.doesNotMatch(activity, /setOnApplyWindowInsetsListener|view\.setPadding\(/u);
+assert.match(manifest, /android:windowSoftInputMode="adjustResize"/u);
 assert.equal(
   (styles.match(/<item name="android:windowFullscreen">true<\/item>/gu) ?? []).length,
-  2,
+  1,
+);
+assert.match(
+  styles,
+  /<style name="AppTheme\.NoActionBarLaunch"[^>]*>[\s\S]*?<item name="android:windowFullscreen">true<\/item>[\s\S]*?<\/style>/u,
 );
 assert.match(plugin, /@CapacitorPlugin\(name = "PureTavernFileSaver"\)/u);
 assert.match(plugin, /Intent\.ACTION_CREATE_DOCUMENT/u);
@@ -48,4 +59,6 @@ assert.match(runtime, /PureTavernFileSaver/u);
 assert.match(runtime, /NATIVE_SAVE_CHUNK_SIZE/u);
 assert.match(runtime, /Web 页面无法确认文件是否写入/u);
 
-console.log('PureTavern Android file saver and immersive fullscreen contracts verified.');
+console.log(
+  'PureTavern Android file saver, resizable IME, and immersive system bars contracts verified.',
+);
