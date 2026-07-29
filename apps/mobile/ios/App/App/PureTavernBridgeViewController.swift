@@ -81,11 +81,16 @@ final class PureTavernBridgeViewController: CAPBridgeViewController {
 
     override func capacitorDidLoad() {
         super.capacitorDidLoad()
-        guard let scriptURL = Bundle.main.url(
-            forResource: "PureTavernAssetBridge",
-            withExtension: "js"
-        ), let source = try? String(contentsOf: scriptURL, encoding: .utf8) else {
-            CAPLog.print("⚡️  ERROR: PureTavern iOS asset bridge script is missing.")
+        addUserScript(named: "PureTavernAssetBridge", describedAs: "asset bridge")
+        // Repairs jQuery UI's local-tab detection, which otherwise AJAX-loads the app root and
+        // injects a second copy of the whole Legacy document. See PureTavernTabsFix.js.
+        addUserScript(named: "PureTavernTabsFix", describedAs: "jQuery UI tabs fix")
+    }
+
+    private func addUserScript(named name: String, describedAs description: String) {
+        guard let scriptURL = Bundle.main.url(forResource: name, withExtension: "js"),
+              let source = try? String(contentsOf: scriptURL, encoding: .utf8) else {
+            CAPLog.print("⚡️  ERROR: PureTavern iOS \(description) script is missing.")
             return
         }
         webView?.configuration.userContentController.addUserScript(

@@ -25,6 +25,7 @@ const [
   bridgeViewController,
   assetSchemeHandler,
   iosAssetBridge,
+  iosTabsFix,
   extensionMimeTypesSource,
   webAssetServiceWorker,
 ] = await Promise.all([
@@ -42,6 +43,7 @@ const [
   readFile(path.join(iosRoot, 'App/App/PureTavernBridgeViewController.swift'), 'utf8'),
   readFile(path.join(iosRoot, 'App/App/PureTavernAssetSchemeHandler.swift'), 'utf8'),
   readFile(path.join(iosRoot, 'App/App/PureTavernAssetBridge.js'), 'utf8'),
+  readFile(path.join(iosRoot, 'App/App/PureTavernTabsFix.js'), 'utf8'),
   readFile(path.join(iosRoot, 'App/App/PureTavernExtensionMimeTypes.json'), 'utf8'),
   readFile(
     path.join(
@@ -91,6 +93,7 @@ for (const source of [
   assert.match(project, new RegExp(`${source.replaceAll('.', '\\.')} in Sources`, 'u'));
 }
 assert.match(project, /PureTavernAssetBridge\.js in Resources/u);
+assert.match(project, /PureTavernTabsFix\.js in Resources/u);
 assert.match(project, /PureTavernExtensionMimeTypes\.json in Resources/u);
 assert.match(
   bridgeViewController,
@@ -119,6 +122,22 @@ assert.match(
   bridgeViewController,
   /WKUserScript\(source: source, injectionTime: \.atDocumentStart/u,
 );
+assert.match(bridgeViewController, /addUserScript\(named: "PureTavernAssetBridge"/u);
+// jQuery UI 1.13.2 的 _isLocal() 把 anchor 和 location 当字符串比。Capacitor 加载的
+// capacitor://localhost 没有路径，而 <base href="/"> 会把页内 anchor 解析成带 "/" 的形式，
+// 于是页内 tab 被判成远程 tab，jQuery UI 去 AJAX 加载应用根路径，把整份 Legacy 文档注入成
+// 第二份副本。修的是这个判定函数，不是文档 URL。
+assert.match(bridgeViewController, /addUserScript\(named: "PureTavernTabsFix"/u);
+assert.match(iosTabsFix, /_isLocal/u);
+assert.match(iosTabsFix, /__pureTavernIsLocalPatched/u);
+// jQuery UI 自己判定为 local 时必须沿用其结果，补丁只负责救那个不一致的情形。
+assert.match(iosTabsFix, /original\.call\(this, anchor\) \|\| isSameDocument\(anchor\)/u);
+// 曾被真机否决的两种做法：document-start 的 replaceState 会和 WebKit 的
+// blank-until-painted 逻辑抢时序（永久灰屏）；改 appStartPath / serverURL 则会改掉整个应用
+// 启动所依据的文档 URL（启动卡死）。禁止退回。
+assert.doesNotMatch(bridgeViewController.replace(/\/\/.*$/gmu, ''), /replaceState/u);
+assert.doesNotMatch(bridgeViewController.replace(/\/\/.*$/gmu, ''), /appStartPath|serverURL/u);
+assert.doesNotMatch(iosTabsFix.replace(/\/\/.*$/gmu, ''), /replaceState|pushState/u);
 assert.match(assetSchemeHandler, /WKURLSchemeHandler/u);
 assert.match(assetSchemeHandler, /final class FallbackTaskProxy: NSObject, WKURLSchemeTask/u);
 assert.match(assetSchemeHandler, /fallbackHandler\.webView\(webView, start: proxy\)/u);
