@@ -40,6 +40,7 @@ public class MainActivity extends BridgeActivity {
     }
 
     private void enterImmersiveMode() {
+        WindowCompat.setDecorFitsSystemWindows(getWindow(), false);
         WindowInsetsControllerCompat controller =
                 WindowCompat.getInsetsController(getWindow(), getWindow().getDecorView());
         controller.hide(WindowInsetsCompat.Type.systemBars());

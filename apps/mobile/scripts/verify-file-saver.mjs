@@ -33,7 +33,10 @@ assert.match(
   activity,
   /setSoftInputMode\(WindowManager\.LayoutParams\.SOFT_INPUT_ADJUST_RESIZE\)/u,
 );
-assert.doesNotMatch(activity, /setDecorFitsSystemWindows/u);
+assert.match(
+  activity,
+  /WindowCompat\.setDecorFitsSystemWindows\(getWindow\(\), false\)/u,
+);
 assert.doesNotMatch(activity, /WindowInsetsCompat\.Type\.displayCutout\(\)/u);
 assert.doesNotMatch(activity, /setOnApplyWindowInsetsListener|view\.setPadding\(/u);
 assert.match(manifest, /android:windowSoftInputMode="adjustResize"/u);
