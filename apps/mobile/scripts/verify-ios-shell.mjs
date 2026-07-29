@@ -21,6 +21,7 @@ const [
   capacitorConfigSource,
   icon,
   splash,
+  splashImagesetContents,
   storyboard,
   bridgeViewController,
   assetSchemeHandler,
@@ -38,7 +39,8 @@ const [
   readFile(path.join(mobileRoot, 'package.json'), 'utf8'),
   readFile(path.join(mobileRoot, 'capacitor.config.ts'), 'utf8'),
   readFile(path.join(iosRoot, 'App/App/Assets.xcassets/AppIcon.appiconset/AppIcon-512@2x.png')),
-  readFile(path.join(iosRoot, 'App/App/Assets.xcassets/Splash.imageset/splash-2732x2732.png')),
+  readFile(path.join(iosRoot, 'App/App/Assets.xcassets/Splash.imageset/splash.png')),
+  readFile(path.join(iosRoot, 'App/App/Assets.xcassets/Splash.imageset/Contents.json'), 'utf8'),
   readFile(path.join(iosRoot, 'App/App/Base.lproj/Main.storyboard'), 'utf8'),
   readFile(path.join(iosRoot, 'App/App/PureTavernBridgeViewController.swift'), 'utf8'),
   readFile(path.join(iosRoot, 'App/App/PureTavernAssetSchemeHandler.swift'), 'utf8'),
@@ -201,6 +203,23 @@ assert.match(workflow, /CODE_SIGNING_ALLOWED=NO/u);
 assert.match(workflow, /PureTavern-\$RELEASE_VERSION-ios-unsigned\.ipa/u);
 assert.match(gitignore, /^output$/mu);
 assert.deepEqual(pngMetadata(icon), { width: 1024, height: 1024, colorType: 2 });
-assert.deepEqual(pngMetadata(splash), { width: 2732, height: 2732, colorType: 2 });
+assert.deepEqual(pngMetadata(splash), { width: 1024, height: 1024, colorType: 2 });
+// splashboardd renders the launch image before the app process exists and refuses to decode more
+// than 25 MB of RGBA, denylisting the bundle id when it fails. What matters is the decoded size,
+// not the file size: the old 2732x2732 splash was only 212 KB on disk but 29.9 MB decoded. A
+// scale-suffixed slot makes the system size the image against that scale, so keep a single
+// unscaled entry and check the pixel budget the system actually applies.
+const splashMetadata = pngMetadata(splash);
+assert.ok(
+  splashMetadata.width * splashMetadata.height * 4 <= 25_000_000,
+  'The launch image exceeds splashboardd\'s 25 MB decoded-size limit.',
+);
+const splashContents = JSON.parse(splashImagesetContents);
+assert.equal(splashContents.images.length, 1);
+assert.equal(splashContents.images[0].filename, 'splash.png');
+assert.ok(
+  !('scale' in splashContents.images[0]),
+  'The launch image must stay unscaled; a scale suffix reintroduces the decoded-size overflow.',
+);
 
 console.log('PureTavern Capacitor iOS shell contract verified.');

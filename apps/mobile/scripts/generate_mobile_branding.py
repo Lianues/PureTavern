@@ -8,6 +8,8 @@ SOURCE = PROJECT_ROOT / "apps" / "web" / "src" / "branding" / "pure-tavern-icon.
 ANDROID_RESOURCES = MOBILE_ROOT / "android" / "app" / "src" / "main" / "res"
 IOS_ASSETS = MOBILE_ROOT / "ios" / "App" / "App" / "Assets.xcassets"
 
+SPLASH_SIZE = 1024
+
 ANDROID_DENSITIES = {
     "mdpi": (48, 108),
     "hdpi": (72, 162),
@@ -68,16 +70,21 @@ def write_ios_branding(source: Image.Image) -> None:
     icon.alpha_composite(logo, ((1024 - logo.width) // 2, (1024 - logo.height) // 2))
     icon.convert("RGB").save(icon_path, optimize=True)
 
+    # A single unscaled slot. Registering one image as 1x/2x/3x made the system size the launch
+    # image against the largest scale: 2732x2732 decodes to ~29.9 MB of RGBA, over splashboardd's
+    # 25 MB ceiling, so it refused to generate the launch image and denylisted the bundle id
+    # (XBLaunchStoryboardErrorDomain code 6). Without a scale suffix the image is used at its own
+    # pixel size, and the logo occupies well under a fifth of the canvas anyway.
     splash_directory = IOS_ASSETS / "Splash.imageset"
-    splash = Image.new("RGBA", (2732, 2732), (255, 255, 255, 255))
+    splash = Image.new("RGBA", (SPLASH_SIZE, SPLASH_SIZE), (255, 255, 255, 255))
     splash_logo = source.copy()
-    splash_logo.thumbnail((1256, 1256), Image.Resampling.LANCZOS)
+    limit = round(SPLASH_SIZE * 0.46)
+    splash_logo.thumbnail((limit, limit), Image.Resampling.LANCZOS)
     splash.alpha_composite(
         splash_logo,
-        ((2732 - splash_logo.width) // 2, (2732 - splash_logo.height) // 2),
+        ((SPLASH_SIZE - splash_logo.width) // 2, (SPLASH_SIZE - splash_logo.height) // 2),
     )
-    for name in ("splash-2732x2732-2.png", "splash-2732x2732-1.png", "splash-2732x2732.png"):
-        splash.convert("RGB").save(splash_directory / name, optimize=True)
+    splash.convert("RGB").save(splash_directory / "splash.png", optimize=True)
 
 
 def main() -> None:
