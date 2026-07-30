@@ -190,3 +190,9 @@ CI 会先构建并验证以下产物：
 PureTavern 使用 [AGPL-3.0](./LICENSE) 许可证。
 
 项目包含或衍生自 SillyTavern 的上游资源时，同时遵循对应的上游许可证和署名要求。
+
+
+
+## 社区支持
+
+- [LinuxDO](https://linux.do)
