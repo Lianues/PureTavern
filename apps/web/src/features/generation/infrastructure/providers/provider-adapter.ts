@@ -9,6 +9,7 @@ export interface ProviderAdapterContext {
   descriptor: ProviderDescriptor;
   request: LegacyGenerationRequest;
   credential: string | null;
+  resolveCredential(key: string): Promise<string | null>;
   client: ProviderHttpClient;
   signal?: AbortSignal;
 }

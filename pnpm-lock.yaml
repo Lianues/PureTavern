@@ -136,6 +136,9 @@ importers:
       js-sha256:
         specifier: ^0.11.1
         version: 0.11.1
+      js-sha512:
+        specifier: ^0.9.0
+        version: 0.9.0
       localforage:
         specifier: ^1.10.0
         version: 1.10.0
@@ -1922,6 +1925,9 @@ packages:
 
   js-sha256@0.11.1:
     resolution: {integrity: sha512-o6WSo/LUvY2uC4j7mO50a2ms7E/EAdbP0swigLV+nzHKTTaYnaLIWJ02VdXrsJX0vGedDESQnLsOekr94ryfjg==}
+
+  js-sha512@0.9.0:
+    resolution: {integrity: sha512-mirki9WS/SUahm+1TbAPkqvbCiCfOAAsyXeHxK1UkullnJVVqoJG2pL9ObvT05CN+tM7fxhfYm0NbXn+1hWoZg==}
 
   js-tokens@4.0.0:
     resolution: {integrity: sha512-RdJUflcE3cUzKiMqQgsCu06FPu9UdIJO0beYbPhHN4k6apgJtifcoCtT9bcxOpYBtpD2kCM6Sbzg4CausW/PKQ==}
@@ -4844,6 +4850,8 @@ snapshots:
       textextensions: 6.11.0
 
   js-sha256@0.11.1: {}
+
+  js-sha512@0.9.0: {}
 
   js-tokens@4.0.0: {}
 

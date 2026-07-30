@@ -47,12 +47,10 @@ export function resolveProviderBaseUrl(
       },
     );
   }
-  const localHttp =
-    url.protocol === 'http:' && (url.hostname === 'localhost' || url.hostname === '127.0.0.1');
-  if (url.username || url.password || (url.protocol !== 'https:' && !localHttp)) {
+  if (url.username || url.password || (url.protocol !== 'http:' && url.protocol !== 'https:')) {
     throw new GenerationProviderError(
       'invalid-endpoint',
-      'Provider endpoints must use HTTPS, except localhost development endpoints.',
+      'Provider endpoints must be absolute HTTP or HTTPS URLs without embedded credentials.',
       400,
     );
   }

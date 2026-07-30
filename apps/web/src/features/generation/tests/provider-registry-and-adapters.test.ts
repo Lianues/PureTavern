@@ -17,9 +17,12 @@ const credentials: CredentialResolverCapability = {
   },
 };
 
-function createService(fetchImplementation: typeof window.fetch) {
+function createService(
+  fetchImplementation: typeof window.fetch,
+  credentialResolver: CredentialResolverCapability = credentials,
+) {
   return new GenerationService(
-    credentials,
+    credentialResolver,
     new DirectFetchClient(fetchImplementation),
     new BrowserStreamingGeneration(),
   );
@@ -296,6 +299,8 @@ describe('GenerationService provider adapters', () => {
       model: 'claude-opus-4-6',
       messages,
       max_tokens: 100,
+      reasoning_effort: 'auto',
+      use_sysprompt: true,
       verbosity: 'high',
       tools: [
         {
@@ -313,6 +318,7 @@ describe('GenerationService provider adapters', () => {
       model: 'gemini-browser',
       messages,
       max_tokens: 100,
+      use_sysprompt: true,
     });
     await service.generate({
       chat_completion_source: 'cohere',
@@ -329,7 +335,10 @@ describe('GenerationService provider adapters', () => {
       'content-type': 'application/json',
       'x-api-key': 'credential-for-api_key_claude',
     });
-    expect(calls[0]!.body).toMatchObject({ system: 'System', max_tokens: 100 });
+    expect(calls[0]!.body).toMatchObject({
+      system: [{ type: 'text', text: 'System' }],
+      max_tokens: 100,
+    });
     expect(calls[1]!.url).toContain(
       'generativelanguage.googleapis.com/v1beta/models/gemini-browser:generateContent',
     );
@@ -461,6 +470,12 @@ describe('GenerationService provider adapters', () => {
       if (url.includes('pollinations')) {
         return new Response(JSON.stringify([{ name: 'pollinations-model' }]));
       }
+      if (url.includes('example.openai.azure.com/openai/models')) {
+        return Response.json({ data: [] });
+      }
+      if (url.includes('example.openai.azure.com/openai/deployments/deployment')) {
+        return Response.json({ model: 'deployment' });
+      }
       return new Response(JSON.stringify({ result: [{ name: '@cf/browser-model' }] }));
     }) as typeof window.fetch;
     const service = createService(nativeFetch);
@@ -479,6 +494,7 @@ describe('GenerationService provider adapters', () => {
         chat_completion_source: 'azure_openai',
         azure_base_url: 'https://example.openai.azure.com',
         azure_deployment_name: 'deployment',
+        azure_api_version: '2024-10-21',
       }),
     ).resolves.toEqual({ data: [{ id: 'deployment' }] });
   });
@@ -523,7 +539,7 @@ describe('GenerationService provider adapters', () => {
     ).rejects.toMatchObject({ code: 'aborted', status: 499 });
   });
 
-  it('uses only explicit numeric IDs for logit bias and rejects Vertex full auth honestly', async () => {
+  it('uses only explicit numeric IDs for logit bias and validates Vertex full auth honestly', async () => {
     const service = createService(vi.fn() as unknown as typeof window.fetch);
     expect(
       service.createBiasMap([
@@ -540,8 +556,8 @@ describe('GenerationService provider adapters', () => {
         messages: [{ role: 'user', content: 'Hi' }],
       }),
     ).rejects.toMatchObject({
-      code: 'unsupported-capability',
-      status: 501,
+      code: 'invalid-request',
+      status: 400,
     });
   });
 });

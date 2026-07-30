@@ -1,0 +1,13 @@
+{
+  "upstream": "SillyTavern",
+  "version": "1.18.0",
+  "scope": "main_api=openai chat-completion",
+  "sources": {
+    "public/scripts/openai.js": "93445a168807b916654bcb857f3b7f3943eaff8142c48aa1674fc9763944611d",
+    "src/endpoints/backends/chat-completions.js": "43b70de92b41d0992a957589863b29c7342849e1201ae08c3c26cba6844cf052",
+    "src/prompt-converters.js": "7c7f8dacbe45b27839c206eb2bd93c6b6a280aef0835a389e531123830fab230",
+    "src/endpoints/google.js": "2c08d6a04ab700d4dddb53ca45cc53214e5f999c4aececd554ddbf20458bc21a",
+    "src/constants.js": "ea76963792b63cbeddd8096e0fb338b97d9743b6561de90814c84a8815e8451c",
+    "default/config.yaml": "acec9c7e98a6265e6c10b7c1922c61eaace33349c74b3fab434f26b8a8a81bc4"
+  }
+}

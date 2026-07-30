@@ -3,6 +3,9 @@ apps/web/legacy/upstream/**
 apps/web/legacy/contracts/**
 apps/web/.generated/**
 apps/web/index.html
+# Browser-safe ports and fixtures intentionally retain SillyTavern's upstream formatting.
+apps/web/src/features/generation/compatibility/upstream-prompt-converters.ts
+apps/web/src/features/generation/tests/upstream-prompt-converters.test.ts
 apps/mobile/android/**
 apps/mobile/ios/**
 apps/harmony/.hvigor/**

@@ -1,5 +1,7 @@
 import type { CredentialResolverCapability } from '@/platform/features/standard-capabilities';
 
+import { postProcessPrompt } from '../compatibility/upstream-prompt-converters';
+import { flattenSchema, isRecord } from '../compatibility/upstream-utils';
 import {
   GenerationProviderError,
   readChatCompletionSource,
@@ -78,10 +80,11 @@ export class GenerationService implements GenerationGateway, ModelCatalogGateway
 
   async generate(request: LegacyGenerationRequest, signal?: AbortSignal): Promise<Response> {
     this.diagnostics.generations += 1;
-    const response = await this.#execute(request, signal, (adapter, context) =>
+    const prepared = prepareGenerationRequest(request);
+    const response = await this.#execute(prepared, signal, (adapter, context) =>
       adapter.generate(context),
     );
-    if (request.stream === true) return this.#streaming.forward(response);
+    if (prepared.stream === true) return this.#streaming.forward(response);
     const headers = new Headers();
     headers.set('Content-Type', response.headers.get('Content-Type') ?? 'application/json');
     headers.set('X-Pure-Tavern-Hook', '1');
@@ -129,8 +132,10 @@ export class GenerationService implements GenerationGateway, ModelCatalogGateway
     }
     this.diagnostics.lastSource = source;
     try {
+      const fullVertexAuth =
+        source === 'vertexai' && request.vertexai_auth_mode === 'full' && !hasReverseProxy(request);
       const credential = await this.#resolveCredential(
-        descriptor.secretKey,
+        fullVertexAuth ? 'vertexai_service_account_json' : descriptor.secretKey,
         descriptor.keyOptional,
         descriptor.supportsReverseProxy,
         request,
@@ -139,6 +144,7 @@ export class GenerationService implements GenerationGateway, ModelCatalogGateway
         descriptor,
         request,
         credential,
+        resolveCredential: (key) => this.#resolveNamedCredential(key, request),
         client: this.#client,
       };
       if (signal) context.signal = signal;
@@ -151,6 +157,15 @@ export class GenerationService implements GenerationGateway, ModelCatalogGateway
     }
   }
 
+  async #resolveNamedCredential(
+    key: string,
+    request: LegacyGenerationRequest,
+  ): Promise<string | null> {
+    const id =
+      typeof request.secret_id === 'string' && request.secret_id ? request.secret_id : undefined;
+    return this.#credentials.resolveCredential(key, id);
+  }
+
   async #resolveCredential(
     secretKey: string | null,
     keyOptional: boolean,
@@ -160,11 +175,11 @@ export class GenerationService implements GenerationGateway, ModelCatalogGateway
     if (
       supportsReverseProxy &&
       typeof request.reverse_proxy === 'string' &&
-      request.reverse_proxy.trim() &&
-      typeof request.proxy_password === 'string' &&
-      request.proxy_password
+      request.reverse_proxy.trim()
     ) {
-      return request.proxy_password;
+      // Match SillyTavern's reverse-proxy boundary: a configured proxy must never
+      // silently receive the provider's stored credential when proxy_password is empty.
+      return typeof request.proxy_password === 'string' ? request.proxy_password : null;
     }
     if (!secretKey) return null;
     const id =
@@ -179,6 +194,38 @@ export class GenerationService implements GenerationGateway, ModelCatalogGateway
     }
     return credential;
   }
+}
+
+function prepareGenerationRequest(request: LegacyGenerationRequest): LegacyGenerationRequest {
+  const prepared = structuredClone(request);
+  if (
+    Array.isArray(prepared.messages) &&
+    typeof prepared.custom_prompt_post_processing === 'string' &&
+    prepared.custom_prompt_post_processing
+  ) {
+    const groupNames = Array.isArray(prepared.group_names) ? prepared.group_names.map(String) : [];
+    prepared.messages = postProcessPrompt(
+      prepared.messages,
+      prepared.custom_prompt_post_processing,
+      {
+        charName: String(prepared.char_name ?? ''),
+        userName: String(prepared.user_name ?? ''),
+        groupNames,
+        startsWithGroupName(message: string) {
+          return groupNames.some((name: string) => message.startsWith(`${name}: `));
+        },
+      },
+    ) as unknown[];
+  }
+  if (isRecord(prepared.json_schema) && prepared.json_schema.value) {
+    const source = readChatCompletionSource(prepared.chat_completion_source);
+    prepared.json_schema.value = flattenSchema(prepared.json_schema.value, source);
+  }
+  return prepared;
+}
+
+function hasReverseProxy(request: LegacyGenerationRequest): boolean {
+  return typeof request.reverse_proxy === 'string' && Boolean(request.reverse_proxy.trim());
 }
 
 function readTransport(response: Response): 'direct' | 'remote' {
