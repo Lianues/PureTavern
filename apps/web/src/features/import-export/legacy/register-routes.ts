@@ -36,8 +36,12 @@ export function registerImportExportLegacyRoutes(
 
   router.register('POST', '/api/backups/archive/import/preview', async (request) => {
     try {
-      const { archive, options } = await readImportForm(request);
-      return jsonResponse(await service.previewArchiveStreaming(archive, options));
+      const { archive, options, method } = await readImportForm(request);
+      return jsonResponse(
+        await (method === 'fast'
+          ? service.previewArchive(archive, options)
+          : service.previewArchiveStreaming(archive, options)),
+      );
     } catch (error) {
       return archiveErrorResponse(error);
     }
@@ -45,8 +49,12 @@ export function registerImportExportLegacyRoutes(
 
   router.register('POST', '/api/backups/archive/import', async (request) => {
     try {
-      const { archive, options } = await readImportForm(request);
-      return jsonResponse(await service.importArchiveStreaming(archive, options));
+      const { archive, options, method } = await readImportForm(request);
+      return jsonResponse(
+        await (method === 'fast'
+          ? service.importArchive(archive, options)
+          : service.importArchiveStreaming(archive, options)),
+      );
     } catch (error) {
       return archiveErrorResponse(error);
     }
@@ -126,8 +134,12 @@ export function registerImportExportLegacyRoutes(
 
   router.register('POST', '/api/backups/tauritavern/import/preview', async (request) => {
     try {
-      const { archive, options } = await readImportForm(request);
-      return jsonResponse(await tauriTavern.previewPackageStreaming(archive, options));
+      const { archive, options, method } = await readImportForm(request);
+      return jsonResponse(
+        await (method === 'fast'
+          ? tauriTavern.previewPackage(archive, options)
+          : tauriTavern.previewPackageStreaming(archive, options)),
+      );
     } catch (error) {
       return archiveErrorResponse(error);
     }
@@ -135,8 +147,12 @@ export function registerImportExportLegacyRoutes(
 
   router.register('POST', '/api/backups/tauritavern/import', async (request) => {
     try {
-      const { archive, options } = await readImportForm(request);
-      return jsonResponse(await tauriTavern.importPackageStreaming(archive, options));
+      const { archive, options, method } = await readImportForm(request);
+      return jsonResponse(
+        await (method === 'fast'
+          ? tauriTavern.importPackage(archive, options)
+          : tauriTavern.importPackageStreaming(archive, options)),
+      );
     } catch (error) {
       return archiveErrorResponse(error);
     }
@@ -170,9 +186,11 @@ async function archiveResponse(
   });
 }
 
+type ImportMethod = 'fast' | 'slow';
+
 async function readImportForm(
   request: Request,
-): Promise<{ archive: Blob; options: ArchiveImportOptions }> {
+): Promise<{ archive: Blob; options: ArchiveImportOptions; method: ImportMethod }> {
   let form: FormData;
   try {
     form = await readCompatibilityFormData(request);
@@ -195,7 +213,14 @@ async function readImportForm(
       strategy: normalizeStrategy(form.get('strategy')),
       createRecoveryPoint: form.get('createRecoveryPoint') !== 'false',
     },
+    method: normalizeImportMethod(form.get('method')),
   };
+}
+
+function normalizeImportMethod(value: FormDataEntryValue | null): ImportMethod {
+  if (value === null || value === '') return 'slow';
+  if (value === 'fast' || value === 'slow') return value;
+  throw new ArchiveValidationError('invalid-import-method', 'Archive import method is invalid.');
 }
 
 function readExportOptions(body: Record<string, unknown>): ArchiveExportOptions {

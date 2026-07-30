@@ -10,6 +10,8 @@ import com.getcapacitor.BridgeActivity;
 
 public class MainActivity extends BridgeActivity {
 
+    private EdgeToEdgeImeCompat edgeToEdgeImeCompat;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         registerPlugin(PureTavernFileSaverPlugin.class);
@@ -17,6 +19,16 @@ public class MainActivity extends BridgeActivity {
         configureResizableWindow();
         configureDisplayCutout();
         enterImmersiveMode();
+        edgeToEdgeImeCompat = EdgeToEdgeImeCompat.install(this, getBridge().getWebView());
+    }
+
+    @Override
+    public void onDestroy() {
+        if (edgeToEdgeImeCompat != null) {
+            edgeToEdgeImeCompat.dispose();
+            edgeToEdgeImeCompat = null;
+        }
+        super.onDestroy();
     }
 
     @Override

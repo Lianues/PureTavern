@@ -4,9 +4,16 @@ import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 
 const mobileRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const [activity, plugin, manifest, styles, runtime] = await Promise.all([
+const [activity, imeCompat, plugin, manifest, styles, runtime] = await Promise.all([
   readFile(
     path.join(mobileRoot, 'android/app/src/main/java/com/puretavern/app/MainActivity.java'),
+    'utf8',
+  ),
+  readFile(
+    path.join(
+      mobileRoot,
+      'android/app/src/main/java/com/puretavern/app/EdgeToEdgeImeCompat.java',
+    ),
     'utf8',
   ),
   readFile(
@@ -39,6 +46,18 @@ assert.match(
 );
 assert.doesNotMatch(activity, /WindowInsetsCompat\.Type\.displayCutout\(\)/u);
 assert.doesNotMatch(activity, /setOnApplyWindowInsetsListener|view\.setPadding\(/u);
+assert.match(activity, /EdgeToEdgeImeCompat\.install\(this, getBridge\(\)\.getWebView\(\)\)/u);
+assert.match(activity, /edgeToEdgeImeCompat\.dispose\(\)/u);
+assert.match(activity, /void onDestroy\(\)/u);
+assert.match(imeCompat, /WindowInsetsCompat\.Type\.ime\(\)/u);
+assert.match(imeCompat, /getWindowVisibleDisplayFrame\(visibleWindowFrame\)/u);
+assert.match(imeCompat, /LEGACY_KEYBOARD_MIN_DP = 100/u);
+assert.match(imeCompat, /LEGACY_KEYBOARD_MIN_WINDOW_RATIO = 0\.15f/u);
+assert.match(imeCompat, /webViewContainer\.getPaddingBottom\(\)/u);
+assert.match(imeCompat, /keyboardOcclusion - capacitorHandledBottom/u);
+assert.match(imeCompat, /removeOnGlobalLayoutListener\(globalLayoutListener\)/u);
+assert.match(imeCompat, /setContainerHeight\(originalContainerHeight\)/u);
+assert.doesNotMatch(imeCompat, /setOnApplyWindowInsetsListener/u);
 assert.match(manifest, /android:windowSoftInputMode="adjustResize"/u);
 assert.equal(
   (styles.match(/<item name="android:windowFullscreen">true<\/item>/gu) ?? []).length,
@@ -63,5 +82,5 @@ assert.match(runtime, /NATIVE_SAVE_CHUNK_SIZE/u);
 assert.match(runtime, /Web 页面无法确认文件是否写入/u);
 
 console.log(
-  'PureTavern Android file saver, resizable IME, and immersive system bars contracts verified.',
+  'PureTavern Android file saver, edge-to-edge IME fallback, and immersive system bars contracts verified.',
 );

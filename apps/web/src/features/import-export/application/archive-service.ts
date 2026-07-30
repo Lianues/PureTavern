@@ -29,7 +29,7 @@ import {
 import type { ArchiveExporter, ExportedArchive } from '../ports/archive-exporter';
 import type { ArchiveImporter } from '../ports/archive-importer';
 import type { BackupTransport } from '../ports/backup-transport';
-import type { DecodedArchive } from './archive-codec';
+import { decodeArchive, type DecodedArchive } from './archive-codec';
 import {
   ArchiveParticipantRegistry,
   type PortableArchiveEntry,
@@ -126,8 +126,12 @@ export class ArchiveService implements ArchiveExporter, ArchiveImporter {
     return this.#enqueue(() => this.#exportWithoutQueue(options));
   }
 
-  previewArchive(archive: Blob, options: ArchiveImportOptions = {}): Promise<ArchiveImportPreview> {
-    return this.previewArchiveStreaming(archive, options);
+  async previewArchive(
+    archive: Blob,
+    options: ArchiveImportOptions = {},
+  ): Promise<ArchiveImportPreview> {
+    const decoded = await decodeArchive(archive);
+    return this.#previewDecoded(decoded, options);
   }
 
   /**
@@ -206,8 +210,8 @@ export class ArchiveService implements ArchiveExporter, ArchiveImporter {
 
   importArchive(archive: Blob, options: ArchiveImportOptions = {}): Promise<ArchiveImportReport> {
     return this.#enqueue(async () => {
-      const index = await indexStreamingArchive(archive);
-      return this.#importStreaming(index, options, {}, 'pre-import');
+      const decoded = await decodeArchive(archive);
+      return this.#importDecoded(decoded, options, 'pre-import');
     });
   }
 

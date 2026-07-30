@@ -10,9 +10,15 @@ import type {
   TauriTavernPackageInspection,
 } from './tauri-tavern/application/tauri-tavern-service';
 
+export type DataManagementImportMethod = 'fast' | 'slow';
+
 export interface DataManagementStreamingOptions {
   signal?: AbortSignal;
   onProgress?: (progress: ZipProgress) => void;
+}
+
+export interface DataManagementImportExecutionOptions extends DataManagementStreamingOptions {
+  method?: DataManagementImportMethod;
 }
 
 export interface DataManagementRuntimeBridge {
@@ -23,12 +29,12 @@ export interface DataManagementRuntimeBridge {
   previewArchive(
     archive: Blob,
     options: ArchiveImportOptions,
-    stream?: DataManagementStreamingOptions,
+    execution?: DataManagementImportExecutionOptions,
   ): Promise<ArchiveImportPreview>;
   importArchive(
     archive: Blob,
     options: ArchiveImportOptions,
-    stream?: DataManagementStreamingOptions,
+    execution?: DataManagementImportExecutionOptions,
   ): Promise<ArchiveImportReport>;
   inspectTauriTavern(
     archive: Blob,
@@ -37,12 +43,12 @@ export interface DataManagementRuntimeBridge {
   previewTauriTavern(
     archive: Blob,
     options: ArchiveImportOptions,
-    stream?: DataManagementStreamingOptions,
+    execution?: DataManagementImportExecutionOptions,
   ): Promise<TauriTavernImportPreview>;
   importTauriTavern(
     archive: Blob,
     options: ArchiveImportOptions,
-    stream?: DataManagementStreamingOptions,
+    execution?: DataManagementImportExecutionOptions,
   ): Promise<TauriTavernImportReport>;
 }
 
@@ -58,16 +64,24 @@ export function installDataManagementRuntimeBridge(
 ): DataManagementRuntimeBridge {
   const bridge: DataManagementRuntimeBridge = {
     inspectArchive: (blob, stream) => archive.inspectArchiveStreaming(blob, toZipOptions(stream)),
-    previewArchive: (blob, options, stream) =>
-      archive.previewArchiveStreaming(blob, options, toZipOptions(stream)),
-    importArchive: (blob, options, stream) =>
-      archive.importArchiveStreaming(blob, options, toZipOptions(stream)),
+    previewArchive: (blob, options, execution) =>
+      execution?.method === 'fast'
+        ? archive.previewArchive(blob, options)
+        : archive.previewArchiveStreaming(blob, options, toZipOptions(execution)),
+    importArchive: (blob, options, execution) =>
+      execution?.method === 'fast'
+        ? archive.importArchive(blob, options)
+        : archive.importArchiveStreaming(blob, options, toZipOptions(execution)),
     inspectTauriTavern: (blob, stream) =>
       tauriTavern.inspectPackageStreaming(blob, toZipOptions(stream)),
-    previewTauriTavern: (blob, options, stream) =>
-      tauriTavern.previewPackageStreaming(blob, options, toZipOptions(stream)),
-    importTauriTavern: (blob, options, stream) =>
-      tauriTavern.importPackageStreaming(blob, options, toZipOptions(stream)),
+    previewTauriTavern: (blob, options, execution) =>
+      execution?.method === 'fast'
+        ? tauriTavern.previewPackage(blob, options)
+        : tauriTavern.previewPackageStreaming(blob, options, toZipOptions(execution)),
+    importTauriTavern: (blob, options, execution) =>
+      execution?.method === 'fast'
+        ? tauriTavern.importPackage(blob, options)
+        : tauriTavern.importPackageStreaming(blob, options, toZipOptions(execution)),
   };
   globalThis.__PURE_TAVERN_DATA_STREAMING__ = bridge;
   return bridge;

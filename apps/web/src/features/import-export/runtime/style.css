@@ -57,6 +57,11 @@
   min-width: 11rem;
 }
 
+.ptdm-import-method-row {
+  padding-bottom: 0.75rem;
+  border-bottom: 1px dashed color-mix(in srgb, var(--SmartThemeBorderColor) 70%, transparent);
+}
+
 .ptdm-header,
 .ptdm-toolbar,
 .ptdm-section,

@@ -197,6 +197,15 @@ describe('PureTavern data management panel', () => {
     expect(query('#ptdm-tt-export').textContent).toBe('导出为 TauriTavern 格式');
     expect(query('label[for="ptdm-tt-import-file"]').textContent).toBe('导入 TauriTavern 数据');
     expect(query<HTMLButtonElement>('#ptdm-tt-import-confirm').disabled).toBe(true);
+    const importMethod = query<HTMLSelectElement>('#ptdm-import-method');
+    expect(importMethod.value).toBe('fast');
+    expect([...importMethod.options].map((option) => [option.value, option.textContent])).toEqual([
+      ['fast', '快速导入（高内存占用）'],
+      ['slow', '慢速导入（低内存占用）'],
+    ]);
+    expect(query('.ptdm-import-method-row').textContent).toContain(
+      '如果遇到导入卡死等问题，建议使用慢速导入。',
+    );
     const strategy = query<HTMLSelectElement>('#ptdm-tt-strategy');
     expect(strategy.value).toBe('merge');
     expect([...strategy.options].map((option) => option.value)).toEqual([
@@ -304,6 +313,7 @@ describe('PureTavern data management panel', () => {
     expect(requests[0]?.url).toBe('/api/backups/tauritavern/import/preview');
     expect((requests[0]?.body as FormData).get('strategy')).toBe('merge');
     expect((requests[0]?.body as FormData).get('includeSecrets')).toBe('true');
+    expect((requests[0]?.body as FormData).get('method')).toBe('fast');
     expect(query('#ptdm-tt-import-file-name').textContent).toBe('tauritavern-data.zip');
     expect(query<HTMLButtonElement>('#ptdm-tt-import-confirm').disabled).toBe(false);
     expect(query('#ptdm-tt-preview').textContent).toContain('TauriTavern 数据包：1 个文件');
@@ -312,10 +322,75 @@ describe('PureTavern data management panel', () => {
     expect(query<HTMLButtonElement>('#ptdm-import-confirm').disabled).toBe(true);
   });
 
-  it('uses the direct streaming bridge instead of multipart for a TauriTavern file', async () => {
+  it('applies the global slow method to both import formats', async () => {
     buttonLabelled('打开数据管理').click();
     await settle();
     requests.length = 0;
+    const importMethod = query<HTMLSelectElement>('#ptdm-import-method');
+    importMethod.value = 'slow';
+
+    const tauriTavernInput = query<HTMLInputElement>('#ptdm-tt-import-file');
+    const tauriTavernFile = new File([new Uint8Array([1])], 'tauritavern-data.zip');
+    Object.defineProperty(tauriTavernInput, 'files', {
+      value: [tauriTavernFile],
+      configurable: true,
+    });
+    tauriTavernInput.dispatchEvent(new Event('change'));
+    await settle();
+
+    const nativeInput = query<HTMLInputElement>('#ptdm-import-file');
+    const nativeFile = new File([new Uint8Array([2])], 'pure-tavern-data.zip');
+    Object.defineProperty(nativeInput, 'files', { value: [nativeFile], configurable: true });
+    nativeInput.dispatchEvent(new Event('change'));
+    await settle();
+
+    expect(requests.map((request) => request.url)).toEqual([
+      '/api/backups/tauritavern/import/preview',
+      '/api/backups/archive/import/preview',
+    ]);
+    expect(requests.map((request) => (request.body as FormData).get('method'))).toEqual([
+      'slow',
+      'slow',
+    ]);
+    expect(query('#ptdm-tt-preview').textContent).toContain('慢速导入（低内存占用）');
+    expect(query('#ptdm-preview').textContent).toContain('慢速导入（低内存占用）');
+  });
+
+  it('uses the fast direct bridge preview by default', async () => {
+    buttonLabelled('打开数据管理').click();
+    await settle();
+    requests.length = 0;
+    const previewTauriTavern = vi.fn(async () => PREVIEW);
+    const inspectTauriTavern = vi.fn();
+    (globalThis as { __PURE_TAVERN_DATA_STREAMING__?: unknown }).__PURE_TAVERN_DATA_STREAMING__ = {
+      previewTauriTavern,
+      inspectTauriTavern,
+    };
+
+    const input = query<HTMLInputElement>('#ptdm-tt-import-file');
+    const file = new File([new Uint8Array([1, 2, 3])], 'fast-tauritavern-data.zip', {
+      type: 'application/zip',
+    });
+    Object.defineProperty(input, 'files', { value: [file], configurable: true });
+    input.dispatchEvent(new Event('change'));
+    await settle();
+
+    expect(previewTauriTavern).toHaveBeenCalledWith(
+      file,
+      expect.objectContaining({ includeSecrets: true, strategy: 'merge' }),
+      expect.objectContaining({ method: 'fast' }),
+    );
+    expect(inspectTauriTavern).not.toHaveBeenCalled();
+    expect(requests).toEqual([]);
+    expect(query('#ptdm-tt-preview').textContent).toContain('快速导入（高内存占用）');
+  });
+
+  it('uses the direct streaming bridge instead of multipart in slow mode', async () => {
+    buttonLabelled('打开数据管理').click();
+    await settle();
+    requests.length = 0;
+    const importMethod = query<HTMLSelectElement>('#ptdm-import-method');
+    importMethod.value = 'slow';
     const inspectTauriTavern = vi.fn(async () => ({
       modules: [
         {
@@ -425,6 +500,7 @@ describe('PureTavern data management panel', () => {
       expect(JSON.parse(String(importForm.get('modules')))).toEqual(['characters', 'secrets']);
       expect(importForm.get('includeSecrets')).toBe('true');
       expect(importForm.get('createRecoveryPoint')).toBe('true');
+      expect(importForm.get('method')).toBe('fast');
     } finally {
       vi.clearAllTimers();
       vi.useRealTimers();
@@ -447,6 +523,7 @@ describe('PureTavern data management panel', () => {
       await settle();
       expect(requests[0]?.url).toBe('/api/backups/archive/import/preview');
       expect((requests[0]?.body as FormData).get('includeSecrets')).toBe('true');
+      expect((requests[0]?.body as FormData).get('method')).toBe('fast');
 
       query<HTMLButtonElement>('#ptdm-import-confirm').click();
       await settle();
@@ -475,6 +552,7 @@ describe('PureTavern data management panel', () => {
       expect(JSON.parse(String(importForm.get('modules')))).toEqual(['characters']);
       expect(importForm.get('includeSecrets')).toBe('false');
       expect(importForm.get('strategy')).toBe('merge');
+      expect(importForm.get('method')).toBe('fast');
     } finally {
       vi.clearAllTimers();
       vi.useRealTimers();

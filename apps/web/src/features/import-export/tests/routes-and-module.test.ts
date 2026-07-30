@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { CapabilityRegistry } from '@/platform/features/capability-registry';
 import { archiveParticipantRegistryCapability } from '@/platform/features/standard-capabilities';
@@ -9,7 +9,7 @@ import { initializeStorage } from '@/platform/storage/initialize-storage';
 
 import { LocalBackupTransport } from '../infrastructure/local-backup-transport';
 import { MemoryBackupRepository } from '../infrastructure/resilient-backup-repository';
-import { createImportExportFeature } from '../module';
+import { createImportExportFeature, dataManagementRuntimeCapability } from '../module';
 
 const databases: AppDatabase[] = [];
 
@@ -65,11 +65,13 @@ async function postForm(
   pathname: string,
   archive: Blob,
   strategy = 'merge',
+  method: string | null = null,
 ): Promise<Response> {
   const form = {
     get(name: string) {
       if (name === 'file') return archive;
       if (name === 'strategy') return strategy;
+      if (name === 'method') return method;
       return null;
     },
   } as FormData;
@@ -145,6 +147,29 @@ describe('M21 routes and module', () => {
     await expect((await postJson(router, '/api/backups/chat/get')).json()).resolves.toEqual([]);
   });
 
+  it('dispatches fast and slow multipart previews to their matching service paths', async () => {
+    const { router, capabilities } = await createHarness();
+    const runtime = capabilities.get(dataManagementRuntimeCapability);
+    if (!runtime) throw new Error('Missing data management runtime capability.');
+    const exported = await postJson(router, '/api/backups/archive/export');
+    const archive = await exported.blob();
+    const fast = vi.spyOn(runtime.service, 'previewArchive');
+    const slow = vi.spyOn(runtime.service, 'previewArchiveStreaming');
+
+    expect(
+      (await postForm(router, '/api/backups/archive/import/preview', archive, 'merge', 'fast'))
+        .status,
+    ).toBe(200);
+    expect(fast).toHaveBeenCalledTimes(1);
+    expect(slow).not.toHaveBeenCalled();
+
+    expect(
+      (await postForm(router, '/api/backups/archive/import/preview', archive, 'merge', 'slow'))
+        .status,
+    ).toBe(200);
+    expect(slow).toHaveBeenCalledTimes(1);
+  });
+
   it('rejects malformed archives with bounded structured errors', async () => {
     const { router } = await createHarness();
     const response = await postForm(
@@ -154,6 +179,23 @@ describe('M21 routes and module', () => {
     );
     expect(response.status).toBe(400);
     await expect(response.json()).resolves.toMatchObject({ pureTavern: true });
+  });
+
+  it('rejects an invalid import method before reading the package', async () => {
+    const { router } = await createHarness();
+    const response = await postForm(
+      router,
+      '/api/backups/archive/import/preview',
+      new Blob(['not-a-zip']),
+      'merge',
+      'turbo',
+    );
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toMatchObject({
+      code: 'invalid-import-method',
+      pureTavern: true,
+    });
   });
 
   it('rejects an invalid TauriTavern import mode before reading the package', async () => {
