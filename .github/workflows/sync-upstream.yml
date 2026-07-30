@@ -1,0 +1,85 @@
+name: Sync fork with upstream
+
+on:
+  schedule:
+    # Sync every 6 hours.
+    - cron: "0 */6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: sync-upstream-${{ github.repository }}
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    name: Sync default branch
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Read repository metadata
+        id: repo
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          repo_json="$(gh api "repos/${GITHUB_REPOSITORY}")"
+          is_fork="$(jq -r '.fork' <<< "$repo_json")"
+
+          if [ "$is_fork" != "true" ]; then
+            echo "This repository is not a fork. Nothing to sync."
+            echo "is_fork=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          fork_branch="$(jq -r '.default_branch' <<< "$repo_json")"
+          upstream_full_name="$(jq -r '.parent.full_name' <<< "$repo_json")"
+          upstream_clone_url="$(jq -r '.parent.clone_url' <<< "$repo_json")"
+          upstream_branch="$(jq -r '.parent.default_branch' <<< "$repo_json")"
+
+          echo "Fork: ${GITHUB_REPOSITORY}:${fork_branch}"
+          echo "Upstream: ${upstream_full_name}:${upstream_branch}"
+
+          {
+            echo "is_fork=true"
+            echo "fork_branch=${fork_branch}"
+            echo "upstream_full_name=${upstream_full_name}"
+            echo "upstream_clone_url=${upstream_clone_url}"
+            echo "upstream_branch=${upstream_branch}"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Checkout fork
+        if: steps.repo.outputs.is_fork == 'true'
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.repo.outputs.fork_branch }}
+          fetch-depth: 0
+          token: ${{ github.token }}
+
+      - name: Merge upstream into fork
+        if: steps.repo.outputs.is_fork == 'true'
+        run: |
+          set -euo pipefail
+
+          fork_branch="${{ steps.repo.outputs.fork_branch }}"
+          upstream_clone_url="${{ steps.repo.outputs.upstream_clone_url }}"
+          upstream_branch="${{ steps.repo.outputs.upstream_branch }}"
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git remote add upstream "$upstream_clone_url"
+          git fetch upstream "$upstream_branch"
+
+          git checkout "$fork_branch"
+
+          if git merge-base --is-ancestor FETCH_HEAD HEAD; then
+            echo "Fork already contains the latest upstream commits."
+            exit 0
+          fi
+
+          git merge --no-edit FETCH_HEAD
+          git push origin "HEAD:${fork_branch}"
