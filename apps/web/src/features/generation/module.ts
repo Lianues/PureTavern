@@ -6,9 +6,13 @@ import {
 } from '@/platform/features/standard-capabilities';
 
 import { GenerationService } from './application/generation-service';
+import { GenerationTransportState } from './application/generation-transport-state';
 import { DirectFetchClient } from './infrastructure/direct-fetch-client';
+import { RemoteBackendClient } from './infrastructure/remote-backend-client';
+import { RoutingFetchClient } from './infrastructure/routing-fetch-client';
 import { registerGenerationLegacyRoutes } from './legacy/register-routes';
 import { BrowserStreamingGeneration } from './ports/streaming-generation';
+import { installGenerationTransportUi } from './runtime/generation-transport-ui';
 
 export const generationFeature: FeatureModule = {
   id: 'generation',
@@ -16,7 +20,10 @@ export const generationFeature: FeatureModule = {
     const credentials = capabilities.get(credentialResolverCapability);
     if (!credentials) throw new Error('Generation requires the M14 CredentialResolver capability.');
 
-    const client = new DirectFetchClient(nativeFetch);
+    const transportState = new GenerationTransportState();
+    const directClient = new DirectFetchClient(nativeFetch);
+    const remoteClient = new RemoteBackendClient(nativeFetch, transportState);
+    const client = new RoutingFetchClient(transportState, directClient, remoteClient);
     const service = new GenerationService(credentials, client, new BrowserStreamingGeneration());
     const capability: GenerationProviderCapability = {
       listSources: () => service.listSources().map((descriptor) => descriptor.source),
@@ -25,6 +32,7 @@ export const generationFeature: FeatureModule = {
     };
     capabilities.register(generationProviderCapability, capability);
     registerGenerationLegacyRoutes(router, service);
+    installGenerationTransportUi(transportState, remoteClient);
 
     return {
       diagnostics: {
@@ -32,7 +40,8 @@ export const generationFeature: FeatureModule = {
         transport: client.diagnostics,
         scope: 'chat-completion-only',
         directBrowserRequests: true,
-        optionalBackend: false,
+        optionalBackend: true,
+        transportModes: ['frontend', 'local-placeholder', 'remote'],
         providerSources: service.listSources().map((descriptor) => descriptor.source),
       },
     };

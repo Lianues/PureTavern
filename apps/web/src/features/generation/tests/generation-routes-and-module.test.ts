@@ -140,7 +140,8 @@ describe('Generation feature module', () => {
     expect(result.diagnostics).toMatchObject({
       scope: 'chat-completion-only',
       directBrowserRequests: true,
-      optionalBackend: false,
+      optionalBackend: true,
+      transportModes: ['frontend', 'local-placeholder', 'remote'],
       service: { providerCount: 26, protocolCount: 4 },
     });
     expect(JSON.stringify(result.diagnostics)).not.toContain('module-credential');

@@ -2,7 +2,7 @@
 
 PureTavern 是一个以 SillyTavern 为上游的第三方客户端，采用“纯前端 + 可选后端”的设计。
 
-当前版本不依赖后端服务，可以直接部署到 Cloudflare Pages、GitHub Pages 或其他静态托管平台。可选后端接口已经在架构中预留，但尚未实现。
+当前版本默认不依赖后端服务，可以直接部署到 Cloudflare Pages、GitHub Pages 或其他静态托管平台；同时提供第一版可选 Python 远程代理，用于把聊天补全请求经用户自己的后端转发到上游。
 
 > PureTavern 是独立第三方项目，不是 SillyTavern 官方发行版。
 
@@ -14,7 +14,7 @@ PureTavern 是一个以 SillyTavern 为上游的第三方客户端，采用“�
 
 ## 密钥与隐私（重点）
 
-PureTavern 当前为纯前端应用，API Key 等密钥只保存在用户当前浏览器的 IndexedDB 中，不会上传到 PureTavern 服务器；项目不会收集或窃取用户密钥。发起模型请求时，密钥只会发送给用户主动配置的模型服务商。
+PureTavern 默认使用纯前端模式，API Key 等密钥保存在用户当前浏览器的 IndexedDB 中，不会上传到项目维护者的服务器。前端模式下，模型密钥只发送给用户主动配置的模型服务商；用户主动启用远程后端模式后，最终上游 URL、请求头（包含 Provider Key）和请求体会先发送给用户配置并信任的远程后端，再由其转发给模型服务商。
 
 密钥的本地保存不等于安全加密：同源脚本、用户安装的第三方扩展、浏览器插件、开发者工具或被篡改的部署站点仍可能读取密钥。请使用可信部署并谨慎安装第三方扩展。
 
@@ -25,9 +25,10 @@ PureTavern 当前为纯前端应用，API Key 等密钥只保存在用户当前�
 - 首次启动时从应用内离线导入酒馆助手 `4.8.19` 和 Prompt Template `1.16`，之后不重复安装或覆盖用户选择；
 - 角色、聊天、设置、世界书、预设、密钥和资源保存在浏览器 IndexedDB；
 - 支持本地 ZIP 数据导入、导出和恢复点；
-- 支持浏览器直连允许 CORS 的 聊天补全服务平台；
+- 支持浏览器直连允许 CORS 的聊天补全服务平台；
+- 可选使用带访问 Key 的 Python 远程代理转发聊天补全请求并透传 SSE；
 - 使用 Service Worker 和 Build ID 缓存静态资源，同版本重复访问无需逐文件校验；
-- 为未来的代理、远程备份、私有模型桥接等可选后端能力预留接口。
+- 为未来的本地后端、远程备份、Vault 和私网模型桥接继续保留扩展接口。
 
 ## 架构
 
@@ -38,16 +39,16 @@ PureTavern Compatibility Hook
         │
 Feature Modules / Capability Ports
         │
-IndexedDB + Service Worker + Browser Fetch
+IndexedDB + Service Worker + Browser/Remote Fetch
         │
-Optional Backend Adapters（暂未实现）
+Optional Python Remote Proxy
 ```
 
 - **Legacy UI**：继续使用上游 SillyTavern 的界面和纯前端业务逻辑；
 - **Compatibility Hook**：在浏览器中接管原版 `/api/**` 请求；
 - **Feature Modules**：按角色、聊天、设置、资源、扩展等能力拆分；
 - **Browser Storage**：业务数据写入 IndexedDB，静态代码使用 CacheStorage；
-- **Optional Backend**：未来可接入 CORS 代理、远程备份、Vault 和私网模型桥接。
+- **Optional Backend**：已实现聊天补全的远程 CORS 代理；本地后端、远程备份、Vault 和私网模型桥接仍待后续实现。
 
 ## 开发与构建
 
@@ -55,6 +56,8 @@ Optional Backend Adapters（暂未实现）
 pnpm install
 pnpm dev
 ```
+
+开发服务默认监听 `http://127.0.0.1:8899/`，端口被占用时会直接报错，不会自动回退到其他端口。
 
 生产构建：
 
@@ -69,6 +72,19 @@ apps/web/dist
 ```
 
 这是不绑定托管服务商的通用静态产物，可以部署到 Cloudflare Pages、GitHub Pages、普通静态服务器，也会直接作为 Android 外壳的 Web 内容。
+
+### Python 远程代理（可选）
+
+参考后端位于 [`apps/remote-server/python`](./apps/remote-server/python)。它只代理前端已经构造好的最终聊天补全 HTTP 请求，不存储 URL、访问 Key、Provider Key 或请求内容：
+
+```powershell
+cd apps/remote-server/python
+python -m pip install -r requirements.txt
+$env:PURE_TAVERN_PROXY_KEY = "替换为随机访问密钥"
+python -m uvicorn app:app --host 0.0.0.0 --port 8000
+```
+
+局域网 IP、CORS、HTTPS 和安全配置见该目录的 README。远程后端模式下，连接 URL、Key 和模式目前只保存在页面内存中，刷新后不会保留。
 
 ### Android APK
 
@@ -183,15 +199,13 @@ CI 会先构建并验证以下产物：
 
 ## 浏览器限制
 
-纯前端无法绕过目标服务的 CORS、TLS 和 Private Network Access 策略。当前密钥保存在浏览器本地，不应视为安全 Vault。
+纯前端模式无法绕过目标服务的 CORS、TLS 和 Private Network Access 策略。远程代理可以绕过 Provider CORS，但浏览器到代理本身仍受 CORS、TLS、Mixed Content 和 PNA 限制；HTTPS 网页通常需要 HTTPS 代理。当前浏览器密钥存储与远程后端运行时 Key 都不应视为安全 Vault。
 
 ## 许可证
 
 PureTavern 使用 [AGPL-3.0](./LICENSE) 许可证。
 
 项目包含或衍生自 SillyTavern 的上游资源时，同时遵循对应的上游许可证和署名要求。
-
-
 
 ## 社区支持
 

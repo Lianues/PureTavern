@@ -1,4 +1,5 @@
 import { GenerationProviderError } from '../domain/provider';
+import type { ProviderHttpClient } from '../ports/provider-http-client';
 
 export interface DirectFetchDiagnostics {
   requests: number;
@@ -9,7 +10,7 @@ export interface DirectFetchDiagnostics {
   lastErrorCode: string | null;
 }
 
-export class DirectFetchClient {
+export class DirectFetchClient implements ProviderHttpClient {
   readonly diagnostics: DirectFetchDiagnostics = {
     requests: 0,
     streams: 0,

@@ -25,6 +25,8 @@ export interface TokenizerServiceOptions {
   primary?: TokenAnalysisEngine | null;
   tokenx?: TokenAnalysisEngine;
   fallback?: TokenAnalysisEngine;
+  /** Never replay an asynchronous Worker count with tokenx on the UI thread. */
+  nonBlockingCount?: boolean;
 }
 
 export class TokenizerService implements TokenizerPort {
@@ -34,6 +36,7 @@ export class TokenizerService implements TokenizerPort {
   #primary: TokenAnalysisEngine | null;
   readonly #tokenx: TokenAnalysisEngine;
   readonly #fallback: TokenAnalysisEngine;
+  readonly #nonBlockingCount: boolean;
   readonly #decodeCache = new Map<string, DecodeCacheEntry>();
   #cachedCharacters = 0;
 
@@ -41,6 +44,7 @@ export class TokenizerService implements TokenizerPort {
     this.#primary = options.primary ?? null;
     this.#tokenx = options.tokenx ?? new TokenxAnalysisEngine();
     this.#fallback = options.fallback ?? new CharacterFallbackAnalysisEngine();
+    this.#nonBlockingCount = options.nonBlockingCount ?? false;
     this.diagnostics = {
       status: 'pending',
       backend: this.#primary ? 'worker-tokenx' : 'main-thread-tokenx',
@@ -61,8 +65,8 @@ export class TokenizerService implements TokenizerPort {
   async countText(text: string): Promise<TokenCountResult> {
     assertTokenizerText(text);
     await this.ready;
-    const { analysis, backend } = await this.#analyze(text);
-    return this.#countResult(analysis.count, backend);
+    const { count, backend } = await this.#count(text);
+    return this.#countResult(count, backend);
   }
 
   async countMessages(messages: unknown): Promise<TokenCountResult> {
@@ -83,8 +87,8 @@ export class TokenizerService implements TokenizerPort {
 
   countTextSync(text: string): TokenCountResult {
     assertTokenizerText(text);
-    const { analysis, backend } = this.#analyzeSync(text);
-    return this.#countResult(analysis.count, backend);
+    const { count, backend } = this.#countSync(text);
+    return this.#countResult(count, backend);
   }
 
   encodeSync(text: string): TokenEncodingResult {
@@ -138,6 +142,71 @@ export class TokenizerService implements TokenizerPort {
       this.diagnostics.backend = 'character-fallback';
       this.diagnostics.status = 'degraded';
       this.diagnostics.message = error instanceof Error ? error.message : String(error);
+    }
+  }
+
+  async #count(text: string): Promise<{ count: number; backend: TokenizerBackend }> {
+    this.diagnostics.requests += 1;
+    if (this.#primary) {
+      try {
+        return { count: await this.#primary.count(text), backend: 'worker-tokenx' };
+      } catch (error) {
+        this.diagnostics.workerFailures += 1;
+        this.diagnostics.status = 'degraded';
+        this.diagnostics.message = error instanceof Error ? error.message : String(error);
+        this.#primary = null;
+        if (this.#nonBlockingCount) return this.#fallbackCount(text);
+      }
+    } else if (this.#nonBlockingCount) {
+      this.diagnostics.status = 'degraded';
+      this.diagnostics.message ??=
+        'Tokenizer Worker is unavailable; using non-blocking character fallback.';
+      return this.#fallbackCount(text);
+    }
+
+    try {
+      return {
+        count: await this.#tokenx.count(text),
+        backend: 'main-thread-tokenx',
+      };
+    } catch (error) {
+      this.diagnostics.tokenxFailures += 1;
+      this.diagnostics.status = 'degraded';
+      this.diagnostics.message = error instanceof Error ? error.message : String(error);
+      return this.#fallbackCount(text);
+    }
+  }
+
+  async #fallbackCount(text: string): Promise<{ count: number; backend: TokenizerBackend }> {
+    this.diagnostics.fallbackRequests += 1;
+    this.diagnostics.status = 'degraded';
+    return {
+      count: await this.#fallback.count(text),
+      backend: 'character-fallback',
+    };
+  }
+
+  #countSync(text: string): { count: number; backend: TokenizerBackend } {
+    this.diagnostics.requests += 1;
+    try {
+      const count = this.#tokenx.count(text);
+      if (count instanceof Promise) {
+        throw new TypeError('The synchronous tokenx count engine returned a Promise.');
+      }
+      return { count, backend: 'main-thread-tokenx' };
+    } catch (error) {
+      this.diagnostics.tokenxFailures += 1;
+      this.diagnostics.fallbackRequests += 1;
+      this.diagnostics.status = 'degraded';
+      this.diagnostics.backend = 'character-fallback';
+      this.diagnostics.message = error instanceof Error ? error.message : String(error);
+      const count = this.#fallback.count(text);
+      if (count instanceof Promise) {
+        throw new TypeError('The synchronous fallback count engine returned a Promise.', {
+          cause: error,
+        });
+      }
+      return { count, backend: 'character-fallback' };
     }
   }
 

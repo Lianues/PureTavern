@@ -13,7 +13,7 @@ import {
   EXTENSION_DOM_IDS,
 } from './legacy-contracts.mjs';
 
-const appUrl = process.env.PURE_TAVERN_URL ?? 'http://127.0.0.1:5173/';
+const appUrl = process.env.PURE_TAVERN_URL ?? 'http://127.0.0.1:8899/';
 const criticalDomAnchorIds = [...new Set([...CRITICAL_DOM_IDS, ...EXTENSION_DOM_IDS])];
 const runtimeCriticalDomAnchorIds = criticalDomAnchorIds.filter((id) => id !== 'preloader');
 const expectedRuntimeGlobals = EXPECTED_RUNTIME_GLOBALS;

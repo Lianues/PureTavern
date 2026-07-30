@@ -14,7 +14,7 @@ export interface TokenizerPort {
   encode(text: string): Promise<TokenEncodingResult>;
   decode(ids: readonly number[]): Promise<TokenDecodingResult>;
 
-  /** Legacy synchronous jQuery APIs cannot await a Worker. They use the same tokenx engine directly. */
+  /** Legacy synchronous jQuery APIs cannot await a Worker. Keep this path count-only and lightweight. */
   countTextSync(text: string): TokenCountResult;
   encodeSync(text: string): TokenEncodingResult;
   decodeSync(ids: readonly number[]): TokenDecodingResult;

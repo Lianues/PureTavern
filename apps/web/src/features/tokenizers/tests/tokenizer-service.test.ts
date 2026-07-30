@@ -56,9 +56,108 @@ describe('TokenizerService', () => {
     expect(result.precision).toBe('approximate');
   });
 
+  it('uses the Worker count operation without invoking full analysis', async () => {
+    let workerCounts = 0;
+    let workerAnalyses = 0;
+    let mainThreadCounts = 0;
+    const worker: TokenAnalysisEngine = {
+      id: 'worker-tokenx',
+      initialize() {},
+      count() {
+        workerCounts += 1;
+        return 17;
+      },
+      analyze() {
+        workerAnalyses += 1;
+        return { count: 1, chunks: ['unexpected'] };
+      },
+    };
+    const tokenx: TokenAnalysisEngine = {
+      id: 'main-thread-tokenx',
+      count() {
+        mainThreadCounts += 1;
+        return 99;
+      },
+      analyze() {
+        return { count: 1, chunks: ['unexpected'] };
+      },
+    };
+    const service = new TokenizerService({ primary: worker, tokenx, nonBlockingCount: true });
+
+    await expect(service.countText('count only')).resolves.toMatchObject({
+      count: 17,
+      backend: 'worker-tokenx',
+    });
+    expect(workerCounts).toBe(1);
+    expect(workerAnalyses).toBe(0);
+    expect(mainThreadCounts).toBe(0);
+  });
+
+  it('never replays a failed Worker count with tokenx on the main thread', async () => {
+    let mainThreadCounts = 0;
+    const worker: TokenAnalysisEngine = {
+      id: 'worker-tokenx',
+      initialize() {},
+      count() {
+        throw new Error('worker count failed');
+      },
+      analyze() {
+        throw new Error('not used');
+      },
+    };
+    const tokenx: TokenAnalysisEngine = {
+      id: 'main-thread-tokenx',
+      count() {
+        mainThreadCounts += 1;
+        return 99;
+      },
+      analyze() {
+        throw new Error('not used');
+      },
+    };
+    const service = new TokenizerService({ primary: worker, tokenx, nonBlockingCount: true });
+
+    await expect(service.countText('12345678')).resolves.toMatchObject({
+      count: 2,
+      backend: 'character-fallback',
+    });
+    expect(mainThreadCounts).toBe(0);
+    expect(service.diagnostics).toMatchObject({
+      status: 'degraded',
+      workerFailures: 1,
+      tokenxFailures: 0,
+      fallbackRequests: 1,
+      message: 'worker count failed',
+    });
+  });
+
+  it('keeps the legacy synchronous count path count-only', () => {
+    let analyses = 0;
+    const tokenx: TokenAnalysisEngine = {
+      id: 'main-thread-tokenx',
+      count() {
+        return 7;
+      },
+      analyze() {
+        analyses += 1;
+        return { count: 1, chunks: ['unexpected'] };
+      },
+    };
+    const service = new TokenizerService({ tokenx });
+
+    expect(service.countTextSync('count only')).toMatchObject({
+      count: 7,
+      backend: 'main-thread-tokenx',
+    });
+    expect(analyses).toBe(0);
+  });
+
   it('falls back to the character estimator when tokenx throws', async () => {
     const failing: TokenAnalysisEngine = {
       id: 'failing-tokenx',
+      count() {
+        throw new Error('tokenx unavailable');
+      },
       analyze() {
         throw new Error('tokenx unavailable');
       },
@@ -75,11 +174,14 @@ describe('TokenizerService', () => {
     });
   });
 
-  it('falls back from a failed Worker initialization to main-thread tokenx', async () => {
+  it('falls back from a failed Worker initialization to main-thread tokenx when allowed', async () => {
     const worker: TokenAnalysisEngine = {
       id: 'worker-tokenx',
       async initialize() {
         throw new Error('worker blocked');
+      },
+      count() {
+        throw new Error('should not be called');
       },
       analyze() {
         throw new Error('should not be called');

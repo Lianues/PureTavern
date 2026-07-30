@@ -20,18 +20,21 @@ can implement the same Port without changing the original UI.
 ## Worker and synchronous Legacy calls
 
 Asynchronous count/encode runs in `/__pure_tavern/tokenizer-worker.js`, bundled from this feature's
-`runtime-assets.json`. Worker startup, timeout or runtime failure falls back to main-thread tokenx;
-only a tokenx failure uses the character estimator.
+`runtime-assets.json`. Count requests use a dedicated Worker operation that returns only a number;
+they never create pseudo-token chunks. A missing, timed-out, or failed count Worker degrades directly
+to the constant-time character estimate and is never replayed with tokenx on the UI thread.
 
-SillyTavern also exposes synchronous jQuery encode/decode helpers. The Compatibility XHR bridge has
-a narrowly registered synchronous path for M15 and runs the same tokenx engine on the main thread.
-Other synchronous `/api/**` requests are not intercepted.
+SillyTavern also exposes synchronous jQuery helpers. The Compatibility XHR bridge has a narrowly
+registered synchronous path for M15; synchronous count runs only the lightweight tokenx estimate,
+while actual encode/decode retains the pseudo-token compatibility behavior. Other synchronous
+`/api/**` requests are not intercepted.
 
 ## Encode and decode limitation
 
 `tokenx` does not expose vocabulary token IDs. M15 therefore creates deterministic **pseudo IDs** and
-one estimated chunk per token position for Legacy token viewers. A bounded page-session cache can
-decode IDs produced by that same page. Unknown IDs return `supported: false` and empty text.
+one estimated chunk per token position for Legacy token viewers. Chunk normalization uses a single
+linear partition when tokenx's split count differs from its estimate. A bounded page-session cache
+can decode IDs produced by that same page. Unknown IDs return `supported: false` and empty text.
 
 Pseudo IDs must never be sent to a generation provider. They exist only for UI compatibility.
 

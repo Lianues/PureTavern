@@ -13,11 +13,19 @@ The 26 upstream `chat_completion_sources` are represented by one audited descrip
 
 The module ports are `GenerationGateway`, `ModelCatalogGateway` and `StreamingGeneration`. Credentials are resolved just in time through M14's narrow capability. Keys are never added to diagnostics or provider request bodies.
 
-## Browser limits
+## Generation transport modes
 
-This project does not provide a CORS proxy, Vault or private-network bridge. A provider can be implemented correctly and still reject browser requests because of CORS, TLS, Private Network Access or vendor policy. Such failures are reported as `cors-or-network` and are not disguised as successful responses.
+PureTavern injects a transport selector above Legacy Connection Manager's `#connection_profiles` row without changing the upstream template:
 
-Custom and reverse-proxy URLs must use HTTPS, except localhost/127.0.0.1 development URLs. A user-supplied reverse proxy is merely a direct target; it is not a PureTavern optional backend.
+- **Current frontend call** keeps the existing direct browser request behavior.
+- **Local backend call** is a disabled native-app placeholder. It is omitted entirely on the Web build.
+- **Remote backend call** sends the final provider URL, headers and JSON body to the optional PureTavern proxy protocol. Provider adaptation and response parsing remain in this frontend module; the backend is transport-only.
+
+The remote backend URL, access key, selected mode and connection result are session-memory state. They are deliberately not written to IndexedDB, localStorage, Legacy settings or diagnostics in this phase. The health endpoint must identify protocol `pure-tavern-generation-proxy` version 1 before requests are enabled. Both JSON responses and SSE bodies are streamed through unchanged.
+
+The reference implementation is `apps/remote-server/python`. Direct mode can still fail because of CORS, TLS, Private Network Access or vendor policy; these failures remain reported as `cors-or-network`. Remote mode requires the proxy itself to be reachable and CORS-enabled. An HTTPS page may not call an HTTP LAN proxy because of Mixed Content/PNA, so production Web deployments need an HTTPS backend.
+
+Custom and reverse-proxy provider URLs must still use HTTPS, except localhost/127.0.0.1 development URLs. The remote backend access key authenticates the proxy and is separate from the provider credentials carried inside the encrypted HTTPS request.
 
 Vertex AI service-account auth is not enabled because a browser-only token exchange is not a reliable security or CORS boundary. Vertex Express API-key mode is supported. Advanced provider-specific multimodal, cache, reasoning-signature and beta tool combinations may return an explicit capability error; text Chat Completion, basic tools, non-streaming and SSE are the compatibility baseline.
 

@@ -58,7 +58,7 @@ function generationErrorResponse(error: unknown): Response {
   const providerError =
     error instanceof GenerationProviderError
       ? error
-      : new GenerationProviderError('provider-error', 'Direct provider operation failed.', 502);
+      : new GenerationProviderError('provider-error', 'Provider operation failed.', 502);
   return jsonResponse(
     {
       error: {

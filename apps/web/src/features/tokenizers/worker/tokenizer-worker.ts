@@ -1,13 +1,13 @@
 /// <reference lib="webworker" />
 
-import { analyzeWithTokenx } from '../application/tokenx-engine';
+import { analyzeWithTokenx, countWithTokenx } from '../application/tokenx-engine';
 
 const PROTOCOL = 'pure-tavern-tokenizer/1';
 
 type WorkerRequest = {
   protocol: typeof PROTOCOL;
   id: number;
-  operation: 'analyze';
+  operation: 'count' | 'analyze';
   text: string;
 };
 
@@ -17,7 +17,7 @@ type WorkerResponse =
       id: number;
       ok: true;
       count: number;
-      chunks: string[];
+      chunks?: string[];
     }
   | {
       protocol: typeof PROTOCOL;
@@ -33,7 +33,7 @@ scope.addEventListener('message', (event: MessageEvent<WorkerRequest>) => {
   if (
     !request ||
     request.protocol !== PROTOCOL ||
-    request.operation !== 'analyze' ||
+    !['count', 'analyze'].includes(request.operation) ||
     !Number.isSafeInteger(request.id)
   ) {
     return;
@@ -41,8 +41,17 @@ scope.addEventListener('message', (event: MessageEvent<WorkerRequest>) => {
 
   let response: WorkerResponse;
   try {
-    const result = analyzeWithTokenx(request.text);
-    response = { protocol: PROTOCOL, id: request.id, ok: true, ...result };
+    if (request.operation === 'count') {
+      response = {
+        protocol: PROTOCOL,
+        id: request.id,
+        ok: true,
+        count: countWithTokenx(request.text),
+      };
+    } else {
+      const result = analyzeWithTokenx(request.text);
+      response = { protocol: PROTOCOL, id: request.id, ok: true, ...result };
+    }
   } catch (error) {
     response = {
       protocol: PROTOCOL,

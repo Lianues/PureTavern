@@ -64,6 +64,10 @@ export type ProviderErrorCode =
   | 'missing-credential'
   | 'invalid-endpoint'
   | 'cors-or-network'
+  | 'remote-backend-not-connected'
+  | 'remote-backend-unreachable'
+  | 'remote-backend-authentication'
+  | 'remote-backend-protocol'
   | 'provider-error'
   | 'invalid-response'
   | 'aborted';

@@ -12,7 +12,7 @@ export const tokenizersFeature: FeatureModule = {
   id: 'tokenizers',
   install({ router, capabilities }) {
     const worker = TokenizerWorkerClient.createBrowser();
-    const service = new TokenizerService({ primary: worker });
+    const service = new TokenizerService({ primary: worker, nonBlockingCount: true });
     const capability: TokenizerCapability = {
       id: 'tokenx',
       precision: 'approximate',

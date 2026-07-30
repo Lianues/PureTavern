@@ -57,7 +57,7 @@ importers:
         specifier: 8.4.2
         version: 8.4.2
 
-  apps/server: {}
+  apps/remote-server: {}
 
   apps/vscode-extension:
     devDependencies:

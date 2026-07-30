@@ -8,8 +8,8 @@ import {
 } from '../domain/provider';
 import type { GenerationGateway } from '../ports/generation-gateway';
 import type { ModelCatalogGateway } from '../ports/model-catalog-gateway';
+import type { ProviderHttpClient } from '../ports/provider-http-client';
 import type { StreamingGeneration } from '../ports/streaming-generation';
-import { DirectFetchClient } from '../infrastructure/direct-fetch-client';
 import { AnthropicAdapter } from '../infrastructure/providers/anthropic';
 import { CohereAdapter } from '../infrastructure/providers/cohere';
 import { GoogleAdapter } from '../infrastructure/providers/google';
@@ -44,13 +44,13 @@ export class GenerationService implements GenerationGateway, ModelCatalogGateway
   };
 
   readonly #credentials: CredentialResolverCapability;
-  readonly #client: DirectFetchClient;
+  readonly #client: ProviderHttpClient;
   readonly #streaming: StreamingGeneration;
   readonly #adapters: Record<string, ProviderAdapter>;
 
   constructor(
     credentials: CredentialResolverCapability,
-    client: DirectFetchClient,
+    client: ProviderHttpClient,
     streaming: StreamingGeneration,
   ) {
     this.#credentials = credentials;
@@ -85,7 +85,7 @@ export class GenerationService implements GenerationGateway, ModelCatalogGateway
     const headers = new Headers();
     headers.set('Content-Type', response.headers.get('Content-Type') ?? 'application/json');
     headers.set('X-Pure-Tavern-Hook', '1');
-    headers.set('X-Pure-Tavern-Provider', 'direct');
+    headers.set('X-Pure-Tavern-Provider', readTransport(response));
     return new Response(response.body, {
       status: response.status,
       statusText: response.statusText,
@@ -179,6 +179,10 @@ export class GenerationService implements GenerationGateway, ModelCatalogGateway
     }
     return credential;
   }
+}
+
+function readTransport(response: Response): 'direct' | 'remote' {
+  return response.headers.get('X-Pure-Tavern-Transport') === 'remote' ? 'remote' : 'direct';
 }
 
 function parseExplicitTokenIds(value: string): number[] | null {

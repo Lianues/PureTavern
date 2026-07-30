@@ -7,7 +7,7 @@ const PACKAGE_FILES = Object.freeze([
   'apps/desktop/package.json',
   'apps/harmony/package.json',
   'apps/mobile/package.json',
-  'apps/server/package.json',
+  'apps/remote-server/package.json',
   'apps/vscode-extension/package.json',
   'apps/web/package.json',
   'packages/contracts/package.json',

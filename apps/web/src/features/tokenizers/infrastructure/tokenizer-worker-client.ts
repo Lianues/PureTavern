@@ -1,8 +1,11 @@
-import type { TokenAnalysis } from '../domain/tokenizer';
 import type { TokenAnalysisEngine } from '../application/tokenx-engine';
+import type { TokenAnalysis } from '../domain/tokenizer';
 
 const PROTOCOL = 'pure-tavern-tokenizer/1';
 const DEFAULT_TIMEOUT_MS = 5_000;
+
+type WorkerOperation = 'count' | 'analyze';
+type WorkerResult = number | TokenAnalysis;
 
 export interface TokenizerWorkerLike {
   postMessage(message: unknown): void;
@@ -14,7 +17,8 @@ export interface TokenizerWorkerLike {
 }
 
 interface PendingRequest {
-  resolve(result: TokenAnalysis): void;
+  operation: WorkerOperation;
+  resolve(result: WorkerResult): void;
   reject(error: Error): void;
   timeout: ReturnType<typeof setTimeout>;
 }
@@ -48,20 +52,15 @@ export class TokenizerWorkerClient implements TokenAnalysisEngine {
   }
 
   async initialize(): Promise<void> {
-    await this.analyze('');
+    await this.count('');
+  }
+
+  count(text: string): Promise<number> {
+    return this.#request('count', text);
   }
 
   analyze(text: string): Promise<TokenAnalysis> {
-    if (this.#closed) return Promise.reject(new Error('Tokenizer Worker is closed.'));
-    const id = this.#nextId++;
-    return new Promise<TokenAnalysis>((resolve, reject) => {
-      const timeout = setTimeout(() => {
-        this.#pending.delete(id);
-        reject(new Error(`Tokenizer Worker timed out after ${this.#timeoutMs}ms.`));
-      }, this.#timeoutMs);
-      this.#pending.set(id, { resolve, reject, timeout });
-      this.#worker.postMessage({ protocol: PROTOCOL, id, operation: 'analyze', text });
-    });
+    return this.#request('analyze', text);
   }
 
   dispose(): void {
@@ -69,6 +68,21 @@ export class TokenizerWorkerClient implements TokenAnalysisEngine {
     this.#closed = true;
     this.#worker.terminate();
     this.#rejectAll(new Error('Tokenizer Worker was disposed.'));
+  }
+
+  #request(operation: 'count', text: string): Promise<number>;
+  #request(operation: 'analyze', text: string): Promise<TokenAnalysis>;
+  #request(operation: WorkerOperation, text: string): Promise<WorkerResult> {
+    if (this.#closed) return Promise.reject(new Error('Tokenizer Worker is closed.'));
+    const id = this.#nextId++;
+    return new Promise<WorkerResult>((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        this.#pending.delete(id);
+        reject(new Error(`Tokenizer Worker timed out after ${this.#timeoutMs}ms.`));
+      }, this.#timeoutMs);
+      this.#pending.set(id, { operation, resolve, reject, timeout });
+      this.#worker.postMessage({ protocol: PROTOCOL, id, operation, text });
+    });
   }
 
   #onMessage(event: MessageEvent): void {
@@ -86,15 +100,21 @@ export class TokenizerWorkerClient implements TokenAnalysisEngine {
     if (!pending) return;
     this.#pending.delete(id);
     clearTimeout(pending.timeout);
-    if (
-      response.ok === true &&
-      typeof response.count === 'number' &&
-      Array.isArray(response.chunks) &&
-      response.chunks.every((chunk) => typeof chunk === 'string')
-    ) {
-      pending.resolve({ count: response.count, chunks: response.chunks });
-      return;
+
+    if (response.ok === true && typeof response.count === 'number') {
+      if (pending.operation === 'count') {
+        pending.resolve(response.count);
+        return;
+      }
+      if (
+        Array.isArray(response.chunks) &&
+        response.chunks.every((chunk) => typeof chunk === 'string')
+      ) {
+        pending.resolve({ count: response.count, chunks: response.chunks });
+        return;
+      }
     }
+
     pending.reject(
       new Error(typeof response.error === 'string' ? response.error : 'Tokenizer Worker failed.'),
     );

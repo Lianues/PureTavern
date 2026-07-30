@@ -15,20 +15,25 @@ class FakeWorker implements TokenizerWorkerLike {
   postMessage(message: unknown): void {
     this.messages.push(message);
     if (!this.respond) return;
-    const request = message as { protocol: string; id: number };
+    const request = message as { protocol: string; id: number; operation: 'count' | 'analyze' };
     queueMicrotask(() => {
-      for (const listener of this.#messageListeners) {
-        listener(
-          new MessageEvent('message', {
-            data: {
+      const data =
+        request.operation === 'count'
+          ? {
+              protocol: request.protocol,
+              id: request.id,
+              ok: true,
+              count: 2,
+            }
+          : {
               protocol: request.protocol,
               id: request.id,
               ok: true,
               count: 2,
               chunks: ['Hello', ' world'],
-            },
-          }),
-        );
+            };
+      for (const listener of this.#messageListeners) {
+        listener(new MessageEvent('message', { data }));
       }
     });
   }
@@ -47,7 +52,7 @@ class FakeWorker implements TokenizerWorkerLike {
 }
 
 describe('TokenizerWorkerClient', () => {
-  it('correlates Worker requests and responses', async () => {
+  it('correlates Worker analysis requests and responses', async () => {
     const worker = new FakeWorker();
     const client = new TokenizerWorkerClient(worker, 100);
 
@@ -55,9 +60,18 @@ describe('TokenizerWorkerClient', () => {
       count: 2,
       chunks: ['Hello', ' world'],
     });
-    expect(worker.messages).toHaveLength(1);
+    expect(worker.messages).toMatchObject([{ operation: 'analyze', text: 'Hello world' }]);
     client.dispose();
     expect(worker.terminated).toBe(true);
+  });
+
+  it('returns count-only Worker responses without chunks', async () => {
+    const worker = new FakeWorker();
+    const client = new TokenizerWorkerClient(worker, 100);
+
+    await expect(client.count('Hello world')).resolves.toBe(2);
+    expect(worker.messages).toMatchObject([{ operation: 'count', text: 'Hello world' }]);
+    client.dispose();
   });
 
   it('rejects a Worker request after its timeout', async () => {
@@ -65,7 +79,7 @@ describe('TokenizerWorkerClient', () => {
     worker.respond = false;
     const client = new TokenizerWorkerClient(worker, 5);
 
-    await expect(client.analyze('timeout')).rejects.toThrow('timed out');
+    await expect(client.count('timeout')).rejects.toThrow('timed out');
     client.dispose();
   });
 });

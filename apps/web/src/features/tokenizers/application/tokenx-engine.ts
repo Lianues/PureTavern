@@ -5,11 +5,16 @@ import { TOKENIZER_LIMITS, type TokenAnalysis } from '../domain/tokenizer';
 export interface TokenAnalysisEngine {
   readonly id: string;
   initialize?(): Promise<void> | void;
+  count(text: string): Promise<number> | number;
   analyze(text: string): Promise<TokenAnalysis> | TokenAnalysis;
 }
 
 export class TokenxAnalysisEngine implements TokenAnalysisEngine {
   readonly id = 'main-thread-tokenx';
+
+  count(text: string): number {
+    return countWithTokenx(text);
+  }
 
   analyze(text: string): TokenAnalysis {
     return analyzeWithTokenx(text);
@@ -18,6 +23,13 @@ export class TokenxAnalysisEngine implements TokenAnalysisEngine {
 
 export class CharacterFallbackAnalysisEngine implements TokenAnalysisEngine {
   readonly id = 'character-fallback';
+
+  count(text: string): number {
+    if (!text) return 0;
+    // This fallback is intentionally constant-time so a failed Worker can never move a long task
+    // onto the UI thread. Exact Unicode code-point accounting is not required for this degraded path.
+    return Math.max(1, Math.ceil(text.length / 4));
+  }
 
   analyze(text: string): TokenAnalysis {
     if (!text) return { count: 0, chunks: [] };
@@ -33,9 +45,13 @@ export class CharacterFallbackAnalysisEngine implements TokenAnalysisEngine {
   }
 }
 
-export function analyzeWithTokenx(text: string): TokenAnalysis {
+export function countWithTokenx(text: string): number {
   assertTokenizerText(text);
-  const count = Math.max(0, Math.trunc(estimateTokenCount(text)));
+  return Math.max(0, Math.trunc(estimateTokenCount(text)));
+}
+
+export function analyzeWithTokenx(text: string): TokenAnalysis {
+  const count = countWithTokenx(text);
   if (count > TOKENIZER_LIMITS.maxPseudoTokens) {
     throw new RangeError(
       `Estimated token count exceeds ${TOKENIZER_LIMITS.maxPseudoTokens.toLocaleString('en')} tokens.`,
@@ -47,36 +63,13 @@ export function analyzeWithTokenx(text: string): TokenAnalysis {
 
 function normalizePseudoChunks(text: string, count: number, input: readonly string[]): string[] {
   if (count === 0) return [];
-  const chunks = input.length ? [...input] : [text];
-  while (chunks.length < count) {
-    let candidateIndex = -1;
-    let candidateLength = 0;
-    for (let index = 0; index < chunks.length; index += 1) {
-      const length = [...(chunks[index] ?? '')].length;
-      if (length > candidateLength) {
-        candidateIndex = index;
-        candidateLength = length;
-      }
-    }
-    if (candidateIndex < 0 || candidateLength <= 1) {
-      chunks.push('');
-      continue;
-    }
-    const characters = [...(chunks[candidateIndex] ?? '')];
-    const midpoint = Math.ceil(characters.length / 2);
-    chunks.splice(
-      candidateIndex,
-      1,
-      characters.slice(0, midpoint).join(''),
-      characters.slice(midpoint).join(''),
-    );
-  }
-  while (chunks.length > count) {
-    const tail = chunks.pop() ?? '';
-    chunks[chunks.length - 1] = `${chunks[chunks.length - 1] ?? ''}${tail}`;
-  }
-  if (chunks.join('') !== text) return partitionTextExactly(text, count);
-  return chunks;
+
+  // tokenx's split count is not guaranteed to equal its estimate. The previous implementation
+  // filled that gap one chunk at a time and rescanned the entire growing array on every pass,
+  // turning ordinary 50k-character prompts into multi-second O(n²) work. Preserve tokenx's
+  // chunks when they already satisfy the pseudo-encoding contract; otherwise partition once.
+  if (input.length === count && input.join('') === text) return [...input];
+  return partitionTextExactly(text, count);
 }
 
 function partitionTextExactly(text: string, count: number): string[] {

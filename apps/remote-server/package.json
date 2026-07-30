@@ -1,0 +1,13 @@
+{
+  "name": "@pure-tavern/remote-server",
+  "version": "0.1.11",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node -e \"console.log('Remote server implementations are distributed as source.')\"",
+    "typecheck": "node -e \"console.log('Use pnpm check:python to validate the optional Python server.')\"",
+    "test": "node -e \"console.log('Use pnpm test:python to test the optional Python server.')\"",
+    "check:python": "python -m compileall -q python/app.py python/tests",
+    "test:python": "python -m pytest -q python/tests"
+  }
+}

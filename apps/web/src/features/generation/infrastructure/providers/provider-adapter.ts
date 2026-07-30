@@ -3,13 +3,13 @@ import type {
   ModelCatalogResult,
   ProviderDescriptor,
 } from '../../domain/provider';
-import type { DirectFetchClient } from '../direct-fetch-client';
+import type { ProviderHttpClient } from '../../ports/provider-http-client';
 
 export interface ProviderAdapterContext {
   descriptor: ProviderDescriptor;
   request: LegacyGenerationRequest;
   credential: string | null;
-  client: DirectFetchClient;
+  client: ProviderHttpClient;
   signal?: AbortSignal;
 }
 

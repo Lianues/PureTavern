@@ -631,7 +631,7 @@ jobs:
             apps/mobile/android/app/build.gradle \
             apps/mobile/ios/App/App.xcodeproj/project.pbxproj \
             apps/mobile/package.json \
-            apps/server/package.json \
+            apps/remote-server/package.json \
             apps/vscode-extension/package.json \
             apps/vscode-extension/README.md \
             apps/web/package.json \

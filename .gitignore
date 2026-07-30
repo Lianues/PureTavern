@@ -16,6 +16,12 @@ coverage/
 .DS_Store
 Thumbs.db
 
+# Python environments and caches
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
 # Logs
 *.log
 pnpm-debug.log*
