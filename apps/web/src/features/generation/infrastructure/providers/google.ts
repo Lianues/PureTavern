@@ -20,11 +20,11 @@ export class GoogleAdapter implements ProviderAdapter {
       context.descriptor.source === 'vertexai'
         ? joinProviderUrl(base, '/v1/publishers/google/models')
         : joinProviderUrl(base, '/v1beta/models');
-    this.#authenticate(url, context);
+    const authenticationHeaders = this.#authenticate(url, context);
     const response = await context.client.send(
       context.descriptor.source,
       url,
-      getRequest(context.signal),
+      getRequest(context.signal, authenticationHeaders),
     );
     const data = await parseJson(response);
     return {
@@ -73,16 +73,28 @@ export class GoogleAdapter implements ProviderAdapter {
       context.descriptor.source === 'vertexai' ? '/v1/publishers/google/models' : '/v1beta/models';
     const url = joinProviderUrl(base, `${prefix}/${encodeURIComponent(model)}:${operation}`);
     if (context.request.stream) url.searchParams.set('alt', 'sse');
-    this.#authenticate(url, context);
+    const authenticationHeaders = this.#authenticate(url, context);
     const response = await context.client.send(
       context.descriptor.source,
       url,
-      requestInit({ 'Content-Type': 'application/json' }, body, context.signal),
+      requestInit(
+        { 'Content-Type': 'application/json', ...authenticationHeaders },
+        body,
+        context.signal,
+      ),
     );
     return requireOk(response);
   }
 
-  #authenticate(url: URL, context: ProviderAdapterContext): void {
+  #authenticate(url: URL, context: ProviderAdapterContext): Record<string, string> {
+    const usesVertexProxy =
+      context.descriptor.source === 'vertexai' &&
+      typeof context.request.reverse_proxy === 'string' &&
+      Boolean(context.request.reverse_proxy.trim());
+    if (usesVertexProxy) {
+      return context.credential ? { Authorization: `Bearer ${context.credential}` } : {};
+    }
     if (context.credential) url.searchParams.set('key', context.credential);
+    return {};
   }
 }

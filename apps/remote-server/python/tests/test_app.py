@@ -99,6 +99,16 @@ def test_proxy_forwards_provider_request_and_streams_response(settings: Settings
         headers={
             "Authorization": "Bearer provider-secret",
             "Content-Type": "application/json",
+            "HTTP-Referer": "https://sillytavern.app",
+            "X-Title": "SillyTavern",
+            "api-key": "azure-provider-key",
+            "x-api-key": "anthropic-provider-key",
+            "anthropic-version": "2023-06-01",
+            "anthropic-beta": "tools-2024-05-16",
+            "Accept-Language": "en-US,en",
+            "X-Provider": "preferred-provider",
+            "X-Billing-Mode": "paygo",
+
             "Host": "attacker.example",
             "Connection": "upgrade",
             "Content-Length": "999999",
@@ -119,6 +129,16 @@ def test_proxy_forwards_provider_request_and_streams_response(settings: Settings
     )
     assert upstream.method == "POST"
     assert upstream.headers["authorization"] == "Bearer provider-secret"
+    assert upstream.headers["http-referer"] == "https://sillytavern.app"
+    assert upstream.headers["x-title"] == "SillyTavern"
+    assert upstream.headers["api-key"] == "azure-provider-key"
+    assert upstream.headers["x-api-key"] == "anthropic-provider-key"
+    assert upstream.headers["anthropic-version"] == "2023-06-01"
+    assert upstream.headers["anthropic-beta"] == "tools-2024-05-16"
+    assert upstream.headers["accept-language"] == "en-US,en"
+    assert upstream.headers["x-provider"] == "preferred-provider"
+    assert upstream.headers["x-billing-mode"] == "paygo"
+
     assert upstream.headers["host"] == "provider.example"
     assert upstream.headers["content-length"] == str(
         len(b'{"model":"test-model","stream":true}')

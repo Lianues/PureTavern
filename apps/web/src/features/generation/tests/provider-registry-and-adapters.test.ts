@@ -187,6 +187,33 @@ describe('GenerationService provider adapters', () => {
     });
   });
 
+  it('matches SillyTavern NanoGPT provider and paygo headers', async () => {
+    let sentInit: RequestInit = {};
+    const nativeFetch = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      sentInit = init ?? {};
+      return new Response(JSON.stringify({ choices: [{ message: { content: 'ok' } }] }), {
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }) as typeof window.fetch;
+    const service = createService(nativeFetch);
+
+    await service.generate({
+      chat_completion_source: 'nanogpt',
+      model: 'nanogpt-model',
+      messages: [{ role: 'user', content: 'Hi' }],
+      nanogpt_provider: 'preferred-provider',
+      nanogpt_payg_override: true,
+    });
+
+    expect(Object.fromEntries(new Headers(sentInit.headers).entries())).toEqual({
+      authorization: 'Bearer credential-for-api_key_nanogpt',
+      'content-type': 'application/json',
+      'x-billing-mode': 'paygo',
+      'x-provider': 'preferred-provider',
+    });
+    expect(JSON.parse(String(sentInit.body))).toMatchObject({ billing_mode: 'paygo' });
+  });
+
   it('accepts YAML object and scalar custom exclusion variants', async () => {
     const bodies: Record<string, unknown>[] = [];
     const nativeFetch = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
@@ -310,6 +337,37 @@ describe('GenerationService provider adapters', () => {
     expect(calls[1]!.body).toHaveProperty('systemInstruction');
     expect(calls[2]!.url).toBe('https://api.cohere.ai/v2/chat');
     expect(calls[2]!.body).toMatchObject({ model: 'command-browser', max_tokens: 100 });
+  });
+
+  it('uses Authorization for Vertex AI reverse proxy mode, matching SillyTavern', async () => {
+    let sentUrl = '';
+    let sentHeaders = new Headers();
+    const nativeFetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      sentUrl = String(input);
+      sentHeaders = new Headers(init?.headers);
+      return new Response(
+        JSON.stringify({ candidates: [{ content: { parts: [{ text: 'ok' }] } }] }),
+        {
+          headers: { 'Content-Type': 'application/json' },
+        },
+      );
+    }) as typeof window.fetch;
+    const service = createService(nativeFetch);
+
+    await service.generate({
+      chat_completion_source: 'vertexai',
+      reverse_proxy: 'https://vertex-proxy.example',
+      proxy_password: 'vertex-proxy-secret',
+      model: 'gemini-proxy',
+      messages: [{ role: 'user', content: 'Hi' }],
+    });
+
+    expect(sentUrl).toBe(
+      'https://vertex-proxy.example/v1/publishers/google/models/gemini-proxy:generateContent',
+    );
+    expect(sentUrl).not.toContain('key=');
+    expect(sentHeaders.get('Authorization')).toBe('Bearer vertex-proxy-secret');
+    expect(sentHeaders.get('Content-Type')).toBe('application/json');
   });
 
   it('honors zai reverse_proxy over the zai_endpoint=coding default', async () => {

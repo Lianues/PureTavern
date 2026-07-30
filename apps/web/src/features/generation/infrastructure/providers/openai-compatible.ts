@@ -124,6 +124,16 @@ export class OpenAiCompatibleAdapter implements ProviderAdapter {
       headers.Accept = 'application/json';
     }
     if (context.descriptor.source === 'zai') headers['Accept-Language'] = 'en-US,en';
+    if (context.descriptor.source === 'nanogpt' && includeContentType) {
+      if (
+        typeof context.request.nanogpt_provider === 'string' &&
+        context.request.nanogpt_provider
+      ) {
+        headers['X-Provider'] = context.request.nanogpt_provider;
+      }
+      if (context.request.nanogpt_payg_override) headers['X-Billing-Mode'] = 'paygo';
+    }
+
     if (context.descriptor.source === 'custom') {
       // Upstream merges Custom YAML last, so user values can replace controllable defaults.
       Object.assign(headers, parseCustomHeaders(context.request.custom_include_headers));
@@ -147,6 +157,10 @@ function buildOpenAiBody(request: LegacyGenerationRequest): Record<string, unkno
   if (request.chat_completion_source === 'workers_ai') {
     body.repetition_penalty = request.repetition_penalty;
   }
+  if (request.chat_completion_source === 'nanogpt' && request.nanogpt_payg_override) {
+    body.billing_mode = 'paygo';
+  }
+
   if (request.chat_completion_source === 'moonshot' || request.chat_completion_source === 'zai') {
     body.thinking = { type: request.include_reasoning ? 'enabled' : 'disabled' };
   }
