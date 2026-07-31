@@ -60,6 +60,7 @@ assert.match(
 assert.match(buildProfile, /applyToProducts\s*:\s*\[['"]default['"],\s*['"]ci['"]\]/u);
 assert.match(buildProfile, /signingConfigs\s*:\s*\[\]/u);
 assert.match(moduleProfile, /['"]ohos\.permission\.INTERNET['"]/u);
+assert.doesNotMatch(moduleProfile, /\bnetwork\s*:/u);
 assert.match(
   moduleProfile,
   /deviceTypes\s*:\s*\[['"]phone['"],\s*['"]tablet['"],\s*['"]2in1['"]\]/u,
@@ -71,6 +72,7 @@ assert.match(page, /https:\/\/puretavern\.local\//u);
 assert.match(page, /onInterceptRequest/u);
 assert.match(page, /registerServiceWorkerSchemeHandler\(\)/u);
 assert.match(page, /domStorageAccess\(true\)/u);
+assert.match(page, /\.mixedMode\(MixedMode\.All\)/u);
 assert.match(page, /setWebDebuggingAccess\(false\)/u);
 assert.match(page, /initializeWebEngine\(\);[\s\S]*registerServiceWorkerSchemeHandler\(\)/u);
 assert.doesNotMatch(page, /onConsole/u);

@@ -24,7 +24,11 @@ export const generationFeature: FeatureModule = {
     const transportState = new GenerationTransportState();
     const directClient = new DirectFetchClient(nativeFetch);
     const localClient = new LocalBackendClient();
-    const remoteClient = new RemoteBackendClient(nativeFetch, transportState);
+    const remoteClient = new RemoteBackendClient(
+      nativeFetch,
+      transportState,
+      localClient.diagnostics.available ? localClient : null,
+    );
     const client = new RoutingFetchClient(transportState, directClient, localClient, remoteClient);
     const service = new GenerationService(credentials, client, new BrowserStreamingGeneration());
     const capability: GenerationProviderCapability = {

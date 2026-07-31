@@ -66,3 +66,5 @@ PureTavern-<version>-remote-server-<platform>-<arch>.tar.gz
 ## 安全提示
 
 这些服务是能够访问任意 HTTP/HTTPS 和私有网络地址的受保护代理。生产环境必须设置高强度 `PURE_TAVERN_PROXY_KEY`、限制 `PURE_TAVERN_ALLOWED_ORIGINS`，并配合 HTTPS、防火墙及访问控制；不要将其作为无鉴权开放代理暴露到公网。
+
+HTTP 监听和 HTTP 上游是为可信局域网联调保留的兼容能力，不提供传输加密。客户端到代理使用 HTTP 时，代理访问 Key 和完整代理请求可被读取或篡改；代理到 Provider 使用 HTTP 时，Provider Key、提示词和响应同样是明文。公网或不可信网络必须在代理前配置 HTTPS，并优先使用 HTTPS Provider。

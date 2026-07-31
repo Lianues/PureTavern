@@ -35,10 +35,16 @@ export class RemoteBackendClient implements ProviderHttpClient {
 
   readonly #fetch: typeof window.fetch;
   readonly #state: GenerationTransportState;
+  readonly #shellHttp: ProviderHttpClient | null;
 
-  constructor(nativeFetch: typeof window.fetch, state: GenerationTransportState) {
+  constructor(
+    nativeFetch: typeof window.fetch,
+    state: GenerationTransportState,
+    shellHttp: ProviderHttpClient | null = null,
+  ) {
     this.#fetch = nativeFetch;
     this.#state = state;
+    this.#shellHttp = shellHttp;
   }
 
   async connect(): Promise<void> {
@@ -47,7 +53,7 @@ export class RemoteBackendClient implements ProviderHttpClient {
     try {
       const baseUrl = normalizeRemoteBackendUrl(attempt.url);
       const key = requireRemoteBackendKey(attempt.key);
-      const response = await this.#fetch(remoteEndpoint(baseUrl, 'v1/health'), {
+      const response = await this.#request(remoteEndpoint(baseUrl, 'v1/health'), {
         method: 'GET',
         headers: backendHeaders(key),
         cache: 'no-store',
@@ -120,7 +126,7 @@ export class RemoteBackendClient implements ProviderHttpClient {
         protocolVersion: REMOTE_BACKEND_PROTOCOL_VERSION,
         request: createFinalProviderRequest(url, init),
       };
-      const response = await this.#fetch(remoteEndpoint(remote.baseUrl, 'v1/proxy'), {
+      const response = await this.#request(remoteEndpoint(remote.baseUrl, 'v1/proxy'), {
         method: 'POST',
         headers: {
           ...backendHeaders(remote.key),
@@ -165,6 +171,13 @@ export class RemoteBackendClient implements ProviderHttpClient {
       }
       throw providerError;
     }
+  }
+
+  async #request(url: URL, init: RequestInit): Promise<Response> {
+    if (this.#shellHttp) {
+      return await this.#shellHttp.send('remote-backend', url, init);
+    }
+    return await this.#fetch(url, init);
   }
 }
 
@@ -260,7 +273,7 @@ function normalizeRemoteError(
   return new GenerationProviderError(
     'remote-backend-unreachable',
     operation === 'connection'
-      ? 'The browser could not reach the remote backend. Check its URL, TLS and CORS settings.'
+      ? 'The client could not reach the remote backend. Check its URL and network settings.'
       : 'The connection to the remote backend failed.',
     502,
     { cause: error },

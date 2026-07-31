@@ -18,7 +18,11 @@ async function createFixture() {
   const root = await mkdtemp(path.join(tmpdir(), 'pure-tavern-vscode-server-'));
   roots.push(root);
   await mkdir(path.join(root, 'scripts'), { recursive: true });
-  await writeFile(path.join(root, 'index.html'), '<h1>PureTavern</h1>', 'utf8');
+  await writeFile(
+    path.join(root, 'index.html'),
+    '<!doctype html><html><head><script src="/__pure_tavern/legacy-hook.js"></script></head><body><h1>PureTavern</h1></body></html>',
+    'utf8',
+  );
   await writeFile(path.join(root, 'scripts', 'app.js'), 'export const ready = true;', 'utf8');
   return root;
 }
@@ -33,7 +37,18 @@ describe('PackagedWebServer', () => {
     const index = await fetch(`http://127.0.0.1:${port}/`);
     expect(index.status).toBe(200);
     expect(index.headers.get('content-type')).toBe('text/html; charset=utf-8');
-    await expect(index.text()).resolves.toContain('PureTavern');
+    const indexHtml = await index.text();
+    expect(indexHtml).toContain('PureTavern');
+    expect(indexHtml.match(/data-pure-tavern-vscode-local-backend="1"/gu)).toHaveLength(1);
+    expect(indexHtml).toContain('src="__pure_tavern/vscode-local-backend.js"');
+    expect(indexHtml).not.toContain('src="/__pure_tavern/vscode-local-backend.js"');
+    expect(indexHtml.indexOf('vscode-local-backend.js')).toBeLessThan(
+      indexHtml.indexOf('legacy-hook.js'),
+    );
+
+    const bridge = await fetch(`http://127.0.0.1:${port}/__pure_tavern/vscode-local-backend.js`);
+    expect(bridge.headers.get('cache-control')).toBe('no-store');
+    expect(await bridge.text()).toContain("protocol: 'pure-tavern-local-backend'");
 
     const script = await fetch(`http://127.0.0.1:${port}/scripts/app.js`);
     expect(script.headers.get('content-type')).toBe('application/javascript; charset=utf-8');

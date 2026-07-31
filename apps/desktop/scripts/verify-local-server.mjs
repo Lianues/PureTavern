@@ -11,6 +11,7 @@ const webGenerationRoot = path.join(repositoryRoot, 'apps/web/src/features/gener
 const [
   cargo,
   buildScript,
+  tauriConfig,
   main,
   localServer,
   capability,
@@ -28,6 +29,7 @@ const [
 ] = await Promise.all([
   readFile(path.join(desktopRoot, 'src-tauri/Cargo.toml'), 'utf8'),
   readFile(path.join(desktopRoot, 'src-tauri/build.rs'), 'utf8'),
+  readFile(path.join(desktopRoot, 'src-tauri/tauri.conf.json'), 'utf8'),
   readFile(path.join(desktopRoot, 'src-tauri/src/main.rs'), 'utf8'),
   readFile(path.join(desktopRoot, 'src-tauri/src/local_server.rs'), 'utf8'),
   readFile(path.join(desktopRoot, 'src-tauri/capabilities/default.json'), 'utf8'),
@@ -61,6 +63,8 @@ assert.match(cargo, /reqwest = .*"rustls".*"stream"/u);
 assert.match(cargo, /futures-util/u);
 assert.match(cargo, /base64/u);
 assert.doesNotMatch(cargo, /tauri-plugin-http/u);
+const parsedTauriConfig = JSON.parse(tauriConfig);
+assert.equal(parsedTauriConfig.app.windows[0].useHttpsScheme, false);
 
 assert.match(buildScript, /pure_tavern_local_start_request/u);
 assert.match(buildScript, /pure_tavern_local_cancel_request/u);
@@ -73,6 +77,7 @@ assert.match(main, /cancel_all\(\)/u);
 
 assert.match(localServer, /Client::builder\(\)/u);
 assert.match(localServer, /Policy::none\(\)/u);
+assert.match(localServer, /matches!\(url\.scheme\(\), "http" \| "https"\)/u);
 assert.match(localServer, /MAX_ACTIVE_REQUESTS: usize = 4/u);
 assert.match(localServer, /MAX_REDIRECTS: usize = 10/u);
 assert.match(localServer, /CHUNK_SIZE: usize = 32 \* 1024/u);

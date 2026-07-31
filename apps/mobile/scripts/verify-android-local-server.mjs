@@ -18,6 +18,8 @@ const [
   activity,
   libraryBuild,
   manifest,
+  appManifest,
+  capacitorConfig,
   plugin,
   engine,
   androidBridge,
@@ -36,6 +38,8 @@ const [
   ),
   readFile(path.join(localServerRoot, 'build.gradle'), 'utf8'),
   readFile(path.join(localServerRoot, 'src/main/AndroidManifest.xml'), 'utf8'),
+  readFile(path.join(mobileRoot, 'android/app/src/main/AndroidManifest.xml'), 'utf8'),
+  readFile(path.join(mobileRoot, 'capacitor.config.ts'), 'utf8'),
   readFile(
     path.join(
       localServerRoot,
@@ -64,6 +68,9 @@ assert.match(libraryBuild, /implementation project\(':capacitor-android'\)/u);
 assert.match(libraryBuild, /testImplementation "junit:junit:\$junitVersion"/u);
 assert.doesNotMatch(libraryBuild, /okhttp|ktor|nanohttp|retrofit/u);
 assert.match(manifest, /android:usesCleartextTraffic="true"/u);
+assert.match(appManifest, /android:usesCleartextTraffic="true"/u);
+assert.match(capacitorConfig, /android:\s*\{[\s\S]*?allowMixedContent:\s*true,?[\s\S]*?\}/u);
+assert.match(capacitorConfig, /server:\s*\{[\s\S]*?cleartext:\s*true,?[\s\S]*?\}/u);
 
 assert.match(plugin, /@CapacitorPlugin\(name = "PureTavernLocalServer"\)/u);
 assert.match(plugin, /void startRequest\(PluginCall call\)/u);

@@ -74,7 +74,8 @@ PURE_TAVERN_ALLOWED_ORIGINS=https://tavern.example.com
 - 生产环境限制 `PURE_TAVERN_ALLOWED_ORIGINS`，同时使用防火墙、反向代理、HTTPS 和访问控制；
 - 不要把它作为无鉴权开放代理暴露到公网；
 - 本版本允许自定义 Provider 和局域网上游，因此没有封锁私有 IP；这也意味着拥有代理 Key 的用户具备服务端网络访问能力；
-- 服务不记录请求体或密钥，但外围反向代理/平台日志仍需单独检查与脱敏。
+- 服务不记录请求体或密钥，但外围反向代理/平台日志仍需单独检查与脱敏；
+- HTTP 不加密：客户端到代理的访问 Key，以及代理到 HTTP Provider 的 Provider Key、提示词和响应都可能被读取或篡改。仅在可信测试局域网使用，其他场景配置 HTTPS。
 
 ## 测试
 

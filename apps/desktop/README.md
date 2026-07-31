@@ -15,7 +15,9 @@ Windows、macOS 和 Linux 共用 `src-tauri/src/local_server.rs`。桌面专属�
 
 Rust 客户端禁用自动重定向，最多手动跟随 10 次；跨源跳转移除 Authorization、Cookie 和 Proxy-Authorization。Host、Content-Length、hop-by-hop、Set-Cookie 及上游 CORS 标头不会跨越桥接层。最多同时运行 4 个请求，AbortSignal 会中止底层异步任务，窗口销毁时会清理全部请求。
 
-桌面端使用同一份 Rust 源码，但安装包仍需由 Windows、macOS、Linux 各自的 CI runner 编译。当前 iOS 外壳是 Capacitor，不能直接加载 Tauri 命令；后续应使用一个薄的 Swift `URLSession` Capacitor 插件复用同一前端协议，而不是复制 Provider 逻辑。
+桌面端使用同一份 Rust 源码，但安装包仍需由 Windows、macOS、Linux 各自的 CI runner 编译。Tauri 窗口显式保留 HTTP custom scheme，远程后端的 health/proxy 请求也复用 Rust bridge，因此本地和远程模式都可访问 HTTP/HTTPS 地址，不依赖 WebView 的 Mixed Content 或 CORS 放行。
+
+HTTP 只用于用户明确配置的兼容场景。明文连接会暴露远程代理访问 Key、Provider Key、提示词和响应，并允许网络中间人修改内容；可信测试局域网之外应始终使用 HTTPS。
 
 ## 命令
 

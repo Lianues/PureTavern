@@ -1,7 +1,9 @@
 import { createReadStream } from 'node:fs';
-import { stat } from 'node:fs/promises';
-import { createServer, type Server, type ServerResponse } from 'node:http';
+import { readFile, stat } from 'node:fs/promises';
+import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import path from 'node:path';
+
+import { injectVscodeLocalBackendBridge, VscodeLocalBackendProxy } from './local-backend-proxy.js';
 
 const MIME_TYPES: Readonly<Record<string, string>> = Object.freeze({
   '.css': 'text/css; charset=utf-8',
@@ -55,6 +57,7 @@ function applyHeaders(response: ServerResponse, contentType: string, size: numbe
 
 export class PackagedWebServer {
   readonly #root: string;
+  readonly #localBackend = new VscodeLocalBackendProxy();
   #server: Server | undefined;
   #port: number | undefined;
 
@@ -70,7 +73,10 @@ export class PackagedWebServer {
   async start(): Promise<number> {
     if (this.#server) return this.port;
     const server = createServer((request, response) => {
-      void this.#handle(request.method ?? 'GET', request.url ?? '/', response);
+      void this.#handle(request, response).catch(() => {
+        if (!response.headersSent) response.writeHead(500);
+        response.end();
+      });
     });
     await new Promise<void>((resolve, reject) => {
       server.once('error', reject);
@@ -90,21 +96,25 @@ export class PackagedWebServer {
     const server = this.#server;
     this.#server = undefined;
     this.#port = undefined;
+    this.#localBackend.abortAll();
     if (!server) return;
     await new Promise<void>((resolve) => server.close(() => resolve()));
   }
 
-  async #handle(method: string, requestUrl: string, response: ServerResponse) {
-    if (method !== 'GET' && method !== 'HEAD') {
-      response.writeHead(405, { Allow: 'GET, HEAD' });
+  async #handle(request: IncomingMessage, response: ServerResponse) {
+    let pathname: string;
+    try {
+      pathname = new URL(request.url ?? '/', 'http://localhost').pathname;
+    } catch {
+      response.writeHead(400);
       response.end();
       return;
     }
-    let pathname: string;
-    try {
-      pathname = new URL(requestUrl, 'http://localhost').pathname;
-    } catch {
-      response.writeHead(400);
+    if (await this.#localBackend.handle(pathname, request, response)) return;
+
+    const method = request.method ?? 'GET';
+    if (method !== 'GET' && method !== 'HEAD') {
+      response.writeHead(405, { Allow: 'GET, HEAD' });
       response.end();
       return;
     }
@@ -117,6 +127,14 @@ export class PackagedWebServer {
     try {
       const info = await stat(target);
       if (!info.isFile()) throw new Error('Not a file');
+      if (target === path.join(this.#root, 'index.html')) {
+        const html = injectVscodeLocalBackendBridge(await readFile(target, 'utf8'));
+        const body = Buffer.from(html, 'utf8');
+        applyHeaders(response, 'text/html; charset=utf-8', body.byteLength);
+        response.writeHead(200);
+        response.end(method === 'HEAD' ? undefined : body);
+        return;
+      }
       applyHeaders(
         response,
         MIME_TYPES[path.extname(target).toLowerCase()] ?? 'application/octet-stream',

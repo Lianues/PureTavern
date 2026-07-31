@@ -294,6 +294,8 @@ export class LocalBackendProxy {
   }
 
   private isAllowedURL(value: string): boolean {
+    // Stage-mode profiles do not accept the legacy FA `module.network` block. Without a
+    // network-security base override, NetworkKit's documented base policy permits cleartext.
     if (value.length === 0 || value.length > 16 * 1024) return false;
     const prefixLength = value.startsWith('https://') ? 8 : value.startsWith('http://') ? 7 : 0;
     if (prefixLength === 0) return false;

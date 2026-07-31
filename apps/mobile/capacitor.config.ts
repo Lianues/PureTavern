@@ -5,11 +5,15 @@ const config: CapacitorConfig = {
   appName: 'PureTavern',
   webDir: '../web/dist',
   backgroundColor: '#171717',
+  android: {
+    allowMixedContent: true,
+  },
   ios: {
     contentInset: 'never',
   },
   server: {
     androidScheme: 'https',
+    cleartext: true,
   },
   plugins: {
     SystemBars: {

@@ -47,7 +47,13 @@ assert.match(plugin, /base64EncodedString\(\)/u);
 assert.match(plugin, /task\?\.cancel\(\)/u);
 assert.match(plugin, /invalidateAndCancel\(\)/u);
 assert.doesNotMatch(plugin, /Alamofire|AFNetworking|print\(|NSLog/u);
-assert.doesNotMatch(info, /NSAllowsArbitraryLoads/u);
+for (const key of [
+  'NSAllowsArbitraryLoads',
+  'NSAllowsArbitraryLoadsInWebContent',
+  'NSAllowsLocalNetworking',
+]) {
+  assert.match(info, new RegExp(`<key>${key}<\\/key>\\s*<true\\/>`, 'u'));
+}
 
 assert.match(bridge, /capacitor\.getPlatform\?\.call\(capacitor\) !== 'ios'/u);
 assert.match(bridge, /PureTavernLocalServer/u);

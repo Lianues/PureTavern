@@ -29,6 +29,7 @@ assert.match(proxy, /Base64Helper/u);
 assert.match(proxy, /CHUNK_SIZE: number = 32 \* 1024/u);
 assert.match(proxy, /MAX_ACTIVE_REQUESTS: number = 4/u);
 assert.match(proxy, /maxRedirects: 10/u);
+assert.match(proxy, /value\.startsWith\('https:\/\/'\)[\s\S]*value\.startsWith\('http:\/\/'\)/u);
 assert.match(proxy, /getLastJavascriptProxyCallingFrameUrl\(\)/u);
 assert.match(proxy, /session\.request\.destroy\(\)/u);
 assert.match(proxy, /dispose\(\): void/u);
@@ -39,6 +40,7 @@ assert.match(page, /\.javaScriptProxy\(\{/u);
 assert.match(page, /name: 'PureTavernHarmonyLocalServer'/u);
 assert.match(page, /methodList: \['startRequest', 'cancelRequest', 'takeEvents'\]/u);
 assert.match(page, /this\.localBackend\.dispose\(\)/u);
+assert.match(page, /\.mixedMode\(MixedMode\.All\)/u);
 
 assert.match(bootstrap, /__PURE_TAVERN_PLATFORM__ = 'harmony'/u);
 assert.match(bootstrap, /PureTavernHarmonyLocalServer/u);
@@ -124,7 +126,7 @@ async function verifyBridgeRuntime(source) {
   });
   await bridge.startRequest({
     requestId: 'request-1',
-    url: 'https://provider.example/v1/messages',
+    url: 'http://provider.example/v1/messages',
     method: 'POST',
     headers: { Authorization: 'Bearer secret', 'Content-Type': 'application/json' },
     body: '{"stream":true}',

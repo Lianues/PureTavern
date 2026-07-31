@@ -9,7 +9,7 @@ import { describe, expect, it } from 'vitest';
 const featureRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const webRoot = path.resolve(featureRoot, '../../..');
 const forbiddenPlatformCode =
-  /Capacitor|__TAURI|@tauri-apps|@kit\.NetworkKit|URLSession|WKUserScript|PureTavernLocalServer|PureTavernHarmonyLocalServer|pure_tavern_local_(?:start|cancel)_request/u;
+  /Capacitor|__TAURI|@tauri-apps|@kit\.NetworkKit|URLSession|WKUserScript|PureTavernLocalServer|PureTavernHarmonyLocalServer|pure_tavern_local_(?:start|cancel)_request|X-Pure-Tavern-VSCode|vscode-local-backend/u;
 
 describe('Generation platform boundary', () => {
   it('contains only the versioned host bridge and no shell-specific adapter', async () => {
@@ -20,7 +20,7 @@ describe('Generation platform boundary', () => {
 
     expect(
       sourceFiles.some((file) =>
-        /android|ios|harmony|tauri|platform-local/iu.test(path.basename(file)),
+        /android|ios|harmony|tauri|vscode|platform-local/iu.test(path.basename(file)),
       ),
     ).toBe(false);
     expect(sources.join('\n')).not.toMatch(forbiddenPlatformCode);

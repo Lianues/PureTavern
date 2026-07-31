@@ -17,7 +17,9 @@ The Harmony rawfile sync injects a small platform bootstrap before the Legacy ru
 
 `LocalBackendProxy.ets` uses Harmony's system `@kit.NetworkKit` `requestInStream` API. It forwards the final GET/POST URL, headers and optional UTF-8 body produced by Web Generation, emits ordered base64 chunks of at most 32 KiB, and supports cancellation and four concurrent requests. No Provider-specific request construction and no ohpm networking dependency are duplicated in the shell.
 
-ArkWeb exposes only `startRequest`, `cancelRequest` and `takeEvents` through a `javaScriptProxy` restricted at runtime to the packaged `https://puretavern.local/` frame. `runtime/harmony-bootstrap.js` maps that object to the shared versioned `pure-tavern-local-backend` bridge and polls quickly only while requests are active. It removes Cookie, hop-by-hop and upstream CORS response headers before Web receives them. HTTP URLs remain subject to HarmonyOS's default cleartext policy; the shell does not globally weaken it.
+ArkWeb exposes only `startRequest`, `cancelRequest` and `takeEvents` through a `javaScriptProxy` restricted at runtime to the packaged `https://puretavern.local/` frame. `runtime/harmony-bootstrap.js` maps that object to the shared versioned `pure-tavern-local-backend` bridge and polls quickly only while requests are active. It removes Cookie, hop-by-hop and upstream CORS response headers before Web receives them.
+
+The shell deliberately accepts both HTTP and HTTPS. ArkWeb uses `MixedMode.All`; local and remote bridge traffic uses NetworkKit, whose base cleartext result is permitted when the application has no network-security override. The Stage-model schema does not accept the legacy FA `module.network` block, so adding that field would make Hvigor reject the project rather than enable anything. HTTP credentials, prompts and responses are unencrypted and should be limited to a trusted test LAN; use HTTPS elsewhere.
 
 ## Local commands
 

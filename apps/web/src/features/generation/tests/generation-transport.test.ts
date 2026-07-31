@@ -13,6 +13,7 @@ import {
   RemoteBackendClient,
 } from '../infrastructure/remote-backend-client';
 import { RoutingFetchClient } from '../infrastructure/routing-fetch-client';
+import type { ProviderHttpClient } from '../ports/provider-http-client';
 
 function healthResponse(): Response {
   return Response.json({
@@ -128,6 +129,42 @@ describe('generation transport routing', () => {
     expect(remote.diagnostics).toMatchObject({ requests: 1, streams: 1, failures: 0 });
     expect(state.snapshot.remote.status).toBe('connected');
     expect(JSON.stringify(state.diagnostics)).not.toContain('backend-access-key');
+  });
+
+  it('uses the shell bridge for an HTTP remote backend when one is available', async () => {
+    const browserFetch = vi.fn(async () => {
+      throw new Error('Browser fetch must not be used by a native shell.');
+    }) as typeof window.fetch;
+    const calls: Array<{ source: string; url: string; init: RequestInit }> = [];
+    const shellHttp: ProviderHttpClient = {
+      async send(source, url, init) {
+        calls.push({ source, url: url.toString(), init });
+        if (url.pathname === '/v1/health') return healthResponse();
+        return new Response('data: {"native":true}\n\n', {
+          headers: { 'Content-Type': 'text/event-stream' },
+        });
+      },
+    };
+    const state = new GenerationTransportState();
+    const remote = new RemoteBackendClient(browserFetch, state, shellHttp);
+    state.updateRemoteConfig('http://192.168.1.8:8000', 'http-backend-key');
+
+    await remote.connect();
+    const response = await remote.send('openai', new URL('http://provider.lan/v1/chat'), {
+      method: 'POST',
+      body: '{}',
+    });
+
+    expect(browserFetch).not.toHaveBeenCalled();
+    expect(calls.map(({ source, url }) => ({ source, url }))).toEqual([
+      { source: 'remote-backend', url: 'http://192.168.1.8:8000/v1/health' },
+      { source: 'remote-backend', url: 'http://192.168.1.8:8000/v1/proxy' },
+    ]);
+    expect(calls[0]?.init.headers).toMatchObject({
+      Authorization: 'Bearer http-backend-key',
+    });
+    expect(response.headers.get('X-Pure-Tavern-Transport')).toBe('remote');
+    await expect(response.text()).resolves.toContain('native');
   });
 
   it('invalidates a connected backend as soon as URL or key input changes', async () => {

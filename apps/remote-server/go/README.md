@@ -93,4 +93,4 @@ CI 使用 `CGO_ENABLED=0` 并通过 `-ldflags` 注入版本与 commit，因此�
 - 过滤 Host、Content-Length、hop-by-hop、Set-Cookie 和上游 CORS 标头；
 - 不保存、不记录 Provider Key 和请求体。
 
-该服务允许访问任意 HTTP/HTTPS 与私有网络地址。不要将它作为无鉴权开放代理暴露到公网；生产部署应同时使用 HTTPS、防火墙和受限 Origin。
+该服务允许访问任意 HTTP/HTTPS 与私有网络地址。不要将它作为无鉴权开放代理暴露到公网；生产部署应同时使用 HTTPS、防火墙和受限 Origin。HTTP 不加密代理访问 Key、Provider Key、提示词或响应，仅应用于可信测试局域网。

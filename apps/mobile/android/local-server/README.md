@@ -4,7 +4,7 @@
 
 This keeps provider behavior in `apps/web/src/features/generation`: Claude, Gemini, OpenRouter, Vertex and other Chat Completion request construction is not duplicated in Java. The Android code is transport-only and has no runtime Maven dependency beyond the existing `:capacitor-android` module.
 
-The Capacitor-specific adapter lives beside this module in `web/local-backend-bridge.js`. After `cap sync android`, `apps/mobile/scripts/install-android-local-backend-bridge.mjs` copies it only into Android assets and inserts it before the Legacy Hook. The generic `apps/web/dist` therefore contains only the versioned local-backend port and no Android or Tauri adapter.
+The Capacitor-specific adapter lives beside this module in `web/local-backend-bridge.js`. After `cap sync android`, `apps/mobile/scripts/install-android-local-backend-bridge.mjs` copies it only into Android assets and inserts it before the Legacy Hook. The generic `apps/web/dist` therefore contains only the versioned local-backend port and no Android, iOS, Harmony, Tauri, or VS Code adapter.
 
 ## Bridge protocol
 

@@ -69,6 +69,8 @@ Key 填 `PURE_TAVERN_PROXY_KEY` 的值。
 
 服务会过滤 Host、Content-Length、hop-by-hop、Set-Cookie 和上游 CORS 标头，错误响应不会回显请求体或 Provider Key。外围反向代理和托管平台的日志仍需自行脱敏。
 
+HTTP 不提供传输加密。客户端到代理使用 HTTP 时访问 Key 和代理请求是明文；代理到 HTTP Provider 时 Provider Key、提示词和响应也是明文。仅在可信测试局域网使用，其他场景配置 HTTPS。
+
 ## 检查与测试
 
 ```powershell
