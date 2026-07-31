@@ -4,10 +4,19 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "node -e \"console.log('Remote server implementations are distributed as source.')\"",
-    "typecheck": "node -e \"console.log('Use pnpm check:python to validate the optional Python server.')\"",
-    "test": "node -e \"console.log('Use pnpm test:python to test the optional Python server.')\"",
+    "build": "node -e \"console.log('Remote server implementations are distributed as source; use build:go for a local Go build.')\"",
+    "typecheck": "pnpm check:nodejs",
+    "test": "pnpm test:nodejs",
+    "start:nodejs": "node nodejs/server.mjs",
+    "check:nodejs": "node --check nodejs/app.mjs && node --check nodejs/server.mjs && node --check nodejs/tests/app.test.mjs && node --check scripts/build-go.mjs",
+    "test:nodejs": "node --test nodejs/tests/app.test.mjs",
     "check:python": "python -m compileall -q python/app.py python/tests",
-    "test:python": "python -m pytest -q python/tests"
+    "test:python": "python -m pytest -q python/tests",
+    "start:go": "go -C go run .",
+    "check:go": "go -C go vet ./...",
+    "test:go": "go -C go test ./...",
+    "build:go": "node scripts/build-go.mjs",
+    "check:all": "pnpm check:nodejs && pnpm check:python && pnpm check:go",
+    "test:all": "pnpm test:nodejs && pnpm test:python && pnpm test:go"
   }
 }

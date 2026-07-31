@@ -572,9 +572,17 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
+  remote-server:
+    name: Build remote server binaries
+    needs: preflight
+    uses: ./.github/workflows/remote-server.yml
+    with:
+      package_version: ${{ inputs.version }}
+      release_artifacts: true
+
   publish:
     name: Commit, tag and publish release
-    needs: [preflight, web, android, desktop, ios, harmony, vscode]
+    needs: [preflight, web, android, desktop, ios, harmony, vscode, remote-server]
     runs-on: ubuntu-latest
     env:
       GH_TOKEN: ${{ github.token }}
@@ -665,6 +673,7 @@ jobs:
                 echo "  若提示「已损坏，无法打开」，在终端执行 \`xattr -dr com.apple.quarantine /Applications/PureTavern.app\`。"
               }
             echo "- Linux：按惯例不做代码签名，请用 SHA256SUMS.txt 校验。"
+            echo "- Remote Server：Go 单文件后端未做代码签名，提供 Windows/Linux/macOS 的 x64 与 arm64，请用 SHA256SUMS.txt 校验。"
             echo "- iOS：**未签名**，需自行签名后安装（如 AltStore / Sideloadly）。"
             echo "- HarmonyOS：**未签名**，纯血鸿蒙默认拒绝未签名包，需自行签名或借助第三方安装工具。"
             echo

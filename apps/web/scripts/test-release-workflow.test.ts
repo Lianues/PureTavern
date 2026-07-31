@@ -45,6 +45,7 @@ describe('manual test release workflow', () => {
       'ios',
       'harmony',
       'vscode',
+      'remote-server',
       'publish',
     ]);
     expect(workflow.jobs.publish.needs).toEqual([
@@ -55,10 +56,13 @@ describe('manual test release workflow', () => {
       'ios',
       'harmony',
       'vscode',
+      'remote-server',
     ]);
     expect(source).toContain('PureTavern-$RELEASE_VERSION-web.zip');
     expect(source).toContain('release-vscode');
     expect(source).toContain('apps/vscode-extension/release/*.vsix');
+    expect(source).toContain('uses: ./.github/workflows/remote-server.yml');
+    expect(source).toContain('release_artifacts: true');
     expect(source).toContain('apps/vscode-extension/README.md');
     expect(source).toContain('TAG="test-v$RELEASE_VERSION"');
     expect(source).toContain('TITLE="$RELEASE_VERSION Test"');

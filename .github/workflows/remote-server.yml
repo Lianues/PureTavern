@@ -1,0 +1,213 @@
+name: Remote Server CI
+
+on:
+  workflow_call:
+    inputs:
+      package_version:
+        description: Stable release version to embed; empty values produce a CI version
+        required: false
+        default: ''
+        type: string
+      release_artifacts:
+        description: Upload artifacts with the release-* naming convention
+        required: false
+        default: false
+        type: boolean
+
+  push:
+    branches: [main]
+    paths:
+      - 'apps/remote-server/**'
+      - '.github/workflows/remote-server.yml'
+      - '.github/workflows/release.yml'
+      - '.github/workflows/test-release.yml'
+  pull_request:
+    paths:
+      - 'apps/remote-server/**'
+      - '.github/workflows/remote-server.yml'
+      - '.github/workflows/release.yml'
+      - '.github/workflows/test-release.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: remote-server-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  node:
+    name: Node.js contract tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Check and test Node.js implementation
+        working-directory: apps/remote-server
+        run: |
+          node --check nodejs/app.mjs
+          node --check nodejs/server.mjs
+          node --test nodejs/tests/*.test.mjs
+
+  python:
+    name: Python contract tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: |
+            apps/remote-server/python/requirements.txt
+            apps/remote-server/python/requirements-dev.txt
+
+      - name: Install Python dependencies
+        working-directory: apps/remote-server/python
+        run: pip install -r requirements.txt -r requirements-dev.txt
+
+      - name: Check and test Python implementation
+        working-directory: apps/remote-server/python
+        run: |
+          python -m compileall -q app.py tests
+          python -m pytest -q tests
+
+  go:
+    name: Go contract tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: apps/remote-server/go/go.mod
+          cache: false
+
+      - name: Vet and test Go implementation
+        working-directory: apps/remote-server/go
+        run: |
+          go vet ./...
+          go test -race ./...
+          go build -trimpath -o "$RUNNER_TEMP/pure-tavern-remote-server" .
+          "$RUNNER_TEMP/pure-tavern-remote-server" --version
+
+  package:
+    name: Package Go ${{ matrix.platform }} ${{ matrix.arch }}
+    needs: go
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: windows
+            arch: x64
+            goos: windows
+            goarch: amd64
+            extension: .exe
+            archive: zip
+          - platform: windows
+            arch: arm64
+            goos: windows
+            goarch: arm64
+            extension: .exe
+            archive: zip
+          - platform: linux
+            arch: x64
+            goos: linux
+            goarch: amd64
+            extension: ''
+            archive: tar.gz
+          - platform: linux
+            arch: arm64
+            goos: linux
+            goarch: arm64
+            extension: ''
+            archive: tar.gz
+          - platform: macos
+            arch: x64
+            goos: darwin
+            goarch: amd64
+            extension: ''
+            archive: tar.gz
+          - platform: macos
+            arch: arm64
+            goos: darwin
+            goarch: arm64
+            extension: ''
+            archive: tar.gz
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: apps/remote-server/go/go.mod
+          cache: false
+
+      - name: Resolve package version
+        env:
+          REQUESTED_VERSION: ${{ inputs.package_version }}
+        run: |
+          set -euo pipefail
+          if [[ -n "$REQUESTED_VERSION" ]]; then
+            node scripts/set-release-version.mjs "$REQUESTED_VERSION" --check
+            echo "VERSION=$REQUESTED_VERSION" >> "$GITHUB_ENV"
+          else
+            node -p '"VERSION=" + require("./apps/remote-server/package.json").version + "-ci." + process.env.GITHUB_RUN_NUMBER' >> "$GITHUB_ENV"
+          fi
+
+      - name: Cross-compile binary
+        working-directory: apps/remote-server/go
+        env:
+          CGO_ENABLED: 0
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/stage"
+          go build -trimpath \
+            -ldflags "-s -w -X main.version=$VERSION -X main.commit=$GITHUB_SHA" \
+            -o "$GITHUB_WORKSPACE/stage/pure-tavern-remote-server${{ matrix.extension }}" .
+
+      - name: Package binary
+        run: |
+          set -euo pipefail
+          mkdir -p release
+          chmod +x "stage/pure-tavern-remote-server${{ matrix.extension }}"
+          ASSET="PureTavern-$VERSION-remote-server-${{ matrix.platform }}-${{ matrix.arch }}"
+          if [[ "${{ matrix.archive }}" == "zip" ]]; then
+            (cd stage && zip -q "$GITHUB_WORKSPACE/release/$ASSET.zip" "pure-tavern-remote-server${{ matrix.extension }}")
+          else
+            tar -C stage -czf "release/$ASSET.tar.gz" "pure-tavern-remote-server${{ matrix.extension }}"
+          fi
+
+      - name: Upload backend binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ inputs.release_artifacts && format('release-remote-server-{0}-{1}', matrix.platform, matrix.arch) || format('PureTavern-remote-server-{0}-{1}-{2}', matrix.platform, matrix.arch, github.run_number) }}
+          path: release/*
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: ${{ inputs.release_artifacts && 7 || 30 }}

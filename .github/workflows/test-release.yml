@@ -435,9 +435,17 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
+  remote-server:
+    name: Build remote server test binaries
+    needs: preflight
+    uses: ./.github/workflows/remote-server.yml
+    with:
+      package_version: ${{ inputs.version }}
+      release_artifacts: true
+
   publish:
     name: Commit, tag and publish test release
-    needs: [preflight, web, android, desktop, ios, harmony, vscode]
+    needs: [preflight, web, android, desktop, ios, harmony, vscode, remote-server]
     runs-on: ubuntu-latest
     env:
       GH_TOKEN: ${{ github.token }}

@@ -22,6 +22,13 @@ __pycache__/
 *.py[cod]
 .pytest_cache/
 
+# Local remote-server binaries
+/apps/remote-server/go/bin/
+/apps/remote-server/go/pure-tavern-remote-server
+/apps/remote-server/go/pure-tavern-remote-server.exe
+/apps/remote-server/go/remote-server
+/apps/remote-server/go/remote-server.exe
+
 # Logs
 *.log
 pnpm-debug.log*
