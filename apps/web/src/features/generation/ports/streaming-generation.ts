@@ -5,8 +5,9 @@ export interface StreamingGeneration {
 export class BrowserStreamingGeneration implements StreamingGeneration {
   forward(response: Response): Response {
     const contentType = response.headers.get('Content-Type') ?? 'text/event-stream; charset=utf-8';
+    const transportHeader = response.headers.get('X-Pure-Tavern-Transport');
     const transport =
-      response.headers.get('X-Pure-Tavern-Transport') === 'remote' ? 'remote' : 'direct';
+      transportHeader === 'local' || transportHeader === 'remote' ? transportHeader : 'direct';
     return new Response(response.body, {
       status: response.status,
       statusText: response.statusText,

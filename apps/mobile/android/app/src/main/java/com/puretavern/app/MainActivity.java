@@ -7,6 +7,7 @@ import androidx.core.view.WindowCompat;
 import androidx.core.view.WindowInsetsCompat;
 import androidx.core.view.WindowInsetsControllerCompat;
 import com.getcapacitor.BridgeActivity;
+import com.puretavern.localserver.PureTavernLocalServerPlugin;
 
 public class MainActivity extends BridgeActivity {
 
@@ -15,6 +16,7 @@ public class MainActivity extends BridgeActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         registerPlugin(PureTavernFileSaverPlugin.class);
+        registerPlugin(PureTavernLocalServerPlugin.class);
         super.onCreate(savedInstanceState);
         configureResizableWindow();
         configureDisplayCutout();

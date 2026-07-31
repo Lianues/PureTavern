@@ -1,6 +1,6 @@
 import type { GenerationTransportState } from '../application/generation-transport-state';
-import { GenerationProviderError } from '../domain/provider';
 import type { ProviderHttpClient } from '../ports/provider-http-client';
+import type { AndroidLocalBackendClient } from './android-local-backend-client';
 import type { DirectFetchClient } from './direct-fetch-client';
 import type { RemoteBackendClient } from './remote-backend-client';
 
@@ -9,19 +9,23 @@ export class RoutingFetchClient implements ProviderHttpClient {
 
   readonly #state: GenerationTransportState;
   readonly #direct: DirectFetchClient;
+  readonly #local: AndroidLocalBackendClient;
   readonly #remote: RemoteBackendClient;
 
   constructor(
     state: GenerationTransportState,
     direct: DirectFetchClient,
+    local: AndroidLocalBackendClient,
     remote: RemoteBackendClient,
   ) {
     this.#state = state;
     this.#direct = direct;
+    this.#local = local;
     this.#remote = remote;
     this.diagnostics = {
       state: state.diagnostics,
       direct: direct.diagnostics,
+      local: local.diagnostics,
       remote: remote.diagnostics,
     };
   }
@@ -33,11 +37,7 @@ export class RoutingFetchClient implements ProviderHttpClient {
       case 'remote':
         return await this.#remote.send(source, url, init);
       case 'local':
-        throw new GenerationProviderError(
-          'unsupported-capability',
-          'Local backend generation is not implemented yet.',
-          501,
-        );
+        return await this.#local.send(source, url, init);
     }
   }
 }

@@ -18,12 +18,12 @@ The module ports are `GenerationGateway`, `ModelCatalogGateway` and `StreamingGe
 PureTavern injects a transport selector above Legacy Connection Manager's `#connection_profiles` row without changing the upstream template:
 
 - **Current frontend call** keeps the existing direct browser request behavior.
-- **Local backend call** is a disabled native-app placeholder. It is omitted entirely on the Web build.
+- **Local backend call** is enabled only in the Android app when the `PureTavernLocalServer` Capacitor plugin is available. It is omitted on Web and remains disabled in other native shells. The plugin sends the final request with `HttpURLConnection`; provider adaptation and response parsing stay in this frontend module.
 - **Remote backend call** sends the final provider URL, headers and JSON body to the optional PureTavern proxy protocol. Provider adaptation and response parsing remain in this frontend module; the backend is transport-only.
 
-The remote backend URL, access key, selected mode and connection result are session-memory state. They are deliberately not written to IndexedDB, localStorage, Legacy settings or diagnostics in this phase. The health endpoint must identify protocol `pure-tavern-generation-proxy` version 1 before requests are enabled. Both JSON responses and SSE bodies are streamed through unchanged.
+The remote backend URL, access key, selected mode and connection result are session-memory state. They are deliberately not written to IndexedDB, localStorage, Legacy settings or diagnostics in this phase. The health endpoint must identify protocol `pure-tavern-generation-proxy` version 1 before requests are enabled. Local and remote modes both rebuild standard `Response` objects and preserve JSON and SSE streaming.
 
-The reference implementation is `apps/remote-server/python`. Direct mode can still fail because of CORS, TLS, Private Network Access or vendor policy; these failures remain reported as `cors-or-network`. Remote mode requires the proxy itself to be reachable and CORS-enabled. An HTTPS page may not call an HTTP LAN proxy because of Mixed Content/PNA, so production Web deployments need an HTTPS backend.
+Remote reference implementations live in `apps/remote-server`; the Android transport is `apps/mobile/android/local-server`. Direct mode can still fail because of CORS, TLS, Private Network Access or vendor policy; these failures remain reported as `cors-or-network`. Android local mode bypasses browser CORS through the native bridge and permits user-configured HTTP LAN providers, but HTTPS is strongly preferred. Remote mode requires the proxy itself to be reachable and CORS-enabled. An HTTPS page may not call an HTTP LAN proxy because of Mixed Content/PNA, so production Web deployments need an HTTPS backend.
 
 Custom and reverse-proxy provider URLs must still use HTTPS, except localhost/127.0.0.1 development URLs. The remote backend access key authenticates the proxy and is separate from the provider credentials carried inside the encrypted HTTPS request.
 

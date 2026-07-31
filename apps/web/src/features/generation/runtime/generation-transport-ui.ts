@@ -2,6 +2,7 @@ import type {
   GenerationTransportSnapshot,
   GenerationTransportState,
 } from '../application/generation-transport-state';
+import { isAndroidLocalBackendAvailable } from '../infrastructure/android-local-backend-client';
 
 const PROFILE_SELECT_SELECTOR = '#connection_profiles';
 const UI_ROOT_ID = 'pure_tavern_generation_transport';
@@ -13,6 +14,7 @@ export interface RemoteBackendConnector {
 
 export interface GenerationTransportUiOptions {
   isNativeApp?: () => boolean;
+  isLocalBackendAvailable?: () => boolean;
 }
 
 interface PlatformGlobals {
@@ -52,6 +54,7 @@ export function installGenerationTransportUi(
   }
 
   const isNativeApp = options.isNativeApp ?? isNativePureTavernApp;
+  const isLocalBackendAvailable = options.isLocalBackendAvailable ?? isAndroidLocalBackendAvailable;
   const style = installStyle();
   let binding: UiBinding | null = null;
 
@@ -66,7 +69,8 @@ export function installGenerationTransportUi(
     const profileRow = profileSelect?.parentElement;
     if (!profileSelect || !profileRow) return;
 
-    binding = createBinding(state, connector, isNativeApp());
+    const nativeApp = isNativeApp();
+    binding = createBinding(state, connector, nativeApp, nativeApp && isLocalBackendAvailable());
     profileRow.before(binding.root);
   };
 
@@ -87,6 +91,7 @@ function createBinding(
   state: GenerationTransportState,
   connector: RemoteBackendConnector,
   isNativeApp: boolean,
+  localBackendAvailable: boolean,
 ): UiBinding {
   const root = document.createElement('section');
   root.id = UI_ROOT_ID;
@@ -96,7 +101,7 @@ function createBinding(
       <label class="pure-tavern-transport-label" for="pure_tavern_generation_transport_mode">LLM 调用方式</label>
       <select class="text_pole flex1" id="pure_tavern_generation_transport_mode">
         <option value="frontend">当前前端调用</option>
-        ${isNativeApp ? '<option value="local" disabled title="暂未实现">本地后端调用</option>' : ''}
+        ${localModeOption(isNativeApp, localBackendAvailable)}
         <option value="remote">远程后端调用</option>
       </select>
       <button id="pure_tavern_remote_backend_toggle" class="menu_button" type="button" title="打开远程后端配置" aria-controls="pure_tavern_remote_backend_panel" aria-expanded="false" hidden>
@@ -145,7 +150,11 @@ function createBinding(
 
   const syncConfig = () => state.updateRemoteConfig(urlInput.value, keyInput.value);
   const onModeChange = () => {
-    if (modeSelect.value === 'frontend' || modeSelect.value === 'remote') {
+    if (
+      modeSelect.value === 'frontend' ||
+      modeSelect.value === 'remote' ||
+      (modeSelect.value === 'local' && localBackendAvailable)
+    ) {
       state.setMode(modeSelect.value);
     }
   };
@@ -190,6 +199,13 @@ function createBinding(
       panel.removeEventListener('submit', onSubmit);
     },
   };
+}
+
+function localModeOption(isNativeApp: boolean, available: boolean): string {
+  if (!isNativeApp) return '';
+  return available
+    ? '<option value="local">本地后端调用</option>'
+    : '<option value="local" disabled title="当前平台未提供本地后端">本地后端调用</option>';
 }
 
 function renderSnapshot(

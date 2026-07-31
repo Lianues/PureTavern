@@ -228,8 +228,9 @@ function hasReverseProxy(request: LegacyGenerationRequest): boolean {
   return typeof request.reverse_proxy === 'string' && Boolean(request.reverse_proxy.trim());
 }
 
-function readTransport(response: Response): 'direct' | 'remote' {
-  return response.headers.get('X-Pure-Tavern-Transport') === 'remote' ? 'remote' : 'direct';
+function readTransport(response: Response): 'direct' | 'local' | 'remote' {
+  const transport = response.headers.get('X-Pure-Tavern-Transport');
+  return transport === 'local' || transport === 'remote' ? transport : 'direct';
 }
 
 function parseExplicitTokenIds(value: string): number[] | null {

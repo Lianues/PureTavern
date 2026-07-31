@@ -7,6 +7,7 @@ import {
 
 import { GenerationService } from './application/generation-service';
 import { GenerationTransportState } from './application/generation-transport-state';
+import { AndroidLocalBackendClient } from './infrastructure/android-local-backend-client';
 import { DirectFetchClient } from './infrastructure/direct-fetch-client';
 import { RemoteBackendClient } from './infrastructure/remote-backend-client';
 import { RoutingFetchClient } from './infrastructure/routing-fetch-client';
@@ -22,8 +23,9 @@ export const generationFeature: FeatureModule = {
 
     const transportState = new GenerationTransportState();
     const directClient = new DirectFetchClient(nativeFetch);
+    const localClient = new AndroidLocalBackendClient();
     const remoteClient = new RemoteBackendClient(nativeFetch, transportState);
-    const client = new RoutingFetchClient(transportState, directClient, remoteClient);
+    const client = new RoutingFetchClient(transportState, directClient, localClient, remoteClient);
     const service = new GenerationService(credentials, client, new BrowserStreamingGeneration());
     const capability: GenerationProviderCapability = {
       listSources: () => service.listSources().map((descriptor) => descriptor.source),
@@ -41,7 +43,7 @@ export const generationFeature: FeatureModule = {
         scope: 'chat-completion-only',
         directBrowserRequests: true,
         optionalBackend: true,
-        transportModes: ['frontend', 'local-placeholder', 'remote'],
+        transportModes: ['frontend', 'local-android', 'remote'],
         providerSources: service.listSources().map((descriptor) => descriptor.source),
       },
     };

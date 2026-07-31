@@ -6,6 +6,7 @@ import {
   REMOTE_BACKEND_PROTOCOL_VERSION,
   type RemoteBackendProxyRequest,
 } from '../domain/remote-backend-protocol';
+import { AndroidLocalBackendClient } from '../infrastructure/android-local-backend-client';
 import { DirectFetchClient } from '../infrastructure/direct-fetch-client';
 import {
   normalizeRemoteBackendUrl,
@@ -23,12 +24,13 @@ function healthResponse(): Response {
 }
 
 describe('generation transport routing', () => {
-  it('keeps frontend mode on the existing direct fetch and bounds the local placeholder', async () => {
+  it('keeps frontend mode on direct fetch and rejects local mode without the Android bridge', async () => {
     const nativeFetch = vi.fn(async () => Response.json({ direct: true })) as typeof window.fetch;
     const state = new GenerationTransportState();
     const direct = new DirectFetchClient(nativeFetch);
+    const local = new AndroidLocalBackendClient(null);
     const remote = new RemoteBackendClient(nativeFetch, state);
-    const routing = new RoutingFetchClient(state, direct, remote);
+    const routing = new RoutingFetchClient(state, direct, local, remote);
 
     const response = await routing.send('openai', new URL('https://provider.example/v1/models'), {
       method: 'GET',
@@ -42,8 +44,8 @@ describe('generation transport routing', () => {
     await expect(
       routing.send('openai', new URL('https://provider.example/v1/models'), { method: 'GET' }),
     ).rejects.toMatchObject({
-      code: 'unsupported-capability',
-      status: 501,
+      code: 'local-backend-unavailable',
+      status: 503,
     });
   });
 

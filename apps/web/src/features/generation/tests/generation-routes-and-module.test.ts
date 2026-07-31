@@ -141,7 +141,7 @@ describe('Generation feature module', () => {
       scope: 'chat-completion-only',
       directBrowserRequests: true,
       optionalBackend: true,
-      transportModes: ['frontend', 'local-placeholder', 'remote'],
+      transportModes: ['frontend', 'local-android', 'remote'],
       service: { providerCount: 26, protocolCount: 4 },
     });
     expect(JSON.stringify(result.diagnostics)).not.toContain('module-credential');

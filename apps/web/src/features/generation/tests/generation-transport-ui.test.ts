@@ -28,18 +28,21 @@ function connectionProfilePanel(): HTMLElement {
   return panel;
 }
 
-function install(isNativeApp = false) {
+function install(isNativeApp = false, isLocalBackendAvailable = false) {
   const state = new GenerationTransportState();
   const connector = { connect: vi.fn(async () => undefined) };
   disposers.push(
-    installGenerationTransportUi(state, connector, { isNativeApp: () => isNativeApp }),
+    installGenerationTransportUi(state, connector, {
+      isNativeApp: () => isNativeApp,
+      isLocalBackendAvailable: () => isLocalBackendAvailable,
+    }),
   );
   return { state, connector };
 }
 
 describe('generation transport Connection Profile hook', () => {
   it('injects above the Legacy flex row and omits local backend mode on Web', async () => {
-    install(false);
+    install(false, true);
     const panel = connectionProfilePanel();
     document.body.append(panel);
     await flushMutationObserver();
@@ -56,13 +59,27 @@ describe('generation transport Connection Profile hook', () => {
     expect(mode?.querySelector('option[value="local"]')).toBeNull();
   });
 
-  it('shows a disabled local placeholder in native apps', () => {
+  it('shows local mode disabled in native apps without the Android bridge', () => {
     document.body.append(connectionProfilePanel());
     install(true);
 
     const local = document.querySelector<HTMLOptionElement>('option[value="local"]');
     expect(local?.textContent).toBe('本地后端调用');
     expect(local?.disabled).toBe(true);
+  });
+
+  it('enables local mode only when the Android bridge is available', () => {
+    document.body.append(connectionProfilePanel());
+    const { state } = install(true, true);
+
+    const mode = document.querySelector<HTMLSelectElement>(
+      '#pure_tavern_generation_transport_mode',
+    )!;
+    const local = mode.querySelector<HTMLOptionElement>('option[value="local"]');
+    expect(local?.disabled).toBe(false);
+    mode.value = 'local';
+    mode.dispatchEvent(new Event('change'));
+    expect(state.mode).toBe('local');
   });
 
   it('reveals the remote button and panel, then passes in-memory URL and key to connect', async () => {

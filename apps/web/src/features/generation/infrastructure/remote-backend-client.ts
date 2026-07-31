@@ -1,4 +1,5 @@
 import type { GenerationTransportState } from '../application/generation-transport-state';
+import { createFinalProviderRequest } from '../domain/final-provider-request';
 import { GenerationProviderError, type ProviderErrorCode } from '../domain/provider';
 import {
   REMOTE_BACKEND_PROTOCOL,
@@ -114,7 +115,11 @@ export class RemoteBackendClient implements ProviderHttpClient {
           503,
         );
       }
-      const payload = createProxyRequest(url, init);
+      const payload: RemoteBackendProxyRequest = {
+        protocol: REMOTE_BACKEND_PROTOCOL,
+        protocolVersion: REMOTE_BACKEND_PROTOCOL_VERSION,
+        request: createFinalProviderRequest(url, init),
+      };
       const response = await this.#fetch(remoteEndpoint(remote.baseUrl, 'v1/proxy'), {
         method: 'POST',
         headers: {
@@ -225,38 +230,6 @@ function backendHeaders(key: string): Record<string, string> {
   return {
     Accept: 'application/json',
     Authorization: `Bearer ${key}`,
-  };
-}
-
-function createProxyRequest(url: URL, init: RequestInit): RemoteBackendProxyRequest {
-  const method = (init.method ?? 'GET').toUpperCase();
-  if (method !== 'GET' && method !== 'POST') {
-    throw new GenerationProviderError(
-      'unsupported-capability',
-      'The remote backend transport only supports GET and POST provider requests.',
-      422,
-    );
-  }
-  let body: string | null = null;
-  if (init.body !== undefined && init.body !== null) {
-    if (typeof init.body !== 'string') {
-      throw new GenerationProviderError(
-        'unsupported-capability',
-        'The remote backend transport only supports string request bodies.',
-        422,
-      );
-    }
-    body = init.body;
-  }
-  return {
-    protocol: REMOTE_BACKEND_PROTOCOL,
-    protocolVersion: REMOTE_BACKEND_PROTOCOL_VERSION,
-    request: {
-      url: url.toString(),
-      method,
-      headers: Object.fromEntries(new Headers(init.headers).entries()),
-      body,
-    },
   };
 }
 
