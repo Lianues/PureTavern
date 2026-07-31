@@ -1,0 +1,12 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "main-local-backend",
+  "description": "Allow the main PureTavern window to call the transport-only local backend and receive its response stream.",
+  "windows": ["main"],
+  "permissions": [
+    "core:event:allow-listen",
+    "core:event:allow-unlisten",
+    "allow-pure-tavern-local-start-request",
+    "allow-pure-tavern-local-cancel-request"
+  ]
+}

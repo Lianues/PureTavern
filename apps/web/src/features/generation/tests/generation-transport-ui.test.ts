@@ -1,10 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { GenerationTransportState } from '../application/generation-transport-state';
-import {
-  installGenerationTransportUi,
-  isNativePureTavernApp,
-} from '../runtime/generation-transport-ui';
+import { installGenerationTransportUi } from '../runtime/generation-transport-ui';
 
 const disposers: Array<() => void> = [];
 
@@ -28,12 +25,11 @@ function connectionProfilePanel(): HTMLElement {
   return panel;
 }
 
-function install(isNativeApp = false, isLocalBackendAvailable = false) {
+function install(isLocalBackendAvailable = false) {
   const state = new GenerationTransportState();
   const connector = { connect: vi.fn(async () => undefined) };
   disposers.push(
     installGenerationTransportUi(state, connector, {
-      isNativeApp: () => isNativeApp,
       isLocalBackendAvailable: () => isLocalBackendAvailable,
     }),
   );
@@ -42,7 +38,7 @@ function install(isNativeApp = false, isLocalBackendAvailable = false) {
 
 describe('generation transport Connection Profile hook', () => {
   it('injects above the Legacy flex row and omits local backend mode on Web', async () => {
-    install(false, true);
+    install();
     const panel = connectionProfilePanel();
     document.body.append(panel);
     await flushMutationObserver();
@@ -59,18 +55,9 @@ describe('generation transport Connection Profile hook', () => {
     expect(mode?.querySelector('option[value="local"]')).toBeNull();
   });
 
-  it('shows local mode disabled in native apps without the Android bridge', () => {
+  it('enables local mode only when a shell bridge is injected', () => {
     document.body.append(connectionProfilePanel());
-    install(true);
-
-    const local = document.querySelector<HTMLOptionElement>('option[value="local"]');
-    expect(local?.textContent).toBe('本地后端调用');
-    expect(local?.disabled).toBe(true);
-  });
-
-  it('enables local mode only when the Android bridge is available', () => {
-    document.body.append(connectionProfilePanel());
-    const { state } = install(true, true);
+    const { state } = install(true);
 
     const mode = document.querySelector<HTMLSelectElement>(
       '#pure_tavern_generation_transport_mode',
@@ -84,7 +71,7 @@ describe('generation transport Connection Profile hook', () => {
 
   it('reveals the remote button and panel, then passes in-memory URL and key to connect', async () => {
     document.body.append(connectionProfilePanel());
-    const { state, connector } = install(false);
+    const { state, connector } = install();
     const mode = document.querySelector<HTMLSelectElement>(
       '#pure_tavern_generation_transport_mode',
     )!;
@@ -126,7 +113,7 @@ describe('generation transport Connection Profile hook', () => {
   it('reinjects after the dynamic Legacy panel is replaced without losing runtime state', async () => {
     const first = connectionProfilePanel();
     document.body.append(first);
-    const { state } = install(false);
+    const { state } = install();
     state.setMode('remote');
     state.updateRemoteConfig('http://127.0.0.1:8000', 'memory-key');
 
@@ -145,15 +132,6 @@ describe('generation transport Connection Profile hook', () => {
     expect(document.querySelector<HTMLInputElement>('#pure_tavern_remote_backend_key')?.value).toBe(
       'memory-key',
     );
-  });
-});
-
-describe('native shell detection', () => {
-  it('recognizes Capacitor, Tauri and Harmony without treating a plain Web scope as native', () => {
-    expect(isNativePureTavernApp({})).toBe(false);
-    expect(isNativePureTavernApp({ Capacitor: { isNativePlatform: () => true } })).toBe(true);
-    expect(isNativePureTavernApp({ __TAURI_INTERNALS__: {} })).toBe(true);
-    expect(isNativePureTavernApp({ __PURE_TAVERN_PLATFORM__: 'harmony' })).toBe(true);
   });
 });
 

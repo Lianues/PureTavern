@@ -20,6 +20,7 @@ export default tseslint.config(
       'apps/harmony/entry/src/main/resources/rawfile/**',
       'apps/desktop/src-tauri/target/**',
       'apps/desktop/src-tauri/gen/schemas/**',
+      'apps/desktop/src-tauri/generated/**',
       'SillyTavern-1.18.0/**',
     ],
   },

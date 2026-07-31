@@ -2,7 +2,7 @@ import type {
   GenerationTransportSnapshot,
   GenerationTransportState,
 } from '../application/generation-transport-state';
-import { isAndroidLocalBackendAvailable } from '../infrastructure/android-local-backend-client';
+import { isLocalBackendBridgeAvailable } from '../ports/local-backend-bridge';
 
 const PROFILE_SELECT_SELECTOR = '#connection_profiles';
 const UI_ROOT_ID = 'pure_tavern_generation_transport';
@@ -13,34 +13,12 @@ export interface RemoteBackendConnector {
 }
 
 export interface GenerationTransportUiOptions {
-  isNativeApp?: () => boolean;
   isLocalBackendAvailable?: () => boolean;
-}
-
-interface PlatformGlobals {
-  Capacitor?: {
-    isNativePlatform?: () => boolean;
-  };
-  __PURE_TAVERN_PLATFORM__?: unknown;
-  __TAURI__?: unknown;
-  __TAURI_INTERNALS__?: unknown;
 }
 
 interface UiBinding {
   root: HTMLElement;
   dispose(): void;
-}
-
-export function isNativePureTavernApp(
-  scope: PlatformGlobals = globalThis as PlatformGlobals,
-): boolean {
-  if (scope.__PURE_TAVERN_PLATFORM__ === 'harmony') return true;
-  if (scope.__TAURI__ || scope.__TAURI_INTERNALS__) return true;
-  try {
-    return scope.Capacitor?.isNativePlatform?.call(scope.Capacitor) === true;
-  } catch {
-    return false;
-  }
 }
 
 /** 在不修改 Connection Manager 上游模板的前提下增加调用模式和远程后端配置。 */
@@ -53,8 +31,7 @@ export function installGenerationTransportUi(
     return () => undefined;
   }
 
-  const isNativeApp = options.isNativeApp ?? isNativePureTavernApp;
-  const isLocalBackendAvailable = options.isLocalBackendAvailable ?? isAndroidLocalBackendAvailable;
+  const isLocalBackendAvailable = options.isLocalBackendAvailable ?? isLocalBackendBridgeAvailable;
   const style = installStyle();
   let binding: UiBinding | null = null;
 
@@ -69,8 +46,7 @@ export function installGenerationTransportUi(
     const profileRow = profileSelect?.parentElement;
     if (!profileSelect || !profileRow) return;
 
-    const nativeApp = isNativeApp();
-    binding = createBinding(state, connector, nativeApp, nativeApp && isLocalBackendAvailable());
+    binding = createBinding(state, connector, isLocalBackendAvailable());
     profileRow.before(binding.root);
   };
 
@@ -90,7 +66,6 @@ export function installGenerationTransportUi(
 function createBinding(
   state: GenerationTransportState,
   connector: RemoteBackendConnector,
-  isNativeApp: boolean,
   localBackendAvailable: boolean,
 ): UiBinding {
   const root = document.createElement('section');
@@ -101,7 +76,7 @@ function createBinding(
       <label class="pure-tavern-transport-label" for="pure_tavern_generation_transport_mode">LLM 调用方式</label>
       <select class="text_pole flex1" id="pure_tavern_generation_transport_mode">
         <option value="frontend">当前前端调用</option>
-        ${localModeOption(isNativeApp, localBackendAvailable)}
+        ${localModeOption(localBackendAvailable)}
         <option value="remote">远程后端调用</option>
       </select>
       <button id="pure_tavern_remote_backend_toggle" class="menu_button" type="button" title="打开远程后端配置" aria-controls="pure_tavern_remote_backend_panel" aria-expanded="false" hidden>
@@ -201,11 +176,8 @@ function createBinding(
   };
 }
 
-function localModeOption(isNativeApp: boolean, available: boolean): string {
-  if (!isNativeApp) return '';
-  return available
-    ? '<option value="local">本地后端调用</option>'
-    : '<option value="local" disabled title="当前平台未提供本地后端">本地后端调用</option>';
+function localModeOption(available: boolean): string {
+  return available ? '<option value="local">本地后端调用</option>' : '';
 }
 
 function renderSnapshot(

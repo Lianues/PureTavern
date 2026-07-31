@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-pure-tavern-local-cancel-request"
+description = "Enables the pure_tavern_local_cancel_request command without any pre-configured scope."
+commands.allow = ["pure_tavern_local_cancel_request"]
+
+[[permission]]
+identifier = "deny-pure-tavern-local-cancel-request"
+description = "Denies the pure_tavern_local_cancel_request command without any pre-configured scope."
+commands.deny = ["pure_tavern_local_cancel_request"]

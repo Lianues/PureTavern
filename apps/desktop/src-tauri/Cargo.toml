@@ -5,10 +5,17 @@ description = "PureTavern desktop shell"
 authors = ["PureTavern contributors"]
 license = "AGPL-3.0-only"
 edition = "2021"
-rust-version = "1.77.2"
+rust-version = "1.85.0"
 
 [build-dependencies]
 tauri-build = { version = "2.6.3", features = [] }
 
 [dependencies]
+base64 = "0.22.1"
+futures-util = "0.3.33"
+reqwest = { version = "0.13.4", default-features = false, features = ["http2", "rustls", "stream", "system-proxy"] }
+serde = { version = "1.0.229", features = ["derive"] }
 tauri = { version = "2.11.5", features = [] }
+
+[dev-dependencies]
+serde_json = "1.0.151"

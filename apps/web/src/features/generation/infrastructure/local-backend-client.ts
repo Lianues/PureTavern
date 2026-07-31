@@ -3,39 +3,18 @@ import {
   type FinalProviderRequest,
 } from '../domain/final-provider-request';
 import { GenerationProviderError, type ProviderErrorCode } from '../domain/provider';
+import {
+  resolveLocalBackendBridge,
+  type LocalBackendBridge,
+  type LocalBackendBridgeListenerHandle,
+} from '../ports/local-backend-bridge';
 import type { ProviderHttpClient } from '../ports/provider-http-client';
 
-const RESPONSE_EVENT = 'pureTavernLocalServerResponse';
 const TRANSPORT_HEADER = 'X-Pure-Tavern-Transport';
 const MAX_DECODED_CHUNK_SIZE = 32 * 1024;
 const MAX_ENCODED_CHUNK_SIZE = 48 * 1024;
 
-export interface AndroidLocalBackendPluginListenerHandle {
-  remove(): Promise<void>;
-}
-
-export interface AndroidLocalBackendPlugin {
-  startRequest(
-    options: FinalProviderRequest & { requestId: string },
-  ): Promise<{ requestId: string }>;
-  cancelRequest(options: { requestId: string }): Promise<void>;
-  addListener(
-    eventName: typeof RESPONSE_EVENT,
-    listener: (event: unknown) => void,
-  ): Promise<AndroidLocalBackendPluginListenerHandle>;
-}
-
-export interface AndroidLocalBackendScope {
-  Capacitor?: {
-    getPlatform?: () => string;
-    Plugins?: {
-      PureTavernLocalServer?: unknown;
-      [name: string]: unknown;
-    };
-  };
-}
-
-export interface AndroidLocalBackendDiagnostics {
+export interface LocalBackendDiagnostics {
   available: boolean;
   requests: number;
   streams: number;
@@ -60,32 +39,19 @@ interface PendingRequest {
 
 let fallbackRequestId = 0;
 
-export function isAndroidLocalBackendAvailable(
-  scope: AndroidLocalBackendScope = globalThis as AndroidLocalBackendScope,
-): boolean {
-  const capacitor = scope.Capacitor;
-  if (!capacitor) return false;
-  try {
-    if (capacitor.getPlatform?.call(capacitor) !== 'android') return false;
-  } catch {
-    return false;
-  }
-  return isAndroidLocalBackendPlugin(capacitor.Plugins?.PureTavernLocalServer);
-}
+/** Rebuilds standard browser responses from the shell-injected local backend bridge. */
+export class LocalBackendClient implements ProviderHttpClient {
+  readonly diagnostics: LocalBackendDiagnostics;
 
-/** Uses the Android Capacitor bridge as a transport for the final frontend-built request. */
-export class AndroidLocalBackendClient implements ProviderHttpClient {
-  readonly diagnostics: AndroidLocalBackendDiagnostics;
-
-  readonly #plugin: AndroidLocalBackendPlugin | null;
+  readonly #bridge: LocalBackendBridge | null;
   readonly #pending = new Map<string, PendingRequest>();
   #listenerPromise: Promise<void> | null = null;
-  #listenerHandle: AndroidLocalBackendPluginListenerHandle | null = null;
+  #listenerHandle: LocalBackendBridgeListenerHandle | null = null;
 
-  constructor(plugin: AndroidLocalBackendPlugin | null = defaultPlugin()) {
-    this.#plugin = plugin;
+  constructor(bridge: LocalBackendBridge | null = resolveLocalBackendBridge()) {
+    this.#bridge = bridge;
     this.diagnostics = {
-      available: plugin !== null,
+      available: bridge !== null,
       requests: 0,
       streams: 0,
       failures: 0,
@@ -99,17 +65,17 @@ export class AndroidLocalBackendClient implements ProviderHttpClient {
     this.diagnostics.requests += 1;
     this.diagnostics.lastSource = source;
 
-    if (!this.#plugin) {
+    if (!this.#bridge) {
       const error = new GenerationProviderError(
         'local-backend-unavailable',
-        'The Android local backend bridge is unavailable.',
+        'The local backend bridge is unavailable in this runtime.',
         503,
       );
       this.#recordFailure(error);
       throw error;
     }
 
-    const plugin = this.#plugin;
+    const bridge = this.#bridge;
     let request: FinalProviderRequest;
     try {
       request = createFinalProviderRequest(url, init);
@@ -146,7 +112,7 @@ export class AndroidLocalBackendClient implements ProviderHttpClient {
       }
 
       try {
-        void Promise.resolve(plugin.startRequest({ requestId, ...request })).catch(
+        void Promise.resolve(bridge.startRequest({ requestId, ...request })).catch(
           (error: unknown) => {
             this.#failPending(pending, rejectedRequestError(error), false);
           },
@@ -159,10 +125,10 @@ export class AndroidLocalBackendClient implements ProviderHttpClient {
 
   async #ensureListener(): Promise<void> {
     if (this.#listenerHandle) return;
-    if (!this.#plugin) throw new Error('Android local backend bridge unavailable.');
+    if (!this.#bridge) throw new Error('Native local backend bridge unavailable.');
     if (!this.#listenerPromise) {
       const listenerPromise = Promise.resolve(
-        this.#plugin.addListener(RESPONSE_EVENT, (event) => this.#handleEvent(event)),
+        this.#bridge.listen((event) => this.#handleEvent(event)),
       ).then((handle) => {
         this.#listenerHandle = handle;
       });
@@ -239,7 +205,7 @@ export class AndroidLocalBackendClient implements ProviderHttpClient {
       this.diagnostics.lastErrorCode = null;
       pending.resolve(response);
     } catch (error) {
-      this.#failPending(pending, protocolError('invalid response headers', error), true);
+      this.#failPending(pending, protocolError('response headers', error), true);
     }
   }
 
@@ -263,20 +229,20 @@ export class AndroidLocalBackendClient implements ProviderHttpClient {
       pending.nextSequence += 1;
       pending.controller.enqueue(chunk);
     } catch (error) {
-      this.#failPending(pending, protocolError('invalid response body chunk', error), true);
+      this.#failPending(pending, protocolError('response body chunk', error), true);
     }
   }
 
   #handleComplete(pending: PendingRequest): void {
     if (!pending.headersReceived) {
-      this.#failPending(pending, protocolError('response completed before headers'), true);
+      this.#failPending(pending, protocolError('response completion order'), true);
       return;
     }
     try {
       pending.controller?.close();
       this.#cleanup(pending);
     } catch (error) {
-      this.#failPending(pending, protocolError('response stream could not close', error), true);
+      this.#failPending(pending, protocolError('response stream completion', error), true);
     }
   }
 
@@ -319,9 +285,9 @@ export class AndroidLocalBackendClient implements ProviderHttpClient {
   }
 
   #cancelNative(requestId: string): void {
-    if (!this.#plugin) return;
+    if (!this.#bridge) return;
     try {
-      void Promise.resolve(this.#plugin.cancelRequest({ requestId })).catch(() => undefined);
+      void Promise.resolve(this.#bridge.cancelRequest(requestId)).catch(() => undefined);
     } catch {
       // Cancellation is best-effort after the frontend request has already settled.
     }
@@ -332,21 +298,6 @@ export class AndroidLocalBackendClient implements ProviderHttpClient {
     if (error.code === 'aborted') this.diagnostics.aborted += 1;
     this.diagnostics.lastErrorCode = error.code;
   }
-}
-
-function defaultPlugin(): AndroidLocalBackendPlugin | null {
-  const scope = globalThis as AndroidLocalBackendScope;
-  if (!isAndroidLocalBackendAvailable(scope)) return null;
-  return scope.Capacitor?.Plugins?.PureTavernLocalServer as AndroidLocalBackendPlugin;
-}
-
-function isAndroidLocalBackendPlugin(value: unknown): value is AndroidLocalBackendPlugin {
-  if (!isRecord(value)) return false;
-  return (
-    typeof value.startRequest === 'function' &&
-    typeof value.cancelRequest === 'function' &&
-    typeof value.addListener === 'function'
-  );
 }
 
 function createRequestId(): string {
@@ -383,7 +334,7 @@ function decodeBase64(value: string): Uint8Array {
 function rejectedRequestError(cause: unknown): GenerationProviderError {
   return new GenerationProviderError(
     'local-backend-protocol',
-    'The Android local backend rejected the provider request.',
+    'The local backend rejected the provider request.',
     502,
     { cause },
   );
@@ -394,11 +345,11 @@ function nativeEventError(code: unknown): GenerationProviderError {
   if (code === 'network') {
     return new GenerationProviderError(
       'local-backend-network',
-      'The Android local backend could not reach the provider.',
+      'The local backend could not reach the provider.',
       502,
     );
   }
-  return protocolError('native proxy error');
+  return protocolError('bridge error');
 }
 
 function signalAborted(signal: AbortSignal | null | undefined): boolean {
@@ -410,12 +361,12 @@ function normalizeBeforeStartError(
   signal: AbortSignal | null | undefined,
 ): GenerationProviderError {
   if (error instanceof GenerationProviderError) return error;
-  if (signal?.aborted === true || (error instanceof DOMException && error.name === 'AbortError')) {
+  if (signalAborted(signal) || (error instanceof DOMException && error.name === 'AbortError')) {
     return abortedError(error);
   }
   return new GenerationProviderError(
     'local-backend-unavailable',
-    'The Android local backend bridge could not be initialized.',
+    'The local backend bridge could not be initialized.',
     503,
     { cause: error },
   );
@@ -424,7 +375,7 @@ function normalizeBeforeStartError(
 function abortedError(cause?: unknown): GenerationProviderError {
   return new GenerationProviderError(
     'aborted',
-    'The Android local backend request was aborted.',
+    'The local backend request was aborted.',
     499,
     cause === undefined ? undefined : { cause },
   );
@@ -433,7 +384,7 @@ function abortedError(cause?: unknown): GenerationProviderError {
 function protocolError(reason: string, cause?: unknown): GenerationProviderError {
   return new GenerationProviderError(
     'local-backend-protocol',
-    `The Android local backend returned an invalid ${reason}.`,
+    `The local backend returned an invalid ${reason}.`,
     502,
     cause === undefined ? undefined : { cause },
   );

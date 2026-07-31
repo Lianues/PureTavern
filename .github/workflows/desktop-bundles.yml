@@ -87,6 +87,9 @@ jobs:
       - name: Build generic web app
         run: pnpm build
 
+      - name: Test desktop local backend
+        run: pnpm --filter @pure-tavern/desktop test:rust
+
       - name: Read package version
         shell: bash
         run: node -p '"RELEASE_VERSION=" + require("./package.json").version' >> "$GITHUB_ENV"

@@ -3,10 +3,17 @@
   "version": "0.1.11",
   "private": true,
   "scripts": {
-    "dev:desktop": "pnpm --dir ../.. build && tauri dev --ci",
-    "build:desktop": "pnpm --dir ../.. build && tauri build --ci"
+    "bridge:build": "node scripts/build-local-backend-bridge.mjs",
+    "bridge:check": "node scripts/build-local-backend-bridge.mjs --check",
+    "test": "pnpm bridge:check && node scripts/verify-local-server.mjs",
+    "test:rust": "pnpm bridge:build && cargo test --locked --manifest-path src-tauri/Cargo.toml",
+    "check:rust": "pnpm bridge:build && cargo check --locked --manifest-path src-tauri/Cargo.toml",
+    "dev:desktop": "pnpm --dir ../.. build && pnpm bridge:build && tauri dev --ci",
+    "build:desktop": "pnpm --dir ../.. build && pnpm bridge:build && tauri build --ci"
   },
   "devDependencies": {
-    "@tauri-apps/cli": "2.11.4"
+    "@tauri-apps/api": "2.11.1",
+    "@tauri-apps/cli": "2.11.4",
+    "esbuild": "^0.27.0"
   }
 }

@@ -1,32 +1,32 @@
 import { describe, expect, it, vi } from 'vitest';
 
+import { LocalBackendClient } from '../infrastructure/local-backend-client';
 import {
-  AndroidLocalBackendClient,
-  isAndroidLocalBackendAvailable,
-  type AndroidLocalBackendPlugin,
-  type AndroidLocalBackendPluginListenerHandle,
-} from '../infrastructure/android-local-backend-client';
+  LOCAL_BACKEND_BRIDGE_PROTOCOL,
+  LOCAL_BACKEND_BRIDGE_PROTOCOL_VERSION,
+  isLocalBackendBridgeAvailable,
+  resolveLocalBackendBridge,
+  type LocalBackendBridge,
+  type LocalBackendBridgeListenerHandle,
+} from '../ports/local-backend-bridge';
 
-class FakeAndroidLocalBackendPlugin implements AndroidLocalBackendPlugin {
-  readonly requests: Array<Parameters<AndroidLocalBackendPlugin['startRequest']>[0]> = [];
+class FakeLocalBackendBridge implements LocalBackendBridge {
+  readonly protocol = LOCAL_BACKEND_BRIDGE_PROTOCOL;
+  readonly protocolVersion = LOCAL_BACKEND_BRIDGE_PROTOCOL_VERSION;
+  readonly requests: Array<Parameters<LocalBackendBridge['startRequest']>[0]> = [];
   readonly cancellations: string[] = [];
   listener: ((event: unknown) => void) | null = null;
 
-  async startRequest(
-    options: Parameters<AndroidLocalBackendPlugin['startRequest']>[0],
-  ): Promise<{ requestId: string }> {
+  async startRequest(options: Parameters<LocalBackendBridge['startRequest']>[0]): Promise<unknown> {
     this.requests.push(options);
     return { requestId: options.requestId };
   }
 
-  async cancelRequest(options: { requestId: string }): Promise<void> {
-    this.cancellations.push(options.requestId);
+  async cancelRequest(requestId: string): Promise<void> {
+    this.cancellations.push(requestId);
   }
 
-  async addListener(
-    _eventName: 'pureTavernLocalServerResponse',
-    listener: (event: unknown) => void,
-  ): Promise<AndroidLocalBackendPluginListenerHandle> {
+  async listen(listener: (event: unknown) => void): Promise<LocalBackendBridgeListenerHandle> {
     this.listener = listener;
     return {
       remove: async () => {
@@ -40,10 +40,10 @@ class FakeAndroidLocalBackendPlugin implements AndroidLocalBackendPlugin {
   }
 }
 
-describe('Android local backend client', () => {
+describe('shell-injected local backend client', () => {
   it('serializes the final provider request and reconstructs a non-stream response', async () => {
-    const plugin = new FakeAndroidLocalBackendPlugin();
-    const client = new AndroidLocalBackendClient(plugin);
+    const bridge = new FakeLocalBackendBridge();
+    const client = new LocalBackendClient(bridge);
     const responsePromise = client.send(
       'openai',
       new URL('https://provider.example/v1/chat/completions?api-version=1'),
@@ -57,8 +57,8 @@ describe('Android local backend client', () => {
         body: '{"model":"test"}',
       },
     );
-    await vi.waitFor(() => expect(plugin.requests).toHaveLength(1));
-    const request = plugin.requests[0]!;
+    await vi.waitFor(() => expect(bridge.requests).toHaveLength(1));
+    const request = bridge.requests[0]!;
 
     expect(request).toMatchObject({
       url: 'https://provider.example/v1/chat/completions?api-version=1',
@@ -70,7 +70,7 @@ describe('Android local backend client', () => {
       },
       body: '{"model":"test"}',
     });
-    plugin.emit({
+    bridge.emit({
       requestId: request.requestId,
       type: 'headers',
       status: 200,
@@ -79,13 +79,13 @@ describe('Android local backend client', () => {
     });
     const response = await responsePromise;
     const bodyPromise = response.text();
-    plugin.emit({
+    bridge.emit({
       requestId: request.requestId,
       type: 'chunk',
       sequence: 0,
       data: encodeBase64('{"ok":true}'),
     });
-    plugin.emit({ requestId: request.requestId, type: 'complete' });
+    bridge.emit({ requestId: request.requestId, type: 'complete' });
 
     expect(response.status).toBe(200);
     expect(response.headers.get('X-Pure-Tavern-Transport')).toBe('local');
@@ -98,19 +98,20 @@ describe('Android local backend client', () => {
       failures: 0,
       lastSource: 'openai',
     });
+    expect(JSON.stringify(client.diagnostics)).not.toContain('provider-secret');
   });
 
   it('preserves ordered SSE chunks through a ReadableStream', async () => {
-    const plugin = new FakeAndroidLocalBackendPlugin();
-    const client = new AndroidLocalBackendClient(plugin);
+    const bridge = new FakeLocalBackendBridge();
+    const client = new LocalBackendClient(bridge);
     const responsePromise = client.send('claude', new URL('https://provider.example/v1/messages'), {
       method: 'POST',
       body: '{}',
       headers: { 'Content-Type': 'application/json' },
     });
-    await vi.waitFor(() => expect(plugin.requests).toHaveLength(1));
-    const requestId = plugin.requests[0]!.requestId;
-    plugin.emit({
+    await vi.waitFor(() => expect(bridge.requests).toHaveLength(1));
+    const requestId = bridge.requests[0]!.requestId;
+    bridge.emit({
       requestId,
       type: 'headers',
       status: 200,
@@ -119,52 +120,47 @@ describe('Android local backend client', () => {
     });
     const response = await responsePromise;
     const bodyPromise = response.text();
-    plugin.emit({
+    bridge.emit({
       requestId,
       type: 'chunk',
       sequence: 0,
       data: encodeBase64('data: {"delta":"A"}\n'),
     });
-    plugin.emit({
-      requestId,
-      type: 'chunk',
-      sequence: 1,
-      data: encodeBase64('\n'),
-    });
-    plugin.emit({ requestId, type: 'complete' });
+    bridge.emit({ requestId, type: 'chunk', sequence: 1, data: encodeBase64('\n') });
+    bridge.emit({ requestId, type: 'complete' });
 
     await expect(bodyPromise).resolves.toBe('data: {"delta":"A"}\n\n');
     expect(client.diagnostics.streams).toBe(1);
   });
 
-  it('forwards AbortSignal cancellation to the native request', async () => {
-    const plugin = new FakeAndroidLocalBackendPlugin();
-    const client = new AndroidLocalBackendClient(plugin);
+  it('forwards AbortSignal cancellation to the injected bridge', async () => {
+    const bridge = new FakeLocalBackendBridge();
+    const client = new LocalBackendClient(bridge);
     const controller = new AbortController();
     const responsePromise = client.send('makersuite', new URL('https://provider.example/models'), {
       method: 'GET',
       signal: controller.signal,
     });
-    await vi.waitFor(() => expect(plugin.requests).toHaveLength(1));
-    const requestId = plugin.requests[0]!.requestId;
+    await vi.waitFor(() => expect(bridge.requests).toHaveLength(1));
+    const requestId = bridge.requests[0]!.requestId;
 
     controller.abort();
 
     await expect(responsePromise).rejects.toMatchObject({ code: 'aborted', status: 499 });
-    await vi.waitFor(() => expect(plugin.cancellations).toEqual([requestId]));
+    await vi.waitFor(() => expect(bridge.cancellations).toEqual([requestId]));
     expect(client.diagnostics).toMatchObject({ failures: 1, aborted: 1 });
   });
 
-  it('errors the reconstructed stream on an out-of-order native chunk', async () => {
-    const plugin = new FakeAndroidLocalBackendPlugin();
-    const client = new AndroidLocalBackendClient(plugin);
+  it('errors the reconstructed stream on an out-of-order bridge chunk', async () => {
+    const bridge = new FakeLocalBackendBridge();
+    const client = new LocalBackendClient(bridge);
     const responsePromise = client.send('openrouter', new URL('https://provider.example/chat'), {
       method: 'POST',
       body: '{}',
     });
-    await vi.waitFor(() => expect(plugin.requests).toHaveLength(1));
-    const requestId = plugin.requests[0]!.requestId;
-    plugin.emit({
+    await vi.waitFor(() => expect(bridge.requests).toHaveLength(1));
+    const requestId = bridge.requests[0]!.requestId;
+    bridge.emit({
       requestId,
       type: 'headers',
       status: 200,
@@ -174,28 +170,22 @@ describe('Android local backend client', () => {
     const response = await responsePromise;
     const bodyPromise = response.text();
 
-    plugin.emit({ requestId, type: 'chunk', sequence: 1, data: encodeBase64('bad') });
+    bridge.emit({ requestId, type: 'chunk', sequence: 1, data: encodeBase64('bad') });
 
     await expect(bodyPromise).rejects.toMatchObject({ code: 'local-backend-protocol' });
-    await vi.waitFor(() => expect(plugin.cancellations).toEqual([requestId]));
-    expect(client.diagnostics.lastErrorCode).toBe('local-backend-protocol');
+    await vi.waitFor(() => expect(bridge.cancellations).toEqual([requestId]));
   });
 
-  it('detects only an Android Capacitor runtime with the complete plugin', () => {
-    const plugin = new FakeAndroidLocalBackendPlugin();
+  it('accepts only the versioned shell bridge contract', () => {
+    const bridge = new FakeLocalBackendBridge();
+    expect(resolveLocalBackendBridge({ __PURE_TAVERN_LOCAL_BACKEND__: bridge })).toBe(bridge);
+    expect(isLocalBackendBridgeAvailable({ __PURE_TAVERN_LOCAL_BACKEND__: bridge })).toBe(true);
     expect(
-      isAndroidLocalBackendAvailable({
-        Capacitor: { getPlatform: () => 'android', Plugins: { PureTavernLocalServer: plugin } },
+      resolveLocalBackendBridge({
+        __PURE_TAVERN_LOCAL_BACKEND__: { ...bridge, protocolVersion: 2 },
       }),
-    ).toBe(true);
-    expect(
-      isAndroidLocalBackendAvailable({
-        Capacitor: { getPlatform: () => 'web', Plugins: { PureTavernLocalServer: plugin } },
-      }),
-    ).toBe(false);
-    expect(
-      isAndroidLocalBackendAvailable({ Capacitor: { getPlatform: () => 'android', Plugins: {} } }),
-    ).toBe(false);
+    ).toBeNull();
+    expect(resolveLocalBackendBridge({})).toBeNull();
   });
 });
 

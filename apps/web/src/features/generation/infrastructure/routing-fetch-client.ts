@@ -1,6 +1,6 @@
 import type { GenerationTransportState } from '../application/generation-transport-state';
 import type { ProviderHttpClient } from '../ports/provider-http-client';
-import type { AndroidLocalBackendClient } from './android-local-backend-client';
+import type { LocalBackendClient } from './local-backend-client';
 import type { DirectFetchClient } from './direct-fetch-client';
 import type { RemoteBackendClient } from './remote-backend-client';
 
@@ -9,13 +9,13 @@ export class RoutingFetchClient implements ProviderHttpClient {
 
   readonly #state: GenerationTransportState;
   readonly #direct: DirectFetchClient;
-  readonly #local: AndroidLocalBackendClient;
+  readonly #local: LocalBackendClient;
   readonly #remote: RemoteBackendClient;
 
   constructor(
     state: GenerationTransportState,
     direct: DirectFetchClient,
-    local: AndroidLocalBackendClient,
+    local: LocalBackendClient,
     remote: RemoteBackendClient,
   ) {
     this.#state = state;

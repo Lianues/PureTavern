@@ -6,8 +6,8 @@ import {
   REMOTE_BACKEND_PROTOCOL_VERSION,
   type RemoteBackendProxyRequest,
 } from '../domain/remote-backend-protocol';
-import { AndroidLocalBackendClient } from '../infrastructure/android-local-backend-client';
 import { DirectFetchClient } from '../infrastructure/direct-fetch-client';
+import { LocalBackendClient } from '../infrastructure/local-backend-client';
 import {
   normalizeRemoteBackendUrl,
   RemoteBackendClient,
@@ -28,7 +28,7 @@ describe('generation transport routing', () => {
     const nativeFetch = vi.fn(async () => Response.json({ direct: true })) as typeof window.fetch;
     const state = new GenerationTransportState();
     const direct = new DirectFetchClient(nativeFetch);
-    const local = new AndroidLocalBackendClient(null);
+    const local = new LocalBackendClient(null);
     const remote = new RemoteBackendClient(nativeFetch, state);
     const routing = new RoutingFetchClient(state, direct, local, remote);
 
