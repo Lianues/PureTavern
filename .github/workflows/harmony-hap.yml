@@ -38,6 +38,9 @@ jobs:
       - name: Install workspace dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Test Harmony shell contracts
+        run: pnpm --dir apps/harmony test
+
       - name: Read package version
         run: node -p '"RELEASE_VERSION=" + require("./package.json").version' >> "$GITHUB_ENV"
 

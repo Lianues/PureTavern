@@ -6,6 +6,6 @@
     "sync:web": "node scripts/sync-web-assets.mjs",
     "build:hap": "node scripts/sync-web-assets.mjs && node scripts/build-hap.mjs",
     "deploy:local": "node scripts/deploy-local.mjs",
-    "test": "node scripts/verify-harmony-shell.mjs"
+    "test": "node scripts/verify-harmony-shell.mjs && node scripts/verify-local-backend.mjs"
   }
 }

@@ -9,17 +9,19 @@ import { describe, expect, it } from 'vitest';
 const featureRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const webRoot = path.resolve(featureRoot, '../../..');
 const forbiddenPlatformCode =
-  /Capacitor|__TAURI|@tauri-apps|PureTavernLocalServer|pure_tavern_local_(?:start|cancel)_request/u;
+  /Capacitor|__TAURI|@tauri-apps|@kit\.NetworkKit|URLSession|WKUserScript|PureTavernLocalServer|PureTavernHarmonyLocalServer|pure_tavern_local_(?:start|cancel)_request/u;
 
 describe('Generation platform boundary', () => {
-  it('contains only the versioned host bridge and no Android or Tauri adapter', async () => {
+  it('contains only the versioned host bridge and no shell-specific adapter', async () => {
     const sourceFiles = (await listFiles(featureRoot)).filter(
       (file) => file.endsWith('.ts') && !file.includes(`${path.sep}tests${path.sep}`),
     );
     const sources = await Promise.all(sourceFiles.map((file) => readFile(file, 'utf8')));
 
     expect(
-      sourceFiles.some((file) => /android|tauri|platform-local/iu.test(path.basename(file))),
+      sourceFiles.some((file) =>
+        /android|ios|harmony|tauri|platform-local/iu.test(path.basename(file)),
+      ),
     ).toBe(false);
     expect(sources.join('\n')).not.toMatch(forbiddenPlatformCode);
     expect(sources.join('\n')).toContain('__PURE_TAVERN_LOCAL_BACKEND__');

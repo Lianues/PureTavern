@@ -49,6 +49,8 @@ apps/mobile/ios/App/App.xcodeproj
 
 iOS 的页面 origin 是 `capacitor://localhost`，WebKit 不允许该自定义 scheme 注册 Service Worker。原生外壳因此使用 `PureTavernBridgeViewController` 包装 Capacitor 的 scheme handler，并通过仅随 iOS 打包的 IndexedDB bridge 提供与 Web Assets Service Worker 相同的动态资源路径，包括角色/Persona 头像、缩略图、背景、附件、用户图片、表情资源、资产库和任意第三方扩展文件。非动态文件仍委托给 Capacitor 原 handler，页面 origin 和现有 Web 存储不会改变。
 
+同一个 BridgeViewController 还注册 `PureTavernLocalServerPlugin`。插件只使用系统 `URLSession` 转发前端已经构造好的最终 Provider 请求，支持普通响应、SSE 分片和取消；Claude、Gemini、OpenRouter 等请求规则仍全部留在 Web Generation。`PureTavernLocalBackendBridge.js` 作为 iOS Resource 在 document-start 注入，普通 Web 与 Android 资源不会包含它。HTTP URL 仍受 iOS ATS 默认策略约束，本实现不会全局开启 `NSAllowsArbitraryLoads`。
+
 第三方扩展的 iOS MIME 映射固定为 Web 当前使用的 `mime@1.6.0` 数据。升级该依赖后执行：
 
 ```bash

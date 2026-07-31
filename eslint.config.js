@@ -53,4 +53,13 @@ export default tseslint.config(
       },
     },
   },
+  {
+    files: ['apps/harmony/runtime/**/*.js'],
+    languageOptions: {
+      globals: {
+        ...globals.browser,
+        ...globals.es2022,
+      },
+    },
+  },
 );

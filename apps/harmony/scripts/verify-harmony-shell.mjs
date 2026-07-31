@@ -114,6 +114,8 @@ assert.match(stageScript, /harmonyos-next-arm64-unsigned\.hap/u);
 assert.match(workflow, /^\s*workflow_dispatch:\s*$/mu);
 assert.doesNotMatch(workflow, /^\s*push:\s*$/mu);
 assert.doesNotMatch(workflow, /inputs\.version|inputs:\s*\n\s*version:/u);
+assert.match(workflow, /name: Test Harmony shell contracts/u);
+assert.match(workflow, /pnpm --dir apps\/harmony test/u);
 assert.match(workflow, /name: Read package version/u);
 assert.match(workflow, /require\("\.\/package\.json"\)\.version/u);
 assert.match(workflow, /runs-on: ubuntu-22\.04/u);

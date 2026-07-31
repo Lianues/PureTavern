@@ -3,6 +3,7 @@ import { webview } from '@kit.ArkWeb';
 import { picker } from '@kit.CoreFileKit';
 import { BusinessError } from '@kit.BasicServicesKit';
 import { promptAction } from '@kit.ArkUI';
+import { LocalBackendProxy } from '../local/LocalBackendProxy';
 import { LocalWebAssetLoader } from '../web/LocalWebAssetLoader';
 
 const APP_URL: string = 'https://puretavern.local/';
@@ -13,12 +14,17 @@ struct PureTavernPage {
   private readonly webController: webview.WebviewController = new webview.WebviewController();
   private readonly assetLoader: LocalWebAssetLoader =
     new LocalWebAssetLoader(getContext(this) as common.UIAbilityContext);
+  private readonly localBackend: LocalBackendProxy = new LocalBackendProxy(this.webController);
   @State private lastBackTime: number = 0;
 
   aboutToAppear(): void {
     webview.WebviewController.setWebDebuggingAccess(false);
     webview.WebviewController.initializeWebEngine();
     this.assetLoader.registerServiceWorkerSchemeHandler();
+  }
+
+  aboutToDisappear(): void {
+    this.localBackend.dispose();
   }
 
   onBackPress(): boolean {
@@ -52,6 +58,12 @@ struct PureTavernPage {
     Stack() {
       Web({ src: APP_URL, controller: this.webController })
         .javaScriptAccess(true)
+        .javaScriptProxy({
+          object: this.localBackend,
+          name: 'PureTavernHarmonyLocalServer',
+          methodList: ['startRequest', 'cancelRequest', 'takeEvents'],
+          controller: this.webController,
+        })
         .domStorageAccess(true)
         .fileAccess(true)
         .imageAccess(true)

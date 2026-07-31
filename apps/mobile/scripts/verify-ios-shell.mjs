@@ -199,6 +199,7 @@ assert.deepEqual(
 );
 assert.match(workflow, /^\s*workflow_dispatch:\s*$/mu);
 assert.doesNotMatch(workflow, /^\s*push:\s*$/mu);
+assert.match(workflow, /pnpm --filter @pure-tavern\/mobile test/u);
 assert.match(workflow, /CODE_SIGNING_ALLOWED=NO/u);
 assert.match(workflow, /PureTavern-\$RELEASE_VERSION-ios-unsigned\.ipa/u);
 assert.match(gitignore, /^output$/mu);
@@ -212,7 +213,7 @@ assert.deepEqual(pngMetadata(splash), { width: 1024, height: 1024, colorType: 2 
 const splashMetadata = pngMetadata(splash);
 assert.ok(
   splashMetadata.width * splashMetadata.height * 4 <= 25_000_000,
-  'The launch image exceeds splashboardd\'s 25 MB decoded-size limit.',
+  "The launch image exceeds splashboardd's 25 MB decoded-size limit.",
 );
 const splashContents = JSON.parse(splashImagesetContents);
 assert.equal(splashContents.images.length, 1);

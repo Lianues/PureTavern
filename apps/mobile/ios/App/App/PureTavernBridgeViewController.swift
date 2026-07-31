@@ -51,6 +51,7 @@ final class PureTavernBridgeViewController: CAPBridgeViewController {
     private var localScheme = "capacitor"
     private var appRoot = Bundle.main.resourceURL?.appendingPathComponent("public", isDirectory: true)
     private var pureTavernAssetHandler: PureTavernAssetSchemeHandler?
+    private var localServerPlugin: PureTavernLocalServerPlugin?
 
     override func instanceDescriptor() -> InstanceDescriptor {
         let descriptor = super.instanceDescriptor()
@@ -81,10 +82,18 @@ final class PureTavernBridgeViewController: CAPBridgeViewController {
 
     override func capacitorDidLoad() {
         super.capacitorDidLoad()
+        let localServerPlugin = PureTavernLocalServerPlugin()
+        bridge?.registerPluginInstance(localServerPlugin)
+        self.localServerPlugin = localServerPlugin
+        addUserScript(named: "PureTavernLocalBackendBridge", describedAs: "local backend bridge")
         addUserScript(named: "PureTavernAssetBridge", describedAs: "asset bridge")
         // Repairs jQuery UI's local-tab detection, which otherwise AJAX-loads the app root and
         // injects a second copy of the whole Legacy document. See PureTavernTabsFix.js.
         addUserScript(named: "PureTavernTabsFix", describedAs: "jQuery UI tabs fix")
+    }
+
+    deinit {
+        localServerPlugin?.shutdown()
     }
 
     private func addUserScript(named name: String, describedAs description: String) {

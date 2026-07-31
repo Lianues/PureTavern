@@ -11,7 +11,13 @@ The project intentionally provides two products:
 
 DevEco Studio's normal **Run/Debug** action uses `product=default`. The GitHub workflow sets `HARMONY_PRODUCT=ci`; do not switch the local IDE configuration to `ci` unless API 23 is also installed.
 
-The Harmony rawfile sync injects a small platform marker before the Legacy runtime. The page runs at the secure `https://puretavern.local/` origin. Normal page requests use the Web component interceptor, while Service Worker network requests use ArkWeb's process-wide `setServiceWorkerWebSchemeHandler` bridge after `initializeWebEngine()`. Both paths resolve the same packaged `rawfile/web` assets, which keeps dynamic avatar, thumbnail, and third-party extension routes on the normal Service Worker implementation. A normal `200` scheme response must not call `WebSchemeHandlerResponse.setUrl()`, because ArkWeb treats that field as a redirect and Service Worker scripts reject redirected registration. This bridge is confined to the Harmony shell; browser, desktop, Android, iOS, and VS Code builds retain the standard Web Service Worker path unchanged.
+The Harmony rawfile sync injects a small platform bootstrap before the Legacy runtime. The page runs at the secure `https://puretavern.local/` origin. Normal page requests use the Web component interceptor, while Service Worker network requests use ArkWeb's process-wide `setServiceWorkerWebSchemeHandler` bridge after `initializeWebEngine()`. Both paths resolve the same packaged `rawfile/web` assets, which keeps dynamic avatar, thumbnail, and third-party extension routes on the normal Service Worker implementation. A normal `200` scheme response must not call `WebSchemeHandlerResponse.setUrl()`, because ArkWeb treats that field as a redirect and Service Worker scripts reject redirected registration. This bridge is confined to the Harmony shell; browser, desktop, Android, iOS, and VS Code builds retain the standard Web Service Worker path unchanged.
+
+## Local generation transport
+
+`LocalBackendProxy.ets` uses Harmony's system `@kit.NetworkKit` `requestInStream` API. It forwards the final GET/POST URL, headers and optional UTF-8 body produced by Web Generation, emits ordered base64 chunks of at most 32 KiB, and supports cancellation and four concurrent requests. No Provider-specific request construction and no ohpm networking dependency are duplicated in the shell.
+
+ArkWeb exposes only `startRequest`, `cancelRequest` and `takeEvents` through a `javaScriptProxy` restricted at runtime to the packaged `https://puretavern.local/` frame. `runtime/harmony-bootstrap.js` maps that object to the shared versioned `pure-tavern-local-backend` bridge and polls quickly only while requests are active. It removes Cookie, hop-by-hop and upstream CORS response headers before Web receives them. HTTP URLs remain subject to HarmonyOS's default cleartext policy; the shell does not globally weaken it.
 
 ## Local commands
 
