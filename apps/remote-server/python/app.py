@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import inspect
 import os
 import secrets
 from collections.abc import AsyncIterator
@@ -126,15 +127,23 @@ def create_app(
         redoc_url=None,
         lifespan=lifespan,
     )
-    application.add_middleware(
-        CORSMiddleware,
-        allow_origins=list(resolved_settings.allowed_origins),
-        allow_credentials=False,
-        allow_methods=["GET", "POST", "OPTIONS"],
-        allow_headers=["Authorization", "Content-Type"],
-        expose_headers=[PROXY_HEADER, PROXY_ERROR_HEADER, "Content-Type"],
-        max_age=600,
-    )
+    cors_options: dict[str, object] = {
+        "allow_origins": list(resolved_settings.allowed_origins),
+        "allow_credentials": False,
+        "allow_methods": ["GET", "POST", "OPTIONS"],
+        "allow_headers": ["Authorization", "Content-Type"],
+        "expose_headers": [PROXY_HEADER, PROXY_ERROR_HEADER, "Content-Type"],
+        "max_age": 600,
+    }
+    # Starlette 1.3+ validates Private Network Access preflights itself and
+    # returns 400 unless this new option is enabled. Older supported releases
+    # do not accept the keyword, so keep the existing response-header shim for
+    # them and opt into the native validation only when it is available.
+    if "allow_private_network" in inspect.signature(
+        CORSMiddleware.__init__
+    ).parameters:
+        cors_options["allow_private_network"] = True
+    application.add_middleware(CORSMiddleware, **cors_options)
 
     @application.middleware("http")
     async def allow_private_network_preflight(request: Request, call_next):
