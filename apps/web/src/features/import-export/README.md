@@ -86,6 +86,15 @@ slow mode, the practical import memory ceiling is therefore the largest individu
 entire module. A single enormous character PNG or JSON document can still exceed a constrained
 WebKit process limit.
 
+TauriTavern exports retain binary sources as Blob handles and use the same chunked ZIP writer,
+including conversion of stored recovery points. Semantic conversion still keeps record/index data
+in memory; this is not a constant-memory guarantee for arbitrarily large chat JSON documents.
+
+Generated Legacy downloads and the management panel share the platform file-save bridge. Android
+uses its acknowledged native writer; browser downloads/shares are reported as unconfirmed handoffs.
+If a long export exhausts transient user activation, the user gets a save-ready button before the
+browser picker/share sheet opens. Cancelled saves do not produce a saved notification.
+
 ## Storage
 
 M21 local backups use its own generic records/blobs namespace. The default retention is five archives. File System Access is an enhancement; standard browser downloads and file inputs remain available.

@@ -65,3 +65,5 @@ Header 会保留未知字段，并单独索引完整 `chat_metadata`。消息数
 ## 降级与诊断
 
 sessions、messages、owner aliases 各自使用 resilient repository。IndexedDB 不可用时降级为当前页面会话内存，并通过 `globalThis.__PURE_TAVERN__.features.chats` 暴露 diagnostics；降级不新增数据库 schema 或 Object Store。
+
+写入失败但主存储仍可读时，未持久化的记录和删除标记优先于主存储旧值；成功重试相同记录后清除 pending 状态。整库归档在聊天存在 pending writes 时拒绝导出，避免把旧持久化值伪装成完整备份；用户仍可单独导出聊天 JSONL 保存页面内的新内容。

@@ -1,4 +1,5 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { Blob as NodeBlob } from 'node:buffer';
 
 import { AppDatabase } from '@/platform/storage/app-database';
 import {
@@ -159,6 +160,26 @@ afterEach(async () => {
 });
 
 describe('TauriTavernMigrationService', () => {
+  it('exports binary sources by slicing Blob handles without eagerly reading their full bytes', async () => {
+    vi.stubGlobal('Blob', NodeBlob);
+    try {
+      const harness = await createHarness();
+      await seed(harness);
+      const blob = new Blob([new Uint8Array([9, 8, 7, 6])]);
+      vi.spyOn(blob, 'arrayBuffer').mockRejectedValue(new Error('Eager full-file read'));
+      await harness.blobStores.get('characters')!.put('avatars', 'Seraphina.png', blob);
+      const exported = await harness.migration.exportPackage();
+      const files = await unpackTauriTavernArchive(exported.blob);
+      expect(
+        files.find((file) => file.path === 'data/default-user/characters/Seraphina.png')?.data,
+      ).toEqual(new Uint8Array([9, 8, 7, 6]));
+      expect(blob.arrayBuffer).not.toHaveBeenCalled();
+    } finally {
+      vi.restoreAllMocks();
+      vi.unstubAllGlobals();
+    }
+  });
+
   it('exports a data/default-user package and leaves secrets out by default', async () => {
     const harness = await createHarness();
     await seed(harness);

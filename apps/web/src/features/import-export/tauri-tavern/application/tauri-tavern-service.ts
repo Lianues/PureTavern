@@ -11,14 +11,21 @@ import {
 import type { ExtensionMigrationCapability } from '@/platform/features/standard-capabilities';
 import { APP_VERSION } from '@/platform/runtime/app-version';
 
-import type { PortableArchiveEntry } from '../../application/archive-participant-registry';
+import type {
+  PortableArchiveEntry,
+  StreamingArchiveExportEntry,
+} from '../../application/archive-participant-registry';
 import type { ArchiveParticipantRegistry } from '../../application/archive-participant-registry';
 import type {
   PortableEntryStreamModule,
   PortableEntryStreamSource,
 } from '../../application/archive-service';
-import type { StreamingZipOptions } from '../../application/streaming-zip';
-import { decodeArchive, type DecodedArchive } from '../../application/archive-codec';
+import { StreamingZipWriter, type StreamingZipOptions } from '../../application/streaming-zip';
+import {
+  indexStreamingArchive,
+  readStreamingArchiveEntry,
+} from '../../application/streaming-archive-reader';
+import type { DecodedArchive } from '../../application/archive-codec';
 import type { ArchiveService } from '../../application/archive-service';
 import type { ArchiveExportOptions, ArchiveImportOptions } from '../../domain/archive';
 import {
@@ -37,13 +44,12 @@ import {
 import type { MigrationIdentityLookup } from '../ports/migration-identity';
 import {
   indexTauriTavernArchive,
-  packTauriTavernArchive,
   readIndexedTauriTavernFile,
   unpackTauriTavernArchive,
   type IndexedTauriTavernArchive,
   type IndexedTauriTavernFile,
 } from './tauri-tavern-archive';
-import { toTauriTavernFiles } from './tauri-tavern-export';
+import { toStreamingTauriTavernFiles } from './tauri-tavern-export';
 import {
   PRESET_TYPE_BY_DIRECTORY,
   createModuleReport,
@@ -133,7 +139,7 @@ export class TauriTavernMigrationService {
   }
 
   async exportPackage(options: ArchiveExportOptions = {}): Promise<TauriTavernPackage> {
-    const { entries } = await this.#archive.collectEntries(options);
+    const entries = await this.#archive.collectExportSources(options);
     return this.#pack(entries);
   }
 
@@ -141,8 +147,21 @@ export class TauriTavernMigrationService {
   async exportBackupPackage(id: string): Promise<TauriTavernPackage | null> {
     const stored = await this.#archive.downloadBackup(id);
     if (!stored) return null;
-    const decoded = await decodeArchive(stored);
-    return this.#pack(decoded.entries);
+    const index = await indexStreamingArchive(stored);
+    const entries: StreamingArchiveExportEntry[] = [];
+    for (const descriptor of index.manifest.files) {
+      const entry = await readStreamingArchiveEntry(index, descriptor);
+      entries.push({
+        descriptor,
+        data:
+          descriptor.kind === 'blob'
+            ? new Blob([entry.data.slice().buffer], {
+                type: descriptor.contentType ?? 'application/octet-stream',
+              })
+            : entry.data,
+      });
+    }
+    return this.#pack(entries);
   }
 
   async previewPackage(
@@ -386,10 +405,19 @@ export class TauriTavernMigrationService {
     }
   }
 
-  #pack(entries: readonly PortableArchiveEntry[]): TauriTavernPackage {
-    const converted = toTauriTavernFiles(entries);
+  async #pack(entries: readonly StreamingArchiveExportEntry[]): Promise<TauriTavernPackage> {
+    const converted = toStreamingTauriTavernFiles(entries);
+    const writer = new StreamingZipWriter();
+    let blob: Blob;
+    try {
+      for (const file of converted.files) await writer.add(file.path, file.data);
+      blob = await writer.end();
+    } catch (error) {
+      writer.terminate();
+      throw error;
+    }
     return {
-      blob: packTauriTavernArchive(converted.files),
+      blob,
       fileName: migrationFileName(this.#clock()),
       migration: {
         files: converted.files.length,

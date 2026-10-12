@@ -13,10 +13,17 @@ export interface ChatStorageDiagnostics {
   backend: 'indexeddb' | 'memory';
   message: string | null;
   lastSavedAt: string | null;
+  pendingWrites: number;
 }
 
 function createDiagnostics(): ChatStorageDiagnostics {
-  return { status: 'ready', backend: 'indexeddb', message: null, lastSavedAt: null };
+  return {
+    status: 'ready',
+    backend: 'indexeddb',
+    message: null,
+    lastSavedAt: null,
+    pendingWrites: 0,
+  };
 }
 
 export class MemoryChatRepository implements ChatRepository {
@@ -79,34 +86,104 @@ export class MemoryOwnerAliasRepository implements OwnerAliasRepository {
   }
 }
 
+/** Pending values and tombstones must win over an older, still-readable primary store. */
+class PendingWrites {
+  readonly #versions = new Map<string, number>();
+  readonly #pending = new Set<string>();
+
+  version(id: string): number {
+    return this.#versions.get(id) ?? 0;
+  }
+  versions(): Map<string, number> {
+    return new Map(this.#versions);
+  }
+  has(id: string): boolean {
+    return this.#pending.has(id);
+  }
+  any(): boolean {
+    return this.#pending.size > 0;
+  }
+  changedSince(id: string, versions: ReadonlyMap<string, number>): boolean {
+    return this.version(id) !== (versions.get(id) ?? 0);
+  }
+
+  async write(
+    id: string,
+    diagnostics: ChatStorageDiagnostics,
+    fallback: () => Promise<void>,
+    primary: () => Promise<void>,
+  ): Promise<void> {
+    const version = this.version(id) + 1;
+    this.#versions.set(id, version);
+    this.#pending.add(id);
+    diagnostics.pendingWrites = this.#pending.size;
+    await fallback();
+    try {
+      await primary();
+      if (this.version(id) === version) this.#pending.delete(id);
+      if (!this.any()) {
+        diagnostics.status = 'ready';
+        diagnostics.backend = 'indexeddb';
+        diagnostics.message = null;
+      }
+    } catch (error) {
+      degrade(diagnostics, error);
+    }
+    diagnostics.pendingWrites = this.#pending.size;
+    diagnostics.lastSavedAt = new Date().toISOString();
+  }
+}
+
 export class ResilientChatRepository implements ChatRepository {
   readonly diagnostics = createDiagnostics();
   readonly #primary: ChatRepository;
   readonly #fallback: ChatRepository;
+  readonly #pending = new PendingWrites();
 
   constructor(primary: ChatRepository, fallback: ChatRepository = new MemoryChatRepository()) {
     this.#primary = primary;
     this.#fallback = fallback;
   }
 
+  hasPendingWrites(): boolean {
+    return this.#pending.any();
+  }
+
   async list(): Promise<StoredChatSession[]> {
+    const versions = this.#pending.versions();
     try {
       const sessions = await this.#primary.list();
-      await Promise.all(sessions.map((session) => this.#fallback.save(session)));
-      return sessions;
+      for (const session of sessions) {
+        if (!this.#pending.has(session.id) && !this.#pending.changedSince(session.id, versions)) {
+          await this.#fallback.save(session);
+        }
+      }
+      const merged = new Map(sessions.map((session) => [session.id, session]));
+      const memory = new Map((await this.#fallback.list()).map((session) => [session.id, session]));
+      for (const id of this.#pending.versions().keys()) {
+        if (!this.#pending.has(id) && !this.#pending.changedSince(id, versions)) continue;
+        const session = memory.get(id);
+        if (session) merged.set(id, session);
+        else merged.delete(id);
+      }
+      return [...merged.values()];
     } catch (error) {
-      this.#degrade(error);
+      degrade(this.diagnostics, error);
       return this.#fallback.list();
     }
   }
 
   async get(id: string): Promise<StoredChatSession | null> {
+    if (this.#pending.has(id)) return this.#fallback.get(id);
+    const version = this.#pending.version(id);
     try {
       const session = await this.#primary.get(id);
+      if (this.#pending.has(id) || this.#pending.version(id) !== version)
+        return this.#fallback.get(id);
       if (session) await this.#fallback.save(session);
       return session;
     } catch (error) {
-      this.#degrade(error);
+      degrade(this.diagnostics, error);
       return this.#fallback.get(id);
     }
   }
@@ -115,40 +192,47 @@ export class ResilientChatRepository implements ChatRepository {
     ownerId: string,
     legacyFileName: string,
   ): Promise<StoredChatSession | null> {
+    const versions = this.#pending.versions();
     try {
       const session = await this.#primary.findByOwnerAndFile(ownerId, legacyFileName);
-      if (session) await this.#fallback.save(session);
-      return session;
+      if (
+        session &&
+        !this.#pending.has(session.id) &&
+        !this.#pending.changedSince(session.id, versions)
+      ) {
+        await this.#fallback.save(session);
+        return session;
+      }
+      return (
+        (await this.#fallback.list()).find(
+          (candidate) =>
+            candidate.ownerId === ownerId &&
+            candidate.legacyFileName === legacyFileName &&
+            (this.#pending.has(candidate.id) || this.#pending.changedSince(candidate.id, versions)),
+        ) ?? null
+      );
     } catch (error) {
-      this.#degrade(error);
+      degrade(this.diagnostics, error);
       return this.#fallback.findByOwnerAndFile(ownerId, legacyFileName);
     }
   }
 
   async save(session: StoredChatSession): Promise<void> {
-    await this.#fallback.save(session);
-    try {
-      await this.#primary.save(session);
-      this.diagnostics.lastSavedAt = new Date().toISOString();
-    } catch (error) {
-      this.#degrade(error);
-      this.diagnostics.lastSavedAt = new Date().toISOString();
-    }
+    await this.#pending.write(
+      session.id,
+      this.diagnostics,
+      () => this.#fallback.save(session),
+      () => this.#primary.save(session),
+    );
   }
 
   async delete(id: string): Promise<void> {
-    await this.#fallback.delete(id);
-    try {
-      await this.#primary.delete(id);
-      this.diagnostics.lastSavedAt = new Date().toISOString();
-    } catch (error) {
-      this.#degrade(error);
-      this.diagnostics.lastSavedAt = new Date().toISOString();
-    }
-  }
-
-  #degrade(error: unknown) {
-    degrade(this.diagnostics, error);
+    await this.#pending.write(
+      id,
+      this.diagnostics,
+      () => this.#fallback.delete(id),
+      () => this.#primary.delete(id),
+    );
   }
 }
 
@@ -156,6 +240,7 @@ export class ResilientMessageRepository implements MessageRepository {
   readonly diagnostics = createDiagnostics();
   readonly #primary: MessageRepository;
   readonly #fallback: MessageRepository;
+  readonly #pending = new PendingWrites();
 
   constructor(
     primary: MessageRepository,
@@ -165,9 +250,17 @@ export class ResilientMessageRepository implements MessageRepository {
     this.#fallback = fallback;
   }
 
+  hasPendingWrites(): boolean {
+    return this.#pending.any();
+  }
+
   async get(chatId: string): Promise<OpaqueJsonObject[]> {
+    if (this.#pending.has(chatId)) return this.#fallback.get(chatId);
+    const version = this.#pending.version(chatId);
     try {
       const messages = await this.#primary.get(chatId);
+      if (this.#pending.has(chatId) || this.#pending.version(chatId) !== version)
+        return this.#fallback.get(chatId);
       await this.#fallback.save(chatId, messages);
       return messages;
     } catch (error) {
@@ -177,25 +270,21 @@ export class ResilientMessageRepository implements MessageRepository {
   }
 
   async save(chatId: string, messages: OpaqueJsonObject[]): Promise<void> {
-    await this.#fallback.save(chatId, messages);
-    try {
-      await this.#primary.save(chatId, messages);
-      this.diagnostics.lastSavedAt = new Date().toISOString();
-    } catch (error) {
-      degrade(this.diagnostics, error);
-      this.diagnostics.lastSavedAt = new Date().toISOString();
-    }
+    await this.#pending.write(
+      chatId,
+      this.diagnostics,
+      () => this.#fallback.save(chatId, messages),
+      () => this.#primary.save(chatId, messages),
+    );
   }
 
   async delete(chatId: string): Promise<void> {
-    await this.#fallback.delete(chatId);
-    try {
-      await this.#primary.delete(chatId);
-      this.diagnostics.lastSavedAt = new Date().toISOString();
-    } catch (error) {
-      degrade(this.diagnostics, error);
-      this.diagnostics.lastSavedAt = new Date().toISOString();
-    }
+    await this.#pending.write(
+      chatId,
+      this.diagnostics,
+      () => this.#fallback.delete(chatId),
+      () => this.#primary.delete(chatId),
+    );
   }
 }
 
@@ -203,6 +292,7 @@ export class ResilientOwnerAliasRepository implements OwnerAliasRepository {
   readonly diagnostics = createDiagnostics();
   readonly #primary: OwnerAliasRepository;
   readonly #fallback: OwnerAliasRepository;
+  readonly #pending = new PendingWrites();
 
   constructor(
     primary: OwnerAliasRepository,
@@ -212,9 +302,17 @@ export class ResilientOwnerAliasRepository implements OwnerAliasRepository {
     this.#fallback = fallback;
   }
 
+  hasPendingWrites(): boolean {
+    return this.#pending.any();
+  }
+
   async get(avatarUrl: string): Promise<OwnerAlias | null> {
+    if (this.#pending.has(avatarUrl)) return this.#fallback.get(avatarUrl);
+    const version = this.#pending.version(avatarUrl);
     try {
       const alias = await this.#primary.get(avatarUrl);
+      if (this.#pending.has(avatarUrl) || this.#pending.version(avatarUrl) !== version)
+        return this.#fallback.get(avatarUrl);
       if (alias) await this.#fallback.save(alias);
       return alias;
     } catch (error) {
@@ -224,14 +322,12 @@ export class ResilientOwnerAliasRepository implements OwnerAliasRepository {
   }
 
   async save(alias: OwnerAlias): Promise<void> {
-    await this.#fallback.save(alias);
-    try {
-      await this.#primary.save(alias);
-      this.diagnostics.lastSavedAt = new Date().toISOString();
-    } catch (error) {
-      degrade(this.diagnostics, error);
-      this.diagnostics.lastSavedAt = new Date().toISOString();
-    }
+    await this.#pending.write(
+      alias.avatarUrl,
+      this.diagnostics,
+      () => this.#fallback.save(alias),
+      () => this.#primary.save(alias),
+    );
   }
 }
 
