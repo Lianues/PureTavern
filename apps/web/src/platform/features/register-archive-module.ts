@@ -7,6 +7,7 @@ export interface ArchiveModuleDescriptor {
   dataVersion?: number;
   sensitive?: boolean;
   defaultSelected?: boolean;
+  assertExportable?: () => void;
 }
 
 export function registerArchiveModule(
@@ -21,5 +22,6 @@ export function registerArchiveModule(
     defaultSelected: descriptor.defaultSelected ?? true,
     records: context.records,
     blobs: context.blobs,
+    ...(descriptor.assertExportable ? { assertExportable: descriptor.assertExportable } : {}),
   });
 }

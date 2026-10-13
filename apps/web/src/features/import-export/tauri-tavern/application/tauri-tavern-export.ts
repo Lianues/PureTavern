@@ -1,4 +1,7 @@
-import type { PortableArchiveEntry } from '../../application/archive-participant-registry';
+import type {
+  PortableArchiveEntry,
+  StreamingArchiveExportEntry,
+} from '../../application/archive-participant-registry';
 import {
   EXTENSION_PACKAGE_PATH_PREFIX,
   TAURI_TAVERN_DIRECTORIES,
@@ -29,6 +32,12 @@ export interface TauriTavernExportResult {
   warnings: string[];
 }
 
+export interface StreamingTauriTavernExportResult {
+  files: { path: string; data: Uint8Array | Blob }[];
+  modules: TauriTavernModuleReport[];
+  warnings: string[];
+}
+
 interface DecodedRecord {
   id: string;
   value: unknown;
@@ -36,7 +45,7 @@ interface DecodedRecord {
 
 interface ModuleEntries {
   records: Map<string, DecodedRecord[]>;
-  blobs: Map<string, PortableArchiveEntry[]>;
+  blobs: Map<string, StreamingArchiveExportEntry[]>;
 }
 
 type ModuleExporter = (module: ModuleEntries, sink: FileSink) => void;
@@ -50,6 +59,20 @@ type ModuleExporter = (module: ModuleEntries, sink: FileSink) => void;
 export function toTauriTavernFiles(
   entries: readonly PortableArchiveEntry[],
 ): TauriTavernExportResult {
+  const converted = toStreamingTauriTavernFiles(entries);
+  return {
+    ...converted,
+    files: converted.files.map((file) => {
+      if (file.data instanceof Blob)
+        throw new TypeError('Portable export entries must contain bytes.');
+      return { path: file.path, data: file.data };
+    }),
+  };
+}
+
+export function toStreamingTauriTavernFiles(
+  entries: readonly StreamingArchiveExportEntry[],
+): StreamingTauriTavernExportResult {
   const sink = new FileSink();
 
   for (const [moduleId, module] of groupByModule(entries)) {
@@ -70,7 +93,7 @@ export function toTauriTavernFiles(
 
 class FileSink {
   readonly warnings: string[] = [];
-  readonly #files = new Map<string, TauriTavernFile>();
+  readonly #files = new Map<string, StreamingTauriTavernExportResult['files'][number]>();
   readonly #reports: TauriTavernModuleReport[] = [];
   #current: TauriTavernModuleReport = createModuleReport('unknown');
 
@@ -80,7 +103,7 @@ class FileSink {
     return this.#current;
   }
 
-  add(path: string, data: Uint8Array): void {
+  add(path: string, data: Uint8Array | Blob): void {
     // 不同模块可能算出同一个路径。先到先得并记一条警告，否则 zip 里会出现两个同名条目，
     // 解包端只能看到其中一个，而用户完全不知道丢了什么。
     const key = path.normalize('NFKC').toLowerCase();
@@ -105,7 +128,7 @@ class FileSink {
     this.#current.skipped += count;
   }
 
-  files(): TauriTavernFile[] {
+  files(): StreamingTauriTavernExportResult['files'] {
     return [...this.#files.values()].sort((left, right) =>
       left.path.localeCompare(right.path, 'en'),
     );
@@ -246,7 +269,7 @@ function exportStats(module: ModuleEntries, sink: FileSink): void {
 }
 
 function exportAssets(module: ModuleEntries, sink: FileSink): void {
-  const blobsByKey = new Map<string, PortableArchiveEntry>();
+  const blobsByKey = new Map<string, StreamingArchiveExportEntry>();
   for (const [collection, entries] of module.blobs) {
     for (const entry of entries) blobsByKey.set(`${collection}\u001f${entry.descriptor.id}`, entry);
   }
@@ -389,7 +412,9 @@ function findById(records: readonly DecodedRecord[] | undefined, id: string): De
   return records?.find((record) => record.id === id) ?? null;
 }
 
-function groupByModule(entries: readonly PortableArchiveEntry[]): Map<string, ModuleEntries> {
+function groupByModule(
+  entries: readonly StreamingArchiveExportEntry[],
+): Map<string, ModuleEntries> {
   const grouped = new Map<string, ModuleEntries>();
   for (const entry of entries) {
     const { moduleId, kind, collection, id } = entry.descriptor;
@@ -399,6 +424,8 @@ function groupByModule(entries: readonly PortableArchiveEntry[]): Map<string, Mo
       grouped.set(moduleId, module);
     }
     if (kind === 'record') {
+      if (entry.data instanceof Blob)
+        throw new TypeError('Record export sources must contain JSON bytes.');
       push(module.records, collection, { id, value: parseRecord(entry.data) });
     } else {
       push(module.blobs, collection, entry);

@@ -1,4 +1,4 @@
-/* global fetch, document, console, URL, setTimeout, location, FormData, AbortController */
+/* global fetch, document, setTimeout, location, FormData, AbortController */
 
 const API = '/api/backups/archive';
 const TT_API = '/api/backups/tauritavern';
@@ -447,127 +447,15 @@ function summarizeMigration(migration) {
   return lines.join('\n');
 }
 
-const NATIVE_SAVE_CHUNK_SIZE = 512 * 1024;
-
-function encodeBase64(buffer) {
-  const bytes = new Uint8Array(buffer);
-  const blocks = [];
-  for (let offset = 0; offset < bytes.length; offset += 0x8000) {
-    blocks.push(String.fromCharCode(...bytes.subarray(offset, offset + 0x8000)));
-  }
-  return globalThis.btoa(blocks.join(''));
-}
-
-async function saveWithNativeFilePicker(blob, fileName) {
-  const saver = globalThis.Capacitor?.Plugins?.PureTavernFileSaver;
-  if (
-    typeof saver?.beginSave !== 'function' ||
-    typeof saver?.writeChunk !== 'function' ||
-    typeof saver?.finishSave !== 'function'
-  ) {
-    return null;
-  }
-
-  const target = await saver.beginSave({
-    fileName,
-    mimeType: blob.type || 'application/zip',
-  });
-  if (target.cancelled) return { cancelled: true, confirmed: false, fileName, location: '' };
-  if (!target.sessionId) throw new Error('系统文件选择器未创建保存会话。');
-
-  try {
-    for (let offset = 0; offset < blob.size; offset += NATIVE_SAVE_CHUNK_SIZE) {
-      const data = encodeBase64(
-        await blob.slice(offset, offset + NATIVE_SAVE_CHUNK_SIZE).arrayBuffer(),
-      );
-      await saver.writeChunk({ sessionId: target.sessionId, data });
-    }
-    await saver.finishSave({ sessionId: target.sessionId });
-  } catch (error) {
-    try {
-      await saver.abortSave?.({ sessionId: target.sessionId });
-    } catch (abortError) {
-      console.warn(abortError);
-    }
-    throw error;
-  }
-
-  return {
-    cancelled: false,
-    confirmed: true,
-    fileName: target.fileName || fileName,
-    location: '你在 Android 系统文件选择器中选择的位置',
-  };
-}
-
 async function saveBlob(blob, fileName) {
-  const nativeResult = await saveWithNativeFilePicker(blob, fileName);
-  if (nativeResult) return nativeResult;
-
-  if (globalThis.showSaveFilePicker) {
-    try {
-      const handle = await globalThis.showSaveFilePicker({
-        suggestedName: fileName,
-        types: [{ description: 'PureTavern backup', accept: { 'application/zip': ['.zip'] } }],
-      });
-      const writable = await handle.createWritable();
-      await writable.write(blob);
-      await writable.close();
-      return {
-        cancelled: false,
-        confirmed: true,
-        fileName: handle.name || fileName,
-        location: '你在系统文件选择器中选择的位置',
-      };
-    } catch (error) {
-      if (error?.name !== 'AbortError') console.warn(error);
-      if (error?.name === 'AbortError') {
-        return { cancelled: true, confirmed: false, fileName, location: '' };
-      }
-    }
-  }
-  if (typeof globalThis.File === 'function' && typeof globalThis.navigator?.share === 'function') {
-    const file = new globalThis.File([blob], fileName, { type: 'application/zip' });
-    const shareData = { files: [file], title: 'PureTavern 数据归档' };
-    let canShare;
-    try {
-      canShare = !globalThis.navigator.canShare || globalThis.navigator.canShare(shareData);
-    } catch (error) {
-      canShare = false;
-      console.warn(error);
-    }
-    if (canShare) {
-      try {
-        await globalThis.navigator.share(shareData);
-        return {
-          cancelled: false,
-          confirmed: false,
-          fileName,
-          location: '你在系统文件/分享面板中选择的位置',
-        };
-      } catch (error) {
-        if (error?.name === 'AbortError') {
-          return { cancelled: true, confirmed: false, fileName, location: '' };
-        }
-        console.warn(error);
-      }
-    }
-  }
-
-  const url = URL.createObjectURL(blob);
-  const anchor = document.createElement('a');
-  anchor.href = url;
-  anchor.download = fileName;
-  anchor.style.display = 'none';
-  document.body.appendChild(anchor);
-  anchor.click();
-  anchor.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 60_000);
+  const save = globalThis.__PURE_TAVERN_SAVE_FILE__;
+  if (typeof save !== 'function') throw new Error('文件保存能力未初始化，请刷新页面后重试。');
+  const saved = await save(blob, fileName);
   return {
-    cancelled: false,
-    confirmed: false,
-    fileName,
-    location: '浏览器/系统默认下载目录（通常是 Download/下载）',
+    cancelled: saved.status === 'cancelled',
+    confirmed: saved.status === 'saved',
+    fileName: saved.fileName,
+    location: saved.location,
   };
 }
 

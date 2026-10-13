@@ -103,6 +103,7 @@ export class ScopedArchiveParticipant {
   }
 
   async exportEntries(): Promise<PortableArchiveEntry[]> {
+    this.#registration.assertExportable?.();
     const [records, blobs] = await Promise.all([
       this.#registration.records.listAll(),
       this.#registration.blobs.listAll(),
@@ -143,12 +144,14 @@ export class ScopedArchiveParticipant {
         data: bytes,
       });
     }
+    this.#registration.assertExportable?.();
     return entries.sort((left, right) =>
       left.descriptor.path.localeCompare(right.descriptor.path, 'en'),
     );
   }
 
   async *streamExportEntries(): AsyncGenerator<StreamingArchiveExportEntry> {
+    this.#registration.assertExportable?.();
     const recordPages =
       this.#registration.records.iterateAll?.() ??
       singlePage(await this.#registration.records.listAll());
@@ -193,6 +196,7 @@ export class ScopedArchiveParticipant {
         };
       }
     }
+    this.#registration.assertExportable?.();
   }
 
   async preview(

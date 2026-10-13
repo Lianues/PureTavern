@@ -10,6 +10,7 @@ import { validateBundledExtensionManifest } from './bundled-extension-manifest.m
 import { generateDefaultAssetManifest } from './default-asset-manifest-generator.mjs';
 import { generateHookedIndex } from './legacy-index-generator.mjs';
 import { normalizeChineseCustomParameterExamples } from './legacy-runtime-text-patches.mjs';
+import { patchLegacyChatExport, patchLegacyDownload } from './legacy-runtime-file-patches.mjs';
 import { generatePresetSeedManifest } from './preset-manifest-generator.mjs';
 import { generateTrustedExtensionManifest } from './trusted-extension-manifest-generator.mjs';
 
@@ -91,6 +92,13 @@ export async function prepareLegacyRuntime() {
     );
   }
   await patchGeneratedChineseLocale();
+  for (const [relativePath, patch] of [
+    ['scripts/utils.js', patchLegacyDownload],
+    ['script.js', patchLegacyChatExport],
+  ]) {
+    const target = path.join(generatedPublicRoot, relativePath);
+    await writeFile(target, patch(await readFile(target, 'utf8')), 'utf8');
+  }
 
   const compatibilityAssetsRoot = path.join(generatedPublicRoot, '__pure_tavern');
   await mkdir(compatibilityAssetsRoot, { recursive: true });

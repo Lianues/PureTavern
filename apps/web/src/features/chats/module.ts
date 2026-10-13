@@ -23,10 +23,24 @@ export const chatsFeature: FeatureModule = {
   id: 'chats',
   install(context) {
     const { router, records, capabilities } = context;
-    registerArchiveModule(context, { moduleId: 'chats', displayName: 'Chats & Messages' });
     const sessions = new ResilientChatRepository(new IndexedDbChatRepository(records));
     const messages = new ResilientMessageRepository(new IndexedDbMessageRepository(records));
     const aliases = new ResilientOwnerAliasRepository(new IndexedDbOwnerAliasRepository(records));
+    registerArchiveModule(context, {
+      moduleId: 'chats',
+      displayName: 'Chats & Messages',
+      assertExportable() {
+        if (
+          sessions.hasPendingWrites() ||
+          messages.hasPendingWrites() ||
+          aliases.hasPendingWrites()
+        ) {
+          throw new Error(
+            'Chat changes are only held in this page because storage could not save them. Export individual chats before closing the page; a complete archive cannot be created yet.',
+          );
+        }
+      },
+    });
     const owners = new OwnerIdentityResolver(
       aliases,
       capabilities.get(characterIdentityCapability),

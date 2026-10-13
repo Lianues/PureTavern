@@ -4,16 +4,13 @@ import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 
 const mobileRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const [activity, imeCompat, plugin, manifest, styles, runtime] = await Promise.all([
+const [activity, imeCompat, plugin, manifest, styles, runtime, fileSave] = await Promise.all([
   readFile(
     path.join(mobileRoot, 'android/app/src/main/java/com/puretavern/app/MainActivity.java'),
     'utf8',
   ),
   readFile(
-    path.join(
-      mobileRoot,
-      'android/app/src/main/java/com/puretavern/app/EdgeToEdgeImeCompat.java',
-    ),
+    path.join(mobileRoot, 'android/app/src/main/java/com/puretavern/app/EdgeToEdgeImeCompat.java'),
     'utf8',
   ),
   readFile(
@@ -26,6 +23,7 @@ const [activity, imeCompat, plugin, manifest, styles, runtime] = await Promise.a
   readFile(path.join(mobileRoot, 'android/app/src/main/AndroidManifest.xml'), 'utf8'),
   readFile(path.join(mobileRoot, 'android/app/src/main/res/values/styles.xml'), 'utf8'),
   readFile(path.join(mobileRoot, '../web/src/features/import-export/runtime/index.js'), 'utf8'),
+  readFile(path.join(mobileRoot, '../web/src/platform/runtime/file-save.ts'), 'utf8'),
 ]);
 
 assert.match(activity, /registerPlugin\(PureTavernFileSaverPlugin\.class\)/u);
@@ -40,10 +38,7 @@ assert.match(
   activity,
   /setSoftInputMode\(WindowManager\.LayoutParams\.SOFT_INPUT_ADJUST_RESIZE\)/u,
 );
-assert.match(
-  activity,
-  /WindowCompat\.setDecorFitsSystemWindows\(getWindow\(\), false\)/u,
-);
+assert.match(activity, /WindowCompat\.setDecorFitsSystemWindows\(getWindow\(\), false\)/u);
 assert.doesNotMatch(activity, /WindowInsetsCompat\.Type\.displayCutout\(\)/u);
 assert.doesNotMatch(activity, /setOnApplyWindowInsetsListener|view\.setPadding\(/u);
 assert.match(activity, /EdgeToEdgeImeCompat\.install\(this, getBridge\(\)\.getWebView\(\)\)/u);
@@ -77,8 +72,9 @@ assert.doesNotMatch(
   manifest,
   /READ_EXTERNAL_STORAGE|WRITE_EXTERNAL_STORAGE|MANAGE_EXTERNAL_STORAGE/u,
 );
-assert.match(runtime, /PureTavernFileSaver/u);
-assert.match(runtime, /NATIVE_SAVE_CHUNK_SIZE/u);
+assert.match(runtime, /__PURE_TAVERN_SAVE_FILE__/u);
+assert.match(fileSave, /PureTavernFileSaver/u);
+assert.match(fileSave, /CHUNK_BYTES = 512 \* 1024/u);
 assert.match(runtime, /Web 页面无法确认文件是否写入/u);
 
 console.log(

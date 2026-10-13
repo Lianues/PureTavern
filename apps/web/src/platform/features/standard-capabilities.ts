@@ -161,6 +161,8 @@ export interface ArchiveModuleRegistration {
   defaultSelected: boolean;
   records: ModuleRecordStore;
   blobs: ModuleBlobStore;
+  /** Reject exports when the persistent store is not the module's current source of truth. */
+  assertExportable?: () => void;
 }
 
 export interface ArchiveParticipantRegistryCapability {

@@ -34,6 +34,7 @@ import {
   ArchiveParticipantRegistry,
   type PortableArchiveEntry,
   type ScopedArchiveParticipant,
+  type StreamingArchiveExportEntry,
 } from './archive-participant-registry';
 import {
   indexStreamingArchive,
@@ -190,6 +191,20 @@ export class ArchiveService implements ArchiveExporter, ArchiveImporter {
     );
   }
 
+  /** Keep binary payloads as Blob handles instead of loading every image/package into the heap. */
+  collectExportSources(options: ArchiveExportOptions = {}): Promise<StreamingArchiveExportEntry[]> {
+    return this.#enqueue(async () => {
+      const entries: StreamingArchiveExportEntry[] = [];
+      for (const participant of this.#selectParticipants(
+        options.moduleIds,
+        Boolean(options.includeSecrets),
+      )) {
+        for await (const entry of participant.streamExportEntries()) entries.push(entry);
+      }
+      return entries;
+    });
+  }
+
   /**
    * 从外部格式转换出来的条目走这里进入导入流水线，于是冲突预览、恢复点、导入日志和
    * merge/skip/replace 策略全部复用，不需要为每种外部格式再写一遍。
@@ -338,7 +353,14 @@ export class ArchiveService implements ArchiveExporter, ArchiveImporter {
             );
           }
           await writer.add(entry.descriptor.path, entry.data);
+          expectedHashes.delete(entry.descriptor.path);
         }
+      }
+      if (expectedHashes.size > 0) {
+        throw new ArchiveValidationError(
+          'data-changed-during-export',
+          `Module data was deleted while it was being exported: ${expectedHashes.keys().next().value}`,
+        );
       }
       return {
         blob: await writer.end(),

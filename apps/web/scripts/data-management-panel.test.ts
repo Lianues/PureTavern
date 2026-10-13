@@ -1,6 +1,7 @@
 import { readFile } from 'node:fs/promises';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { saveFile } from '../src/platform/runtime/file-save';
 
 interface RecordedRequest {
   url: string;
@@ -156,6 +157,7 @@ async function settle(): Promise<void> {
 }
 
 beforeEach(async () => {
+  vi.stubGlobal('__PURE_TAVERN_SAVE_FILE__', saveFile);
   requests.length = 0;
   document.body.replaceChildren();
   delete (globalThis as { __PURE_TAVERN_DATA_MANAGEMENT__?: unknown })

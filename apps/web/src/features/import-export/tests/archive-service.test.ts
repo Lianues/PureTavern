@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { AppDatabase } from '@/platform/storage/app-database';
 import { AppStorage } from '@/platform/storage/app-storage';
@@ -57,7 +57,7 @@ async function createHarness() {
       backupRetention: 5,
     },
   );
-  return { storage, service, transport };
+  return { storage, service, transport, participants };
 }
 
 afterEach(async () => {
@@ -70,6 +70,33 @@ afterEach(async () => {
 });
 
 describe('ArchiveService', () => {
+  it.each(['delete', 'add', 'change'] as const)(
+    'rejects an archive when a record is %s between export passes',
+    async (mutation) => {
+      const { storage, service, participants } = await createHarness();
+      const records = storage.records.forModule('settings');
+      await records.put('documents', 'current', { marker: 'before' });
+      const participant = participants.get('settings')!;
+      const original = participant.streamExportEntries.bind(participant);
+      let pass = 0;
+      vi.spyOn(participant, 'streamExportEntries').mockImplementation(async function* () {
+        yield* original();
+        if (++pass === 1) {
+          if (mutation === 'delete') await records.delete('documents', 'current');
+          if (mutation === 'add') await records.put('documents', 'new', { marker: 'new' });
+          if (mutation === 'change') await records.put('documents', 'current', { marker: 'after' });
+        }
+      });
+      try {
+        await expect(service.exportArchive({ moduleIds: ['settings'] })).rejects.toMatchObject({
+          code: 'data-changed-during-export',
+        });
+      } finally {
+        vi.restoreAllMocks();
+      }
+    },
+  );
+
   it('exports all registered data, excludes secrets by default and restores with conflict preview', async () => {
     const { storage, service } = await createHarness();
     await storage.records.forModule('settings').put('documents', 'current', { theme: 'dark' });
